@@ -256,26 +256,35 @@ jobs:
       - name: Initialize iOS project
         run: pnpm tauri ios init
 
-      # 没有 APPLE_DEVELOPMENT_TEAM secret 的话 xcodebuild 会失败 — 这是预期，
-      # 因为 iOS 分发必须有 Apple Developer 账号。把 secret 加到仓库后再 enable。
-      - name: Build iOS App (development export)
-        env:
-          APPLE_DEVELOPMENT_TEAM: ${{ secrets.APPLE_DEVELOPMENT_TEAM }}
-        run: pnpm tauri ios build --export-method development
-
-      - name: Locate built IPAs
+      - name: Archive (unsigned)
+        working-directory: src-tauri/gen/apple
         run: |
-          set -e
-          mkdir -p artifacts
-          find src-tauri/gen/apple -type f \( -name "*.ipa" -o -name "*.app" \) -print -exec cp -R {} artifacts/ \; || true
-          ls -la artifacts/ || true
+          xcodebuild \
+            -project App.xcodeproj \
+            -scheme App \
+            -configuration Release \
+            -sdk iphoneos \
+            -archivePath "$PWD/build/App.xcarchive" \
+            archive \
+            CODE_SIGNING_ALLOWED=NO \
+            CODE_SIGNING_REQUIRED=NO \
+            CODE_SIGN_IDENTITY="" \
+            DEVELOPMENT_TEAM="" \
+            ONLY_ACTIVE_ARCH=NO
+
+      - name: Package unsigned IPA
+        working-directory: src-tauri/gen/apple
+        run: |
+          mkdir -p build/Payload
+          cp -R build/App.xcarchive/Products/Applications/App.app build/Payload/
+          cd build && zip -qr "../../../../douytv-ios-unsigned-${{ github.sha }}.ipa" Payload
 
       - name: Upload IPA artifacts (non-tag runs)
         if: ${{ !startsWith(github.ref, 'refs/tags/') }}
         uses: actions/upload-artifact@v4
         with:
           name: douytv-ios-${{ github.sha }}
-          path: artifacts/*
+          path: douytv-ios-unsigned-*.ipa
           if-no-files-found: warn
           retention-days: 14
 
@@ -283,6 +292,6 @@ jobs:
         if: ${{ startsWith(github.ref, 'refs/tags/') }}
         uses: softprops/action-gh-release@v2
         with:
-          files: artifacts/*.ipa
+          files: douytv-ios-unsigned-*.ipa
           draft: true
           name: "DouyTV ${{ github.ref_name }}"
