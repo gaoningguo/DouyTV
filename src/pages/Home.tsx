@@ -136,7 +136,7 @@ export default function Home() {
         onRequestReresolve={(item) => reresolveItem(item.id)}
         renderOverlay={(item, i) => (
           <>
-            <div className="absolute left-4 right-20 bottom-32 md:bottom-40 text-cream pointer-events-none z-20">
+            <div className="absolute left-4 right-20 bottom-20 md:bottom-20 text-cream pointer-events-none z-20">
               <div className="flex items-center gap-2 mb-2">
                 <span className="chip-ch">CH {String(i + 1).padStart(2, "0")}</span>
                 {item.sourceName && (

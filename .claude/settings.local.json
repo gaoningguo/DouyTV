@@ -43,7 +43,8 @@
       "Bash(cargo clean *)",
       "Read(//c/Users/GAONX6/.claude/**)",
       "Bash(echo \"EXIT=$?\")",
-      "Bash(pnpm exec *)"
+      "Bash(pnpm exec *)",
+      "Bash(gh auth *)"
     ]
   }
 }

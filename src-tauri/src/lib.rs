@@ -224,7 +224,13 @@ fn proxy_fetch(
     }
     req = req.set("Accept", "*/*");
     req = req.set("Accept-Language", "zh-CN,zh;q=0.9,en;q=0.8");
-    req.call().map_err(|e| format!("{e}"))
+    // ureq 默认把 4xx/5xx 当 Err(Error::Status(code, resp))。我们要转发上游响应给前端
+    // (例如 403 防盗链 / 404 资源不存在原样上抛，hls.js 能识别真实状态而非误以为是代理 502)。
+    match req.call() {
+        Ok(resp) => Ok(resp),
+        Err(ureq::Error::Status(_, resp)) => Ok(resp),
+        Err(e) => Err(format!("{e}")),
+    }
 }
 
 /// 同 src/lib/proxy.ts 的 PROXY_ORIGIN：Windows/Android 走 http://<scheme>.localhost。
