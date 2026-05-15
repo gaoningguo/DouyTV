@@ -1,6 +1,6 @@
 [package]
 name = "douytv"
-version = "0.1.0"
+version = "1.0.1"
 description = "MoonTV-style cross-platform media client built with Tauri v2"
 authors = ["GAONX6"]
 edition = "2021"
