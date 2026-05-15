@@ -222,7 +222,7 @@ jobs:
   # continue-on-error: 让 desktop release 不被这里挡住
   # ===========================================================================
   build-ios:
-    runs-on: macos-14
+    runs-on: macos-15
     continue-on-error: true
     steps:
       - name: Checkout
