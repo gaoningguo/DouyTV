@@ -259,12 +259,27 @@ jobs:
       - name: Archive (unsigned)
         working-directory: src-tauri/gen/apple
         run: |
+          # 自动获取当前目录下的 Xcode 项目名称 (例如 DouyTV.xcodeproj)
+          PROJECT_FILE=$(ls -d *.xcodeproj | head -n 1)
+          APP_NAME=$(basename "$PROJECT_FILE" .xcodeproj)
+          
+          # Tauri v2 默认的 iOS Scheme 通常带有 _iOS 后缀
+          SCHEME="${APP_NAME}_iOS"
+          
+          # 保底逻辑：如果找不到 _iOS 后缀的 Scheme，就用原本的 APP_NAME
+          if ! xcodebuild -list -project "$PROJECT_FILE" | grep -q "$SCHEME"; then
+            SCHEME="$APP_NAME"
+          fi
+          
+          echo "==== 检测到 Xcode 项目: $PROJECT_FILE ===="
+          echo "==== 使用的 Scheme: $SCHEME ===="
+          
           xcodebuild \
-            -project App.xcodeproj \
-            -scheme App \
+            -project "$PROJECT_FILE" \
+            -scheme "$SCHEME" \
             -configuration Release \
             -sdk iphoneos \
-            -archivePath "$PWD/build/App.xcarchive" \
+            -archivePath "$PWD/build/app.xcarchive" \
             archive \
             CODE_SIGNING_ALLOWED=NO \
             CODE_SIGNING_REQUIRED=NO \
@@ -276,22 +291,6 @@ jobs:
         working-directory: src-tauri/gen/apple
         run: |
           mkdir -p build/Payload
-          cp -R build/App.xcarchive/Products/Applications/App.app build/Payload/
+          # 使用通配符 *.app 自动匹配应用，不用管它叫 DouyTV.app 还是其他名字
+          cp -R build/app.xcarchive/Products/Applications/*.app build/Payload/
           cd build && zip -qr "../../../../douytv-ios-unsigned-${{ github.sha }}.ipa" Payload
-
-      - name: Upload IPA artifacts (non-tag runs)
-        if: ${{ !startsWith(github.ref, 'refs/tags/') }}
-        uses: actions/upload-artifact@v4
-        with:
-          name: douytv-ios-${{ github.sha }}
-          path: douytv-ios-unsigned-*.ipa
-          if-no-files-found: warn
-          retention-days: 14
-
-      - name: Publish IPA to GitHub Releases (on tag)
-        if: ${{ startsWith(github.ref, 'refs/tags/') }}
-        uses: softprops/action-gh-release@v2
-        with:
-          files: douytv-ios-unsigned-*.ipa
-          draft: true
-          name: "DouyTV ${{ github.ref_name }}"
