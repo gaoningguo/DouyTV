@@ -137,6 +137,10 @@ jobs:
       - name: Install frontend dependencies
         run: pnpm install --frozen-lockfile
 
+      # 新增：让云端自动初始化 Android 目录
+      - name: Init Android Project
+        run: pnpm tauri android init
+
       - name: Build Android APK
         run: pnpm tauri android build --apk
 
@@ -188,6 +192,10 @@ jobs:
 
       - name: Install frontend dependencies
         run: pnpm install --frozen-lockfile
+
+      # 新增：让云端自动初始化 iOS 目录
+      - name: Init iOS Project
+        run: pnpm tauri ios init
 
       - name: Build iOS App
         run: pnpm tauri ios build
