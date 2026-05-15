@@ -218,14 +218,12 @@ jobs:
           name: "DouyTV ${{ github.ref_name }}"
 
   # ===========================================================================
-  # iOS — 在 CI 上 init + build (实验性，无 Apple Developer 证书 build 会失败)
-  # continue-on-error: 让 desktop release 不被这里挡住
-  # ===========================================================================
-  # ===========================================================================
-  # iOS — CI 免签构建 (Unsigned IPA) - 一次性终极修复版
+  # iOS — CI 免签构建 (Unsigned IPA, 供 sideloadly / AltStore 侧载)
+  # 流程: pnpm build → tauri ios init → xcodebuild archive (skip signing) → 手工打 Payload/.app → .ipa
+  # sideloadly 拿到 ipa 后会用用户的 Apple ID 重签，所以这里不需要任何证书。
   # ===========================================================================
   build-ios:
-    runs-on: macos-15
+    runs-on: macos-14
     continue-on-error: true
     steps:
       - name: Checkout
@@ -256,66 +254,108 @@ jobs:
       - name: Install frontend dependencies
         run: pnpm install --frozen-lockfile
 
-      # 【关键修复 1】：强行将 Node/pnpm/cargo 的路径写入全局配置
-      # 解决 Xcode Run Script 找不到命令导致 Exit 65 的问题
-      - name: Inject PATH for Xcode Build Phase
-        run: |
-          echo "export PATH=\"$PATH\"" >> ~/.profile
-          echo "export PATH=\"$PATH\"" >> ~/.zshenv
-          echo "export PATH=\"$PATH\"" >> ~/.bash_profile
+      # 【关键 1】xcodebuild archive 不会跑 tauri.conf.json 的 beforeBuildCommand，
+      # 必须提前手动 build frontend，否则 Xcode Run Script 找不到 dist/ 报错
+      - name: Build frontend
+        run: pnpm build
 
       - name: Initialize iOS project
         run: pnpm tauri ios init
 
       - name: Archive (unsigned)
         working-directory: src-tauri/gen/apple
+        env:
+          # 【关键 2】让 Xcode Run Script Phase 能找到 cargo / pnpm / node。
+          # Xcode 15+ 默认开启 user script sandbox，会切到独立环境，PATH 必须显式注入。
+          CARGO_HOME: ${{ env.HOME }}/.cargo
+          RUSTUP_HOME: ${{ env.HOME }}/.rustup
         run: |
+          set -e
+          export PATH="$HOME/.cargo/bin:$PATH"
+
           PROJECT_FILE=$(ls -d *.xcodeproj | head -n 1)
           APP_NAME=$(basename "$PROJECT_FILE" .xcodeproj)
-          
           SCHEME="${APP_NAME}_iOS"
-          if ! xcodebuild -list -project "$PROJECT_FILE" | grep -q "$SCHEME"; then
+          if ! xcodebuild -list -project "$PROJECT_FILE" | grep -q "${SCHEME}$"; then
             SCHEME="$APP_NAME"
           fi
-          
-          echo "==== 检测到 Xcode 项目: $PROJECT_FILE ===="
-          echo "==== 使用的 Scheme: $SCHEME ===="
-          
-          # 【关键修复 2】：在构建命令尾部附加 PATH="$PATH"，确保环境变量穿透到沙盒内部
+          echo "==== Xcode 项目: $PROJECT_FILE ===="
+          echo "==== Scheme: $SCHEME ===="
+          echo "==== cargo: $(which cargo) ===="
+
+          # 【关键 3】完整 disable signing + 关 sandbox + 强 iOS device target
           xcodebuild \
             -project "$PROJECT_FILE" \
             -scheme "$SCHEME" \
             -configuration Release \
             -sdk iphoneos \
+            -destination "generic/platform=iOS" \
             -archivePath "$PWD/build/app.xcarchive" \
             archive \
             CODE_SIGNING_ALLOWED=NO \
             CODE_SIGNING_REQUIRED=NO \
             CODE_SIGN_IDENTITY="" \
+            CODE_SIGN_ENTITLEMENTS="" \
             DEVELOPMENT_TEAM="" \
+            PROVISIONING_PROFILE_SPECIFIER="" \
+            ENABLE_USER_SCRIPT_SANDBOXING=NO \
             ONLY_ACTIVE_ARCH=NO \
-            PATH="$PATH"
+            | xcpretty || true
+
+          # xcpretty 吞错误码，单独验证 xcarchive 是否真出来了
+          if [ ! -d "build/app.xcarchive/Products/Applications" ]; then
+            echo "::error::xcarchive 未生成 — 重新跑 xcodebuild (full log)"
+            xcodebuild \
+              -project "$PROJECT_FILE" \
+              -scheme "$SCHEME" \
+              -configuration Release \
+              -sdk iphoneos \
+              -destination "generic/platform=iOS" \
+              -archivePath "$PWD/build/app.xcarchive" \
+              archive \
+              CODE_SIGNING_ALLOWED=NO \
+              CODE_SIGNING_REQUIRED=NO \
+              CODE_SIGN_IDENTITY="" \
+              CODE_SIGN_ENTITLEMENTS="" \
+              DEVELOPMENT_TEAM="" \
+              PROVISIONING_PROFILE_SPECIFIER="" \
+              ENABLE_USER_SCRIPT_SANDBOXING=NO \
+              ONLY_ACTIVE_ARCH=NO
+            exit 1
+          fi
 
       - name: Package unsigned IPA
         working-directory: src-tauri/gen/apple
         run: |
-          mkdir -p build/Payload
-          cp -R build/app.xcarchive/Products/Applications/*.app build/Payload/
-          cd build && zip -qr "../../../../douytv-ios-unsigned-${{ github.sha }}.ipa" Payload
+          set -e
+          APP_PATH=$(find build/app.xcarchive/Products/Applications -maxdepth 1 -name "*.app" -print -quit)
+          if [ -z "$APP_PATH" ]; then
+            echo "::error::找不到 .app — archive 失败"
+            exit 1
+          fi
+          echo "==== 找到 .app: $APP_PATH ===="
 
-      - name: Upload IPA artifacts (non-tag runs)
+          # 标准 iOS ipa 结构: Payload/<App>.app/...，zip 后改后缀 ipa
+          rm -rf build/Payload
+          mkdir -p build/Payload
+          cp -R "$APP_PATH" build/Payload/
+          cd build
+          zip -qr "../../../douytv-ios-unsigned.ipa" Payload
+          ls -lh "../../../douytv-ios-unsigned.ipa"
+
+      - name: Upload unsigned IPA (artifact)
         if: ${{ !startsWith(github.ref, 'refs/tags/') }}
         uses: actions/upload-artifact@v4
         with:
-          name: douytv-ios-${{ github.sha }}
-          path: douytv-ios-unsigned-*.ipa
-          if-no-files-found: warn
+          name: douytv-ios-unsigned-${{ github.sha }}
+          path: douytv-ios-unsigned.ipa
+          if-no-files-found: error
           retention-days: 14
 
-      - name: Publish IPA to GitHub Releases (on tag)
+      - name: Publish unsigned IPA to GitHub Release (on tag)
         if: ${{ startsWith(github.ref, 'refs/tags/') }}
         uses: softprops/action-gh-release@v2
         with:
-          files: douytv-ios-unsigned-*.ipa
+          files: douytv-ios-unsigned.ipa
           draft: true
           name: "DouyTV ${{ github.ref_name }}"
