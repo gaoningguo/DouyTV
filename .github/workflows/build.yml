@@ -221,6 +221,9 @@ jobs:
   # iOS — 在 CI 上 init + build (实验性，无 Apple Developer 证书 build 会失败)
   # continue-on-error: 让 desktop release 不被这里挡住
   # ===========================================================================
+  # ===========================================================================
+  # iOS — CI 免签构建 (Unsigned IPA) - 一次性终极修复版
+  # ===========================================================================
   build-ios:
     runs-on: macos-15
     continue-on-error: true
@@ -253,20 +256,24 @@ jobs:
       - name: Install frontend dependencies
         run: pnpm install --frozen-lockfile
 
+      # 【关键修复 1】：强行将 Node/pnpm/cargo 的路径写入全局配置
+      # 解决 Xcode Run Script 找不到命令导致 Exit 65 的问题
+      - name: Inject PATH for Xcode Build Phase
+        run: |
+          echo "export PATH=\"$PATH\"" >> ~/.profile
+          echo "export PATH=\"$PATH\"" >> ~/.zshenv
+          echo "export PATH=\"$PATH\"" >> ~/.bash_profile
+
       - name: Initialize iOS project
         run: pnpm tauri ios init
 
       - name: Archive (unsigned)
         working-directory: src-tauri/gen/apple
         run: |
-          # 自动获取当前目录下的 Xcode 项目名称 (例如 DouyTV.xcodeproj)
           PROJECT_FILE=$(ls -d *.xcodeproj | head -n 1)
           APP_NAME=$(basename "$PROJECT_FILE" .xcodeproj)
           
-          # Tauri v2 默认的 iOS Scheme 通常带有 _iOS 后缀
           SCHEME="${APP_NAME}_iOS"
-          
-          # 保底逻辑：如果找不到 _iOS 后缀的 Scheme，就用原本的 APP_NAME
           if ! xcodebuild -list -project "$PROJECT_FILE" | grep -q "$SCHEME"; then
             SCHEME="$APP_NAME"
           fi
@@ -274,6 +281,7 @@ jobs:
           echo "==== 检测到 Xcode 项目: $PROJECT_FILE ===="
           echo "==== 使用的 Scheme: $SCHEME ===="
           
+          # 【关键修复 2】：在构建命令尾部附加 PATH="$PATH"，确保环境变量穿透到沙盒内部
           xcodebuild \
             -project "$PROJECT_FILE" \
             -scheme "$SCHEME" \
@@ -285,12 +293,29 @@ jobs:
             CODE_SIGNING_REQUIRED=NO \
             CODE_SIGN_IDENTITY="" \
             DEVELOPMENT_TEAM="" \
-            ONLY_ACTIVE_ARCH=NO
+            ONLY_ACTIVE_ARCH=NO \
+            PATH="$PATH"
 
       - name: Package unsigned IPA
         working-directory: src-tauri/gen/apple
         run: |
           mkdir -p build/Payload
-          # 使用通配符 *.app 自动匹配应用，不用管它叫 DouyTV.app 还是其他名字
           cp -R build/app.xcarchive/Products/Applications/*.app build/Payload/
           cd build && zip -qr "../../../../douytv-ios-unsigned-${{ github.sha }}.ipa" Payload
+
+      - name: Upload IPA artifacts (non-tag runs)
+        if: ${{ !startsWith(github.ref, 'refs/tags/') }}
+        uses: actions/upload-artifact@v4
+        with:
+          name: douytv-ios-${{ github.sha }}
+          path: douytv-ios-unsigned-*.ipa
+          if-no-files-found: warn
+          retention-days: 14
+
+      - name: Publish IPA to GitHub Releases (on tag)
+        if: ${{ startsWith(github.ref, 'refs/tags/') }}
+        uses: softprops/action-gh-release@v2
+        with:
+          files: douytv-ios-unsigned-*.ipa
+          draft: true
+          name: "DouyTV ${{ github.ref_name }}"
