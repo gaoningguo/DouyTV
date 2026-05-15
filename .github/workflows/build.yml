@@ -292,10 +292,16 @@ jobs:
           echo "==== cargo: $(which cargo) ===="
 
           # 【关键 3】完整 disable signing + 关 sandbox + 强 iOS device target
+          # 【关键 4】configuration 必须是小写 release —— cargo-mobile2 生成的
+          # pbxproj 里 build configuration 名字是小写 debug/release（对齐 cargo profile）。
+          # 大写 "Release" 在 Xcode 里找不到对应 configuration 会静默 fallback 到 debug，
+          # Run Script 里 tauri ios xcode-script 走 Debug 路径会尝试读 *-server-addr 文件
+          # （那是 tauri ios dev 写的），archive 模式下根本不存在 → panic 在
+          # crates/tauri-cli/src/mobile/mod.rs:386。
           xcodebuild \
             -project "$PROJECT_FILE" \
             -scheme "$SCHEME" \
-            -configuration Release \
+            -configuration release \
             -sdk iphoneos \
             -destination "generic/platform=iOS" \
             -archivePath "$PWD/build/app.xcarchive" \
@@ -316,7 +322,7 @@ jobs:
             xcodebuild \
               -project "$PROJECT_FILE" \
               -scheme "$SCHEME" \
-              -configuration Release \
+              -configuration release \
               -sdk iphoneos \
               -destination "generic/platform=iOS" \
               -archivePath "$PWD/build/app.xcarchive" \
