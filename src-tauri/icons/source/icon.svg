@@ -1,0 +1,122 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+  DouyTV 应用 icon — CRT 复古电视 + Y 字母
+  设计：圆角电视外壳 + 渐变橙红屏幕 + 米黄 Y 字符 + 扫描线 overlay + 顶部 V 形天线 + 底部品牌带
+  1024×1024 源文件，可用 sharp 渲染到任意尺寸 PNG。
+-->
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1024 1024" width="1024" height="1024">
+  <defs>
+    <!-- 屏幕暖光渐变（CRT 余晖） -->
+    <radialGradient id="screen" cx="50%" cy="42%" r="68%">
+      <stop offset="0%" stop-color="#FF8B5C" />
+      <stop offset="55%" stop-color="#FF6B35" />
+      <stop offset="100%" stop-color="#C43E15" />
+    </radialGradient>
+    <!-- 电视外壳深色金属 -->
+    <linearGradient id="bezel" x1="0%" y1="0%" x2="0%" y2="100%">
+      <stop offset="0%" stop-color="#2A2F3A" />
+      <stop offset="100%" stop-color="#0E0F11" />
+    </linearGradient>
+    <!-- 内描边光 -->
+    <linearGradient id="innerLight" x1="0%" y1="0%" x2="0%" y2="100%">
+      <stop offset="0%" stop-color="rgba(255,255,255,0.18)" />
+      <stop offset="100%" stop-color="rgba(255,255,255,0)" />
+    </linearGradient>
+    <!-- 扫描线 pattern（4px 间隔暗线，叠在屏幕上） -->
+    <pattern id="scanlines" x="0" y="0" width="6" height="6" patternUnits="userSpaceOnUse">
+      <rect width="6" height="2.5" fill="rgba(0,0,0,0.14)" />
+    </pattern>
+    <!-- 屏幕高光（左上角玻璃反射） -->
+    <linearGradient id="glassHL" x1="20%" y1="10%" x2="60%" y2="60%">
+      <stop offset="0%" stop-color="rgba(255,255,255,0.22)" />
+      <stop offset="100%" stop-color="rgba(255,255,255,0)" />
+    </linearGradient>
+  </defs>
+
+  <!-- 背景大圆角方块（应用 icon 容器） -->
+  <rect x="0" y="0" width="1024" height="1024" rx="224" ry="224" fill="#0E0F11" />
+
+  <!-- 顶部 V 形天线（两根斜杆 + 顶圆 ball） -->
+  <g stroke="#F2E8D5" stroke-width="14" stroke-linecap="round" fill="none" opacity="0.78">
+    <line x1="380" y1="200" x2="468" y2="320" />
+    <line x1="644" y1="200" x2="556" y2="320" />
+  </g>
+  <circle cx="380" cy="200" r="14" fill="#F2E8D5" opacity="0.85" />
+  <circle cx="644" cy="200" r="14" fill="#F2E8D5" opacity="0.85" />
+
+  <!-- 电视外壳 (主体方框 + 内嵌阴影) -->
+  <rect
+    x="160" y="296"
+    width="704" height="544"
+    rx="78" ry="78"
+    fill="url(#bezel)"
+    stroke="#3B4250"
+    stroke-width="2"
+  />
+
+  <!-- 屏幕 (内嵌矩形 + 多层视觉效果) -->
+  <g>
+    <!-- 屏幕底色 + 暖光 -->
+    <rect
+      x="216" y="352"
+      width="592" height="432"
+      rx="44" ry="44"
+      fill="url(#screen)"
+    />
+    <!-- 暗角 vignette -->
+    <rect
+      x="216" y="352"
+      width="592" height="432"
+      rx="44" ry="44"
+      fill="url(#innerLight)"
+      opacity="0.6"
+    />
+
+    <!-- 字母 Y（米黄色，大字号，呼应 DouY-TV） -->
+    <g font-family="'Bricolage Grotesque', 'Arial Black', sans-serif" font-weight="900" text-anchor="middle">
+      <text
+        x="512" y="650"
+        font-size="356"
+        fill="#F2E8D5"
+        letter-spacing="-12"
+        style="paint-order: stroke; stroke: rgba(0,0,0,0.18); stroke-width: 4;"
+      >Y</text>
+    </g>
+
+    <!-- 顶部 LIVE 红点 + 文字（呼应 rec-dot） -->
+    <circle cx="278" cy="410" r="11" fill="#FFE5D6" />
+    <circle cx="278" cy="410" r="7" fill="#FF3B30">
+      <animate attributeName="opacity" values="1;0.3;1" dur="1.6s" repeatCount="indefinite" />
+    </circle>
+
+    <!-- 扫描线 overlay -->
+    <rect
+      x="216" y="352"
+      width="592" height="432"
+      rx="44" ry="44"
+      fill="url(#scanlines)"
+      opacity="0.9"
+    />
+
+    <!-- 玻璃反射高光 -->
+    <rect
+      x="216" y="352"
+      width="592" height="432"
+      rx="44" ry="44"
+      fill="url(#glassHL)"
+    />
+  </g>
+
+  <!-- 底部品牌带（电视底座） -->
+  <g>
+    <!-- 旋钮 + LED 灯 -->
+    <circle cx="780" cy="568" r="22" fill="#3B4250" stroke="#1F232B" stroke-width="3" />
+    <circle cx="780" cy="568" r="6" fill="#7CFFB2">
+      <animate attributeName="opacity" values="0.5;1;0.5" dur="2.4s" repeatCount="indefinite" />
+    </circle>
+  </g>
+
+  <!-- 底座支撑（梯形） -->
+  <path d="M 384 840 L 640 840 L 600 884 L 424 884 Z" fill="#1F232B" stroke="#3B4250" stroke-width="2" />
+  <rect x="350" y="876" width="324" height="16" rx="8" fill="#0E0F11" />
+</svg>

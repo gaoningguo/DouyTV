@@ -1,0 +1,32 @@
+[package]
+name = "douytv"
+version = "0.1.0"
+description = "MoonTV-style cross-platform media client built with Tauri v2"
+authors = ["GAONX6"]
+edition = "2021"
+rust-version = "1.77"
+
+[lib]
+name = "douytv_lib"
+crate-type = ["staticlib", "cdylib", "rlib"]
+
+[build-dependencies]
+tauri-build = { version = "2", features = [] }
+
+[dependencies]
+tauri = { version = "2", features = ["protocol-asset"] }
+tauri-plugin-fs = "2"
+tauri-plugin-sql = { version = "2", features = ["sqlite"] }
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+url = "2"
+# HTTP client for source-script ctx.fetch (绕过 webview CORS)。
+# 使用 ureq 2.x 避免引入 reqwest -> encoding_rs (与 rustc 1.95 不兼容)
+ureq = { version = "2.12", features = ["json", "tls"], default-features = false }
+
+[profile.release]
+panic = "abort"
+codegen-units = 1
+lto = true
+incremental = false
+opt-level = "s"
