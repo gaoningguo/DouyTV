@@ -87,7 +87,11 @@ export function wrapWithProxy(
   if (!isTauri || !item.url) return item.url || "";
 
   const ua = getHeader(item.headers, "User-Agent");
-  const referer = getHeader(item.headers, "Referer");
+  // 防盗链：源脚本未指定 Referer 时回落到 https://movie.douban.com/。
+  // 与 MoonTV 的 video-proxy / image-proxy 默认 Referer 一致，绕过 Douban
+  // 关联站的防盗链 (它们普遍只校验 Referer host 在 douban 列表里)。
+  const referer =
+    getHeader(item.headers, "Referer") || "https://movie.douban.com/";
 
   // streamType 判定：显式优先；"auto" / undefined / 未知 → URL 启发式
   let isHls: boolean;

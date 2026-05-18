@@ -15,6 +15,7 @@ import SettingsLiveAdd from "@/pages/settings/LiveAdd";
 import SettingsLiveImport from "@/pages/settings/LiveImport";
 import SettingsLocalScan from "@/pages/settings/LocalScan";
 import SettingsProxy from "@/pages/settings/Proxy";
+import SettingsDanmaku from "@/pages/settings/Danmaku";
 import BottomTabBar from "@/components/BottomTabBar";
 import SideNav from "@/components/SideNav";
 import WelcomeModal from "@/components/WelcomeModal";
@@ -107,6 +108,7 @@ export default function App() {
           <Route path="/settings/live-import" element={<SettingsLiveImport />} />
           <Route path="/settings/local-scan" element={<SettingsLocalScan />} />
           <Route path="/settings/proxy" element={<SettingsProxy />} />
+          <Route path="/settings/danmaku" element={<SettingsDanmaku />} />
           <Route path="/scripts" element={<Scripts />} />
           <Route path="/search" element={<Search />} />
           <Route path="/live" element={<Live />} />

@@ -266,3 +266,151 @@ textarea:focus-visible {
   background: var(--ember);
   color: var(--ink);
 }
+
+/* ============================================================
+   ArtPlayer CRT 主题覆盖
+   ArtPlayer 5 默认是 Material 风格 — 用这块统一改字号 / 色调 / 圆角，
+   不破坏插件内部的 DOM 结构。所有规则都限定在 .art-video-player 下，避免泄漏。
+   ============================================================ */
+.art-video-player {
+  font-family: "Bricolage Grotesque", "PingFang SC", "Hiragino Sans GB",
+    "Microsoft YaHei", system-ui, sans-serif !important;
+  background: var(--ink) !important;
+  color: var(--cream) !important;
+  border-radius: 0;
+}
+
+/* 时间码、进度数字走等宽 */
+.art-video-player .art-time,
+.art-video-player .art-progress-tip,
+.art-video-player .art-setting-range {
+  font-family: "JetBrains Mono", "SF Mono", Consolas, monospace !important;
+  letter-spacing: -0.01em;
+}
+
+/* 底栏：不要任何遮罩，让控件浮在视频上。控件文字用 text-shadow 保留可读性。 */
+.art-video-player .art-bottom {
+  background: transparent !important;
+  padding: 12px 14px 8px;
+}
+.art-video-player .art-controls,
+.art-video-player .art-controls .art-control,
+.art-video-player .art-time {
+  text-shadow: 0 1px 4px rgba(0, 0, 0, 0.85);
+}
+
+/* Home Feed 模式：工具栏「只」在鼠标悬停其本身区域时显示。
+   注意：ArtPlayer 在加载 / 缓冲 / 切换 URL 期间会自动给 .art-video-player 加
+   .art-hover 类来强制显示控件 —— 这是默认行为下用户加载完毕前误以为"工具栏总在"
+   的根因。我们用 !important 把 .art-bottom 的可见性夺回来，且只允许真实
+   :hover 触发。 */
+.art-host-feed .art-video-player .art-bottom {
+  opacity: 0 !important;
+  transition: opacity 220ms ease;
+}
+.art-host-feed .art-video-player .art-bottom:hover {
+  opacity: 1 !important;
+}
+/* 锁定状态下不显示工具栏（移动端长按锁定后是另一种交互） */
+.art-host-feed .art-video-player.art-mobile.art-lock .art-bottom {
+  opacity: 0 !important;
+}
+
+/* 进度条：高亮用 ember，buffered 用 ink-edge，背景透明 */
+.art-video-player .art-progress {
+  height: 4px;
+}
+.art-video-player .art-progress-loaded {
+  background: rgba(242, 232, 213, 0.18) !important;
+}
+.art-video-player .art-progress-played {
+  background: var(--ember) !important;
+  box-shadow: 0 0 6px var(--ember-glow);
+}
+.art-video-player .art-progress-indicator {
+  background: var(--ember) !important;
+  box-shadow: 0 0 8px var(--ember-glow);
+  width: 12px !important;
+  height: 12px !important;
+}
+.art-video-player .art-progress-hover {
+  background: rgba(255, 107, 53, 0.35) !important;
+}
+
+/* 控件按钮：默认 cream，hover/active 切到 ember */
+.art-video-player .art-controls .art-control {
+  color: var(--cream-dim) !important;
+  transition: color 140ms ease, transform 120ms ease;
+}
+.art-video-player .art-controls .art-control:hover,
+.art-video-player .art-controls .art-control.art-current {
+  color: var(--ember) !important;
+}
+.art-video-player .art-controls .art-control:active {
+  transform: scale(0.94);
+}
+
+/* 设置面板 / 信息面板：换成 ink 系暗色卡片 */
+.art-video-player .art-settings,
+.art-video-player .art-info {
+  background: rgba(14, 15, 17, 0.94) !important;
+  border: 1px solid var(--cream-line) !important;
+  border-radius: 14px !important;
+  box-shadow: 0 24px 48px -24px rgba(0, 0, 0, 0.85);
+  font-size: 13px;
+}
+
+/* .art-mask 是 ArtPlayer 全屏 click-to-toggle 的透明遮罩，必须保持透明，
+   否则会盖住整个视频画面（典型「视频上有黑色遮罩」bug）。 */
+.art-video-player .art-mask {
+  background: transparent !important;
+}
+
+/* 同理，loading 状态层 / 暂停态大播放键背板 / 海报层默认会蒙一层暗色 backdrop，
+   DouyTV 视觉里不想要任何中央遮罩 —— 只保留按钮 / spinner 本体，背板全清。
+   注意用 background-color 而非 background，避免清掉 .art-poster 的 background-image。 */
+.art-video-player .art-state,
+.art-video-player .art-loading,
+.art-video-player .art-poster {
+  background-color: transparent !important;
+}
+.art-video-player .art-setting-item {
+  border-radius: 8px;
+}
+.art-video-player .art-setting-item:hover {
+  background: rgba(242, 232, 213, 0.05) !important;
+}
+.art-video-player .art-setting-item-left-icon svg {
+  stroke: var(--cream-dim);
+}
+.art-video-player .art-setting-item:hover .art-setting-item-left-icon svg {
+  stroke: var(--ember);
+}
+
+/* 设置项里的 switch 滑块 */
+.art-video-player .art-setting-item-switch.art-current {
+  background: var(--ember) !important;
+}
+
+/* 加载 loading 圈 / 缓冲提示 */
+.art-video-player .art-loading {
+  filter: hue-rotate(-30deg) saturate(1.4);
+}
+
+/* 通知条 (notice) */
+.art-video-player .art-notice {
+  font-family: "JetBrains Mono", monospace;
+  font-size: 11px;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  background: rgba(14, 15, 17, 0.94) !important;
+  border: 1px solid var(--cream-line) !important;
+  border-radius: 6px !important;
+  color: var(--cream) !important;
+}
+
+/* 弹幕发射器（虽然我们默认关掉了 emitter，留着以防开启） */
+.art-video-player .artplayer-plugin-danmuku {
+  font-family: "JetBrains Mono", monospace;
+}
+

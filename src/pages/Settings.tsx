@@ -7,6 +7,7 @@ import { useEpgStore } from "@/stores/epg";
 import { useConfigSubStore } from "@/stores/configSubscription";
 import { useLibraryStore } from "@/stores/library";
 import { useProxyStore } from "@/stores/proxy";
+import { useDanmakuStore } from "@/stores/danmaku";
 import {
   IconScript,
   IconLive,
@@ -114,6 +115,9 @@ export default function Settings() {
   const proxyEnabled = useProxyStore((s) => s.enabled);
   const proxyUrl = useProxyStore((s) => s.url);
   const hydrateProxy = useProxyStore((s) => s.hydrate);
+  const danmakuEnabled = useDanmakuStore((s) => s.enabled);
+  const danmakuSource = useDanmakuStore((s) => s.sourceType);
+  const hydrateDanmaku = useDanmakuStore((s) => s.hydrate);
 
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [showHotkeys, setShowHotkeys] = useState(false);
@@ -125,6 +129,7 @@ export default function Settings() {
     hydrateEpg();
     hydrateConfigSub();
     hydrateProxy();
+    hydrateDanmaku();
     void hydrateLibrary();
   }, [
     hydrateScripts,
@@ -133,6 +138,7 @@ export default function Settings() {
     hydrateEpg,
     hydrateConfigSub,
     hydrateProxy,
+    hydrateDanmaku,
     hydrateLibrary,
   ]);
 
@@ -284,6 +290,19 @@ export default function Settings() {
                 : "OFF · 直连"
             }
             accent="vhs"
+          />
+          <SettingsRow
+            to="/settings/danmaku"
+            Icon={IconAntenna}
+            title="弹幕设置"
+            subtitle={
+              danmakuEnabled
+                ? danmakuSource === "builtin"
+                  ? "ON · 内置源"
+                  : "ON · 自定义源"
+                : "OFF · 关闭弹幕"
+            }
+            accent="ember"
           />
         </div>
       </section>

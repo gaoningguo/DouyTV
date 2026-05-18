@@ -399,3 +399,12 @@ export const IconWave = (p: Props) => (
     <path d="M3 12c0-3 2-3 2 0s2 5 2 0 2-7 2 0 2 9 2 0 2-7 2 0 2 5 2 0 2-3 2 0" />
   </svg>
 );
+
+export const IconDanmaku = (p: Props) => (
+  <svg {...base(p)}>
+    {/* 弹幕：对话气泡 + 双横线表示文字流 */}
+    <path d="M4 6a2 2 0 012-2h12a2 2 0 012 2v8a2 2 0 01-2 2h-7l-4 3v-3H6a2 2 0 01-2-2V6z" />
+    <path d="M8 9h6" />
+    <path d="M8 12h4" />
+  </svg>
+);

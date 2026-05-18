@@ -262,100 +262,56 @@ jobs:
       - name: Install frontend dependencies
         run: pnpm install --frozen-lockfile
 
-      # 【关键 1】xcodebuild archive 不会跑 tauri.conf.json 的 beforeBuildCommand，
-      # 必须提前手动 build frontend，否则 Xcode Run Script 找不到 dist/ 报错
+      # tauri ios build 自己会跑 beforeBuildCommand (= pnpm build)，
+      # 但显式预跑可以让 frontend 错误更早 surface，加快 fail-fast。
       - name: Build frontend
         run: pnpm build
 
       - name: Initialize iOS project
         run: pnpm tauri ios init
 
-      - name: Archive (unsigned)
-        working-directory: src-tauri/gen/apple
-        env:
-          # 【关键 2】让 Xcode Run Script Phase 能找到 cargo / pnpm / node。
-          # Xcode 15+ 默认开启 user script sandbox，会切到独立环境，PATH 必须显式注入。
-          CARGO_HOME: ${{ env.HOME }}/.cargo
-          RUSTUP_HOME: ${{ env.HOME }}/.rustup
-        run: |
-          set -e
-          export PATH="$HOME/.cargo/bin:$PATH"
-
-          PROJECT_FILE=$(ls -d *.xcodeproj | head -n 1)
-          APP_NAME=$(basename "$PROJECT_FILE" .xcodeproj)
-          SCHEME="${APP_NAME}_iOS"
-          if ! xcodebuild -list -project "$PROJECT_FILE" | grep -q "${SCHEME}$"; then
-            SCHEME="$APP_NAME"
-          fi
-          echo "==== Xcode 项目: $PROJECT_FILE ===="
-          echo "==== Scheme: $SCHEME ===="
-          echo "==== cargo: $(which cargo) ===="
-
-          # 【关键 3】完整 disable signing + 关 sandbox + 强 iOS device target
-          # 【关键 4】configuration 必须是小写 release —— cargo-mobile2 生成的
-          # pbxproj 里 build configuration 名字是小写 debug/release（对齐 cargo profile）。
-          # 大写 "Release" 在 Xcode 里找不到对应 configuration 会静默 fallback 到 debug，
-          # Run Script 里 tauri ios xcode-script 走 Debug 路径会尝试读 *-server-addr 文件
-          # （那是 tauri ios dev 写的），archive 模式下根本不存在 → panic 在
-          # crates/tauri-cli/src/mobile/mod.rs:386。
-          xcodebuild \
-            -project "$PROJECT_FILE" \
-            -scheme "$SCHEME" \
-            -configuration release \
-            -sdk iphoneos \
-            -destination "generic/platform=iOS" \
-            -archivePath "$PWD/build/app.xcarchive" \
-            archive \
-            CODE_SIGNING_ALLOWED=NO \
-            CODE_SIGNING_REQUIRED=NO \
-            CODE_SIGN_IDENTITY="" \
-            CODE_SIGN_ENTITLEMENTS="" \
-            DEVELOPMENT_TEAM="" \
-            PROVISIONING_PROFILE_SPECIFIER="" \
-            ENABLE_USER_SCRIPT_SANDBOXING=NO \
-            ONLY_ACTIVE_ARCH=NO \
-            | xcpretty || true
-
-          # xcpretty 吞错误码，单独验证 xcarchive 是否真出来了
-          if [ ! -d "build/app.xcarchive/Products/Applications" ]; then
-            echo "::error::xcarchive 未生成 — 重新跑 xcodebuild (full log)"
-            xcodebuild \
-              -project "$PROJECT_FILE" \
-              -scheme "$SCHEME" \
-              -configuration release \
-              -sdk iphoneos \
-              -destination "generic/platform=iOS" \
-              -archivePath "$PWD/build/app.xcarchive" \
-              archive \
-              CODE_SIGNING_ALLOWED=NO \
-              CODE_SIGNING_REQUIRED=NO \
-              CODE_SIGN_IDENTITY="" \
-              CODE_SIGN_ENTITLEMENTS="" \
-              DEVELOPMENT_TEAM="" \
-              PROVISIONING_PROFILE_SPECIFIER="" \
-              ENABLE_USER_SCRIPT_SANDBOXING=NO \
-              ONLY_ACTIVE_ARCH=NO
-            exit 1
-          fi
+      # 【关键】必须用 tauri ios build，不能直接调 xcodebuild。
+      # 因为 tauri-cli 在 pbxproj 注入的 Run Script Phase 会调
+      # `tauri ios xcode-script`，那个子命令在入口处无条件 read_options()
+      # (crates/tauri-cli/src/mobile/mod.rs:read_options → 读 *-server-addr 文件)。
+      # 这个文件由 tauri-cli **父进程** (tauri ios dev / tauri ios build)
+      # 在唤起 xcodebuild 前写入；我们直接调 xcodebuild 就没人写，
+      # xcode-script 必 panic in 'failed to read missing addr file'。
+      #
+      # --no-sign     → archive 走 skip_codesign()，免 Apple 证书
+      # --archive-only → 仅 archive，跳过 tauri-cli 自带的自签证书 + export ipa 那段
+      #                  (那段会 touch Keychain，CI 上可能踩坑)。我们沿用原来的
+      #                  Payload/<App>.app 手工 zip 流程产 unsigned ipa，给 sideloadly 用。
+      - name: Archive (unsigned) via tauri ios build
+        run: pnpm tauri ios build --no-sign --archive-only
 
       - name: Package unsigned IPA
-        working-directory: src-tauri/gen/apple
         run: |
           set -e
-          APP_PATH=$(find build/app.xcarchive/Products/Applications -maxdepth 1 -name "*.app" -print -quit)
-          if [ -z "$APP_PATH" ]; then
-            echo "::error::找不到 .app — archive 失败"
+          # tauri-cli 把 xcarchive 放在 gen/apple/build/<scheme>.xcarchive
+          # (而不是固定的 app.xcarchive)，用 find 兜底
+          ARCHIVE_PATH=$(find src-tauri/gen/apple/build -maxdepth 3 -type d -name "*.xcarchive" -print -quit)
+          if [ -z "$ARCHIVE_PATH" ]; then
+            echo "::error::找不到 .xcarchive — archive 失败"
+            find src-tauri/gen/apple/build -maxdepth 4 -print || true
             exit 1
           fi
-          echo "==== 找到 .app: $APP_PATH ===="
+          echo "==== xcarchive: $ARCHIVE_PATH ===="
+
+          APP_PATH=$(find "$ARCHIVE_PATH/Products/Applications" -maxdepth 1 -name "*.app" -print -quit)
+          if [ -z "$APP_PATH" ]; then
+            echo "::error::xcarchive 里找不到 .app"
+            exit 1
+          fi
+          echo "==== .app: $APP_PATH ===="
 
           # 标准 iOS ipa 结构: Payload/<App>.app/...，zip 后改后缀 ipa
-          rm -rf build/Payload
-          mkdir -p build/Payload
-          cp -R "$APP_PATH" build/Payload/
-          cd build
-          zip -qr "../../../douytv-ios-unsigned.ipa" Payload
-          ls -lh "../../../douytv-ios-unsigned.ipa"
+          STAGE_DIR="$(dirname "$ARCHIVE_PATH")/_ipa_stage"
+          rm -rf "$STAGE_DIR"
+          mkdir -p "$STAGE_DIR/Payload"
+          cp -R "$APP_PATH" "$STAGE_DIR/Payload/"
+          (cd "$STAGE_DIR" && zip -qr "$GITHUB_WORKSPACE/douytv-ios-unsigned.ipa" Payload)
+          ls -lh douytv-ios-unsigned.ipa
 
       - name: Upload unsigned IPA (artifact)
         if: ${{ !startsWith(github.ref, 'refs/tags/') }}

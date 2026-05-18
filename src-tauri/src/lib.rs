@@ -213,14 +213,17 @@ fn proxy_fetch(
     let agent = builder.build();
     let mut req = agent.get(target);
     req = req.set("User-Agent", ua.unwrap_or(DEFAULT_UA));
+    // 防盗链：调用方未指定 Referer 时回落到 https://movie.douban.com/。
+    // 对齐 MoonTV 的 video-proxy / image-proxy 默认行为 —— Douban 关联的 VOD
+    // 站普遍只校验 Referer host 是 douban，给一个合法 Douban Referer 即可放行。
     if let Some(r) = referer {
         if !r.is_empty() {
             req = req.set("Referer", r);
+        } else {
+            req = req.set("Referer", "https://movie.douban.com/");
         }
-    } else if let Ok(u) = Url::parse(target) {
-        if let Some(host) = u.host_str() {
-            req = req.set("Referer", &format!("{}://{}/", u.scheme(), host));
-        }
+    } else {
+        req = req.set("Referer", "https://movie.douban.com/");
     }
     req = req.set("Accept", "*/*");
     req = req.set("Accept-Language", "zh-CN,zh;q=0.9,en;q=0.8");
