@@ -18,7 +18,7 @@ permissions:
 
 jobs:
   # ===========================================================================
-  # 桌面端构建 — Windows / macOS (Apple Silicon + Intel) / Linux
+  # 桌面端构建 — Windows / macOS (Apple Silicon) / Linux
   # 产物: .msi / .exe (Win), .dmg / .app (mac), .deb / .AppImage / .rpm (linux)
   # ===========================================================================
   build-desktop:
@@ -38,10 +38,6 @@ jobs:
             args: "--target aarch64-apple-darwin"
             label: macos-arm64
             rust-targets: aarch64-apple-darwin
-          - platform: macos-13
-            args: "--target x86_64-apple-darwin"
-            label: macos-intel
-            rust-targets: x86_64-apple-darwin
 
     runs-on: ${{ matrix.platform }}
     steps:
@@ -107,7 +103,6 @@ jobs:
             | --- | --- |
             | Windows 64 位 | `.msi` 或 `.exe` (NSIS) |
             | macOS Apple Silicon | `*_aarch64.dmg` |
-            | macOS Intel | `*_x64.dmg` |
             | Linux | `.deb` / `.AppImage` / `.rpm` |
             | Android | `*-universal-release-unsigned.apk`（需在手机开启「未知来源」） |
             | iOS | `*.ipa`（实验性 — 无 Apple Developer 证书可能 build 失败） |
