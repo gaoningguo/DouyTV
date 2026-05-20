@@ -2,6 +2,7 @@ import { useEffect, useMemo, useState } from "react";
 import { Link, useNavigate, useParams } from "react-router-dom";
 import { useDetail } from "@/hooks/useDetail";
 import { useLibraryStore } from "@/stores/library";
+import SourceSwitcher from "@/components/SourceSwitcher";
 import {
   IconArrowLeft,
   IconHeart,
@@ -10,6 +11,7 @@ import {
   IconFilm,
   IconClock,
   IconCheck,
+  IconAntenna,
 } from "@/components/Icon";
 
 export default function Detail() {
@@ -25,6 +27,7 @@ export default function Detail() {
   const history = useLibraryStore((s) => s.history);
 
   const [pbIdx, setPbIdx] = useState(0);
+  const [showSourceSwitcher, setShowSourceSwitcher] = useState(false);
 
   useEffect(() => {
     hydrate();
@@ -183,6 +186,21 @@ export default function Detail() {
               </Link>
             )}
             {playback && (
+              <button
+                type="button"
+                onClick={() => setShowSourceSwitcher(true)}
+                className="px-3 py-1.5 rounded-full text-xs font-display font-semibold tap flex items-center gap-1.5 text-cream"
+                style={{
+                  background: "var(--ink-2)",
+                  border: "1px solid var(--cream-line)",
+                }}
+                title="切换线路 / 测速 / 跨脚本换源"
+              >
+                <IconAntenna size={13} />
+                换源 / 测速
+              </button>
+            )}
+            {playback && (
               <Link
                 to={`/play/${encodeURIComponent(scriptKey)}/${encodeURIComponent(vodId)}/${safePbIdx}/0`}
                 className="px-3 py-1.5 rounded-full text-xs font-display font-semibold tap flex items-center gap-1.5 glow-ember"
@@ -302,6 +320,28 @@ export default function Detail() {
           </div>
         </div>
       )}
+
+      {/* 换源 / 跨脚本测速 */}
+      <SourceSwitcher
+        open={showSourceSwitcher}
+        playbacks={detail.playbacks}
+        currentIndex={safePbIdx}
+        episodeIndex={hist?.episodeIndex ?? 0}
+        script={script}
+        videoTitle={detail.title}
+        onPick={(newPbIdx) => {
+          setShowSourceSwitcher(false);
+          setPbIdx(newPbIdx);
+        }}
+        onPickCrossScript={(newScriptKey, newVodId) => {
+          setShowSourceSwitcher(false);
+          // 跨脚本：跳转到该脚本对应视频的 Detail
+          navigate(
+            `/detail/${encodeURIComponent(newScriptKey)}/${encodeURIComponent(newVodId)}`
+          );
+        }}
+        onClose={() => setShowSourceSwitcher(false)}
+      />
     </div>
   );
 }

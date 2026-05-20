@@ -6,7 +6,7 @@ on:
     tags: ["v*"]
   pull_request:
     branches: [main, master]
-  workflow_dispatch:
+  workflow_dispatch: 
 
 # 同一分支/tag 重复 push 时取消上一次未完成的 run，节约 Actions 配额
 concurrency:

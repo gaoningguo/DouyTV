@@ -1,26 +1,96 @@
-import { useEffect } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { Link } from "react-router-dom";
 import VideoFeed from "@/components/VideoFeed";
 import InteractionBar from "@/components/InteractionBar";
+import SourceSwitcher from "@/components/SourceSwitcher";
+import DanmakuPanel, {
+  loadDanmakuMemory,
+  saveDanmakuMemory,
+} from "@/components/DanmakuPanel";
 import { useFeed } from "@/hooks/useFeed";
 import { useLibraryStore } from "@/stores/library";
 import { useScriptStore } from "@/stores/scripts";
-import { IconRefresh, IconStatic } from "@/components/Icon";
+import { useDanmakuStore } from "@/stores/danmaku";
+import { IconRefresh, IconStatic, IconDanmaku } from "@/components/Icon";
+import type { MediaItem } from "@/types/media";
+import type { ScriptPlayback } from "@/source-script/types";
+import type { DanmakuSelection } from "@/lib/danmaku/types";
 
 export default function Home() {
-  const { items, loading, error, loadMore, reload, changeEpisode, reresolveItem } = useFeed();
+  const {
+    items,
+    loading,
+    error,
+    loadMore,
+    reload,
+    changeEpisode,
+    reresolveItem,
+    swapSource,
+  } = useFeed();
   const hydrateScripts = useScriptStore((s) => s.hydrate);
   const hydrateLib = useLibraryStore((s) => s.hydrate);
   const upsertHistory = useLibraryStore((s) => s.upsertHistory);
   const scripts = useScriptStore((s) => s.scripts);
+  const enabledInFeed = useDanmakuStore((s) => s.enabledInFeed);
+  const patchPrefs = useDanmakuStore((s) => s.patchPrefs);
+  const bumpFeedRefresh = useDanmakuStore((s) => s.bumpFeedRefresh);
+
+  const [activeIndex, setActiveIndex] = useState(0);
+  // ArtPlayer 设置菜单「换源 / 测速」触发 → 这里 set 当前 item，弹 SourceSwitcher
+  const [switchSourceItem, setSwitchSourceItem] = useState<MediaItem | null>(null);
+  // 浮层弹幕选择
+  const [danmakuPanelOpen, setDanmakuPanelOpen] = useState(false);
+  // 强制重渲染当前弹幕 selection（saveDanmakuMemory 完不会自动触发 React）
+  const [danmakuSelTick, setDanmakuSelTick] = useState(0);
 
   useEffect(() => {
     hydrateScripts();
     hydrateLib();
   }, [hydrateScripts, hydrateLib]);
 
+  const activeItem: MediaItem | undefined = items[activeIndex];
+
+  const currentDanmakuSel: DanmakuSelection | null = useMemo(() => {
+    if (!activeItem?.title) return null;
+    return loadDanmakuMemory(activeItem.title) ?? null;
+    // 依赖 danmakuSelTick 让选择完后立即更新
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [activeItem?.title, danmakuSelTick]);
+
+  const handleDanmakuPick = (selection: DanmakuSelection) => {
+    setDanmakuPanelOpen(false);
+    if (!activeItem?.title) return;
+    saveDanmakuMemory(activeItem.title, selection);
+    if (!enabledInFeed) patchPrefs({ enabledInFeed: true });
+    bumpFeedRefresh();
+    setDanmakuSelTick((n) => n + 1);
+  };
+
+  // SourceSwitcher 需要的 playbacks（当前线路占位）+ script
+  const switchPlaybacks: ScriptPlayback[] =
+    switchSourceItem && switchSourceItem.episodes && switchSourceItem.episodes.length > 0
+      ? [
+          {
+            sourceId: switchSourceItem.sourceId ?? "",
+            sourceName: switchSourceItem.sourceName ?? "当前线路",
+            episodes: switchSourceItem.episodes,
+            episodes_titles: switchSourceItem.episodesTitles,
+          },
+        ]
+      : [];
+  const switchScript = switchSourceItem
+    ? scripts.find((s) => s.key === switchSourceItem.scriptKey)
+    : undefined;
+
   const TopBar = (
-    <div className="absolute top-0 inset-x-0 z-20 flex items-center justify-between px-4 pt-3 pb-2 pointer-events-none">
+    <div
+      className="absolute top-0 inset-x-0 z-20 flex items-center justify-between px-4 pb-2 pointer-events-none"
+      style={{
+        paddingTop: "calc(env(safe-area-inset-top) + 12px)",
+        paddingLeft: "calc(env(safe-area-inset-left) + 16px)",
+        paddingRight: "calc(env(safe-area-inset-right) + 16px)",
+      }}
+    >
       <div className="pointer-events-auto flex items-center gap-2.5">
         <span className="rec-dot" />
         <span className="font-display font-extrabold text-sm tracking-tight text-cream text-shadow">
@@ -31,6 +101,64 @@ export default function Home() {
         </span>
       </div>
       <div className="flex gap-2 pointer-events-auto">
+        {/* Play 页风格弹幕开关 + 选择 —— 仅当有当前 item 时显示 */}
+        {activeItem && (
+          <>
+            <button
+              type="button"
+              onClick={() => patchPrefs({ enabledInFeed: !enabledInFeed })}
+              className="w-9 h-9 rounded-full flex items-center justify-center tap backdrop-blur-md transition-colors"
+              style={{
+                background: "rgba(14,15,17,0.55)",
+                border: `1px solid ${
+                  enabledInFeed && currentDanmakuSel
+                    ? "var(--ember)"
+                    : "var(--cream-line)"
+                }`,
+                color:
+                  enabledInFeed && currentDanmakuSel
+                    ? "var(--ember)"
+                    : "var(--cream-dim)",
+              }}
+              aria-label="弹幕开关"
+              title={
+                currentDanmakuSel
+                  ? enabledInFeed
+                    ? "关闭弹幕"
+                    : "开启弹幕"
+                  : "未选择弹幕源"
+              }
+            >
+              <IconDanmaku size={16} />
+            </button>
+            <button
+              type="button"
+              onClick={() => setDanmakuPanelOpen(true)}
+              className="px-3 h-9 flex items-center gap-1.5 rounded-full backdrop-blur-md tap font-display text-xs"
+              style={{
+                background: "rgba(14,15,17,0.55)",
+                border: "1px solid var(--cream-line)",
+                color: "var(--cream)",
+              }}
+            >
+              {currentDanmakuSel ? (
+                <>
+                  <span
+                    className="rec-dot"
+                    style={{ width: 5, height: 5, background: "var(--phosphor)" }}
+                  />
+                  <span className="line-clamp-1 max-w-[100px]">
+                    {currentDanmakuSel.episodeTitle ||
+                      currentDanmakuSel.animeTitle ||
+                      "已选弹幕"}
+                  </span>
+                </>
+              ) : (
+                "选择弹幕"
+              )}
+            </button>
+          </>
+        )}
         <button
           type="button"
           onClick={reload}
@@ -130,13 +258,30 @@ export default function Home() {
         items={items}
         onLoadMore={loadMore}
         controls
+        onIndexChange={setActiveIndex}
         onProgress={(item, position, duration) =>
           upsertHistory(item, { position, duration })
         }
+        onItemEnded={(item) => {
+          // 合集自动下一集；不是合集的视频自然 loop=true（VideoPlayer 默认）
+          const cur = item.currentEpisodeIndex ?? 0;
+          const total = item.episodes?.length ?? 0;
+          if (total > 1 && cur + 1 < total) {
+            void changeEpisode(item.id, cur + 1);
+          }
+        }}
         onRequestReresolve={(item) => reresolveItem(item.id)}
+        onRequestSwitchSource={(item) => setSwitchSourceItem(item)}
+        onChangeEpisode={(item, idx) => changeEpisode(item.id, idx)}
         renderOverlay={(item, i) => (
           <>
-            <div className="absolute left-4 right-20 bottom-20 md:bottom-20 text-cream pointer-events-none z-20">
+            <div
+              className="absolute left-4 right-20 text-cream pointer-events-none z-20"
+              style={{
+                bottom: "calc(env(safe-area-inset-bottom) + 56px + 16px)",
+                paddingLeft: "env(safe-area-inset-left)",
+              }}
+            >
               <div className="flex items-center gap-2 mb-2">
                 <span className="chip-ch">CH {String(i + 1).padStart(2, "0")}</span>
                 {item.sourceName && (
@@ -173,6 +318,37 @@ export default function Home() {
           </>
         )}
       />
+
+      {/* 跨脚本换源 / 测速 —— ArtPlayer 设置菜单触发 */}
+      {switchSourceItem && (
+        <SourceSwitcher
+          open={!!switchSourceItem}
+          playbacks={switchPlaybacks}
+          currentIndex={0}
+          episodeIndex={switchSourceItem.currentEpisodeIndex ?? 0}
+          script={switchScript}
+          videoTitle={switchSourceItem.title}
+          onPick={() => setSwitchSourceItem(null)}
+          onPickCrossScript={async (newScriptKey, newVodId) => {
+            const targetId = switchSourceItem.id;
+            setSwitchSourceItem(null);
+            await swapSource(targetId, newScriptKey, newVodId);
+          }}
+          onClose={() => setSwitchSourceItem(null)}
+        />
+      )}
+
+      {/* 弹幕选择面板 */}
+      {activeItem && (
+        <DanmakuPanel
+          open={danmakuPanelOpen}
+          videoTitle={activeItem.title}
+          currentEpisodeIndex={activeItem.currentEpisodeIndex ?? 0}
+          currentSelection={currentDanmakuSel}
+          onSelect={handleDanmakuPick}
+          onClose={() => setDanmakuPanelOpen(false)}
+        />
+      )}
     </div>
   );
 }

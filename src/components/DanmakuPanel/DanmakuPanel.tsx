@@ -80,18 +80,25 @@ export default function DanmakuPanel({
   const [searching, setSearching] = useState(false);
   const [loadingEps, setLoadingEps] = useState(false);
   const [err, setErr] = useState<string | null>(null);
-  const initRef = useRef(false);
+  const wasOpenRef = useRef(false);
 
-  // 初次打开时：用 videoTitle 自动搜一遍，给用户一个起点
+  // 每次 open 由 false 切到 true：重置 + 用 videoTitle 自动搜一遍。
+  // 之前用 initRef 一次性 init 导致面板第二次打开 / 跨视频复用同一 InteractionBar
+  // 实例时不再自动搜索，UI 看起来空白。
   useEffect(() => {
-    if (!open) return;
-    if (initRef.current) return;
-    initRef.current = true;
-    const initialKw = videoTitle.trim();
-    if (initialKw) {
+    if (open && !wasOpenRef.current) {
+      setSelectedAnime(null);
+      setEpisodes([]);
+      setErr(null);
+      const initialKw = videoTitle.trim();
       setKeyword(initialKw);
-      void doSearch(initialKw);
+      if (initialKw) {
+        void doSearch(initialKw);
+      } else {
+        setResults([]);
+      }
     }
+    wasOpenRef.current = open;
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [open, videoTitle]);
 

@@ -8,19 +8,25 @@ import { useConfigSubStore } from "@/stores/configSubscription";
 import { useLibraryStore } from "@/stores/library";
 import { useProxyStore } from "@/stores/proxy";
 import { useDanmakuStore } from "@/stores/danmaku";
+import { useMusicStore } from "@/stores/music";
+import { useBooksStore } from "@/stores/books";
+import { useMangaStore } from "@/stores/manga";
+import { useSyncStore } from "@/stores/sync";
 import {
   IconScript,
   IconLive,
-  IconLocal,
   IconAntenna,
-  IconCalendar,
   IconUpload,
   IconDownload,
   IconTrash,
   IconChevronRight,
   IconKeyboard,
-  IconPlus,
   IconWave,
+  IconMusic,
+  IconBook,
+  IconManga,
+  IconRefresh,
+  IconDownload as IconUpdateDownload,
 } from "@/components/Icon";
 
 function snapshotAppData(): Record<string, unknown> {
@@ -105,19 +111,31 @@ export default function Settings() {
   const subscriptions = useLiveSubStore((s) => s.subscriptions);
   const hydrateSubs = useLiveSubStore((s) => s.hydrate);
   const epgUrl = useEpgStore((s) => s.url);
-  const programmes = useEpgStore((s) => s.programmes);
-  const epgUpdatedAt = useEpgStore((s) => s.updatedAt);
   const hydrateEpg = useEpgStore((s) => s.hydrate);
   const configSubUrl = useConfigSubStore((s) => s.url);
-  const configSubUpdatedAt = useConfigSubStore((s) => s.updatedAt);
   const hydrateConfigSub = useConfigSubStore((s) => s.hydrate);
   const hydrateLibrary = useLibraryStore((s) => s.hydrate);
-  const proxyEnabled = useProxyStore((s) => s.enabled);
-  const proxyUrl = useProxyStore((s) => s.url);
+  const proxyMode = useProxyStore((s) => s.mode);
+  const proxyManualUrl = useProxyStore((s) => s.manualUrl);
+  const proxySystemUrl = useProxyStore((s) => s.systemProxyUrl);
   const hydrateProxy = useProxyStore((s) => s.hydrate);
   const danmakuEnabled = useDanmakuStore((s) => s.enabled);
   const danmakuSource = useDanmakuStore((s) => s.sourceType);
   const hydrateDanmaku = useDanmakuStore((s) => s.hydrate);
+  const musicBackendCount = useMusicStore((s) => s.backends.length);
+  const musicActiveBackend = useMusicStore((s) =>
+    s.backends.find((b) => b.id === s.activeBackendId) ?? null
+  );
+  const musicDefaultPlatform = useMusicStore((s) => s.defaultPlatform);
+  const hydrateMusic = useMusicStore((s) => s.hydrate);
+  const bookSources = useBooksStore((s) => s.sources);
+  const hydrateBooks = useBooksStore((s) => s.hydrate);
+  const mangaServerUrl = useMangaStore((s) => s.serverUrl);
+  const hydrateManga = useMangaStore((s) => s.hydrate);
+  const syncBaseUrl = useSyncStore((s) => s.baseUrl);
+  const syncAutoIntervalMin = useSyncStore((s) => s.autoIntervalMin);
+  const syncLastSyncAt = useSyncStore((s) => s.lastSyncAt);
+  const hydrateSync = useSyncStore((s) => s.hydrate);
 
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [showHotkeys, setShowHotkeys] = useState(false);
@@ -131,6 +149,10 @@ export default function Settings() {
     hydrateProxy();
     hydrateDanmaku();
     void hydrateLibrary();
+    void hydrateMusic();
+    void hydrateBooks();
+    void hydrateManga();
+    hydrateSync();
   }, [
     hydrateScripts,
     hydrateLive,
@@ -140,6 +162,10 @@ export default function Settings() {
     hydrateProxy,
     hydrateDanmaku,
     hydrateLibrary,
+    hydrateMusic,
+    hydrateBooks,
+    hydrateManga,
+    hydrateSync,
   ]);
 
   const onImportFile = async (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -172,12 +198,6 @@ export default function Settings() {
   };
 
   const enabledCount = scripts.filter((s) => s.enabled).length;
-  const formattedConfigSubTs = configSubUpdatedAt
-    ? new Date(configSubUpdatedAt).toLocaleDateString()
-    : undefined;
-  const formattedEpgTs = epgUpdatedAt
-    ? new Date(epgUpdatedAt).toLocaleDateString()
-    : undefined;
 
   return (
     <div className="min-h-screen bg-ink text-cream p-4 pb-20">
@@ -190,84 +210,75 @@ export default function Settings() {
         </h1>
       </div>
 
-      {/* 内容源 */}
+      {/* 内容源 —— 合并入口 */}
       <section className="mb-6">
         <p className="font-mono text-[10px] tracking-[0.2em] text-cream-faint mb-3">
           CONTENT SOURCES
         </p>
         <div className="space-y-2">
           <SettingsRow
-            to="/scripts"
+            to="/settings/video-hub"
             Icon={IconScript}
-            title="视频源"
-            subtitle={`${scripts.length} 个 · ${enabledCount} 启用`}
+            title="视频管理"
+            subtitle={
+              configSubUrl
+                ? `${scripts.length} 源 · ${enabledCount} 启用 · 已订阅`
+                : `${scripts.length} 源 · ${enabledCount} 启用 · 含本地`
+            }
             accent="ember"
           />
           <SettingsRow
-            to="/scripts?dialog=config"
-            Icon={IconAntenna}
-            title="视频源订阅"
+            to="/settings/music"
+            Icon={IconMusic}
+            title="音乐"
             subtitle={
-              configSubUrl
-                ? `已订阅 · ${formattedConfigSubTs ?? "未刷新"}`
-                : "未订阅"
+              musicBackendCount === 0
+                ? "未配置 · 三种后端可选"
+                : musicActiveBackend
+                  ? `${musicActiveBackend.name} · ${musicDefaultPlatform.toUpperCase()}`
+                  : `${musicBackendCount} 个后端 · 未选 active`
+            }
+            accent="ember"
+          />
+          <SettingsRow
+            to="/settings/books"
+            Icon={IconBook}
+            title="电子书"
+            subtitle={
+              bookSources.length > 0
+                ? `${bookSources.length} 个 OPDS 源 · + Legado 网络小说`
+                : "OPDS · Legado 网络小说"
             }
             accent="vhs"
           />
           <SettingsRow
-            to="/settings/local-scan"
-            Icon={IconLocal}
-            title="本地视频"
-            subtitle="扫描本地目录，离线播放"
+            to="/settings/manga"
+            Icon={IconManga}
+            title="漫画"
+            subtitle={
+              mangaServerUrl
+                ? "Suwayomi · JSON 自定义源"
+                : "Suwayomi · JSON 自定义源"
+            }
             accent="phosphor"
           />
         </div>
       </section>
 
-      {/* 直播 */}
+      {/* 直播 —— 合并入口 */}
       <section className="mb-6">
         <p className="font-mono text-[10px] tracking-[0.2em] text-cream-faint mb-3">
           LIVE · IPTV
         </p>
         <div className="space-y-2">
           <SettingsRow
-            to="/live"
+            to="/settings/live-hub"
             Icon={IconLive}
-            title="直播频道"
-            subtitle={`${channels.length} 频道`}
+            title="直播管理"
+            subtitle={`${channels.length} 频道 · ${subscriptions.length} 订阅${
+              epgUrl ? " · EPG 已订阅" : ""
+            }`}
             accent="ember"
-          />
-          <SettingsRow
-            to="/settings/live-subs"
-            Icon={IconAntenna}
-            title="M3U 订阅源"
-            subtitle={`${subscriptions.length} 个订阅`}
-            accent="vhs"
-          />
-          <SettingsRow
-            to="/settings/live-epg"
-            Icon={IconCalendar}
-            title="EPG 节目单"
-            subtitle={
-              epgUrl
-                ? `${Object.keys(programmes).length} 频道 · ${formattedEpgTs ?? "未刷新"}`
-                : "未订阅"
-            }
-            accent="phosphor"
-          />
-          <SettingsRow
-            to="/settings/live-add"
-            Icon={IconPlus}
-            title="添加直播频道"
-            subtitle="手动添加单个 m3u8"
-            accent="vhs"
-          />
-          <SettingsRow
-            to="/settings/live-import"
-            Icon={IconDownload}
-            title="导入 M3U 文本"
-            subtitle="粘贴 M3U 批量导入"
-            accent="phosphor"
           />
         </div>
       </section>
@@ -283,11 +294,15 @@ export default function Settings() {
             Icon={IconWave}
             title="系统代理"
             subtitle={
-              proxyEnabled
-                ? proxyUrl
-                  ? `ON · ${proxyUrl}`
-                  : "ON · 未设置 URL"
-                : "OFF · 直连"
+              proxyMode === "off"
+                ? "OFF · 直连"
+                : proxyMode === "manual"
+                  ? proxyManualUrl
+                    ? `MANUAL · ${proxyManualUrl}`
+                    : "MANUAL · 未设置 URL"
+                  : proxySystemUrl
+                    ? `AUTO · ${proxySystemUrl}`
+                    : "AUTO · 未检测到系统代理"
             }
             accent="vhs"
           />
@@ -303,6 +318,35 @@ export default function Settings() {
                 : "OFF · 关闭弹幕"
             }
             accent="ember"
+          />
+        </div>
+      </section>
+
+      {/* 系统 */}
+      <section className="mb-6">
+        <p className="font-mono text-[10px] tracking-[0.2em] text-cream-faint mb-3">
+          SYSTEM
+        </p>
+        <div className="space-y-2">
+          <SettingsRow
+            to="/settings/sync"
+            Icon={IconRefresh}
+            title="WebDAV 同步"
+            subtitle={
+              syncBaseUrl
+                ? syncAutoIntervalMin > 0
+                  ? `AUTO · 每 ${syncAutoIntervalMin}min · ${syncLastSyncAt ? new Date(syncLastSyncAt).toLocaleDateString() : "未推送"}`
+                  : `MANUAL · ${syncLastSyncAt ? new Date(syncLastSyncAt).toLocaleDateString() : "未推送"}`
+                : "未配置 · 自部署 WebDAV 服务"
+            }
+            accent="vhs"
+          />
+          <SettingsRow
+            to="/settings/updates"
+            Icon={IconUpdateDownload}
+            title="检查更新"
+            subtitle="GitHub Releases · 自动签名校验"
+            accent="phosphor"
           />
         </div>
       </section>

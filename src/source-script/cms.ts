@@ -41,12 +41,21 @@ interface CmsRawItem {
   type_name?: string;
 }
 
+interface CmsClassItem {
+  type_id: number;
+  type_name: string;
+  /** 父分类 id（一级 = 0）。MoonTV CMS API 字段名 */
+  type_pid?: number;
+}
+
 interface CmsResponse {
   code?: number;
   list?: CmsRawItem[];
   pagecount?: number;
   total?: number;
   msg?: string;
+  /** CMS V10 `?ac=list` 返回的 type 列表（电影/电视剧/综艺...） */
+  class?: CmsClassItem[];
 }
 
 function cleanText(s: string | undefined | null): string {
@@ -145,16 +154,46 @@ export function makeCmsScriptModule(desc: ScriptDescriptor): ScriptModule {
   return {
     meta: { name: desc.name, author: "cms-api" },
 
+    /**
+     * 调 ?ac=list 拉真实分类（class 字段）。每个 type 作为一个 ScriptSourceItem，
+     * group="分类"。失败回退到默认 [default]。
+     */
     async getSources() {
-      return [{ id: "default", name: desc.name }];
+      try {
+        const data = await fetchList({ ac: "list" });
+        const cls = data.class ?? [];
+        if (cls.length === 0) {
+          return [{ id: "default", name: desc.name }];
+        }
+        // 排除 type_pid > 0 的子分类，避免树状结构（前端只用一级）
+        // 保留 default + 所有一级 type 作选项
+        return [
+          { id: "default", name: "全部", group: "分类" },
+          ...cls
+            .filter((c) => !c.type_pid || c.type_pid === 0)
+            .map((c) => ({
+              id: String(c.type_id),
+              name: c.type_name,
+              group: "分类",
+            })),
+        ];
+      } catch (e) {
+        console.warn(`[cms:${desc.key}] getSources fallback`, e);
+        return [{ id: "default", name: desc.name }];
+      }
     },
 
-    async search(_ctx, { keyword, page }) {
-      const data = await fetchList({
+    async search(_ctx, { keyword, page, sourceId }) {
+      const params: Record<string, string | number> = {
         ac: "videolist",
         wd: keyword,
         pg: page || 1,
-      });
+      };
+      // sourceId 是 type_id（!== "default"）时按分类过滤
+      if (sourceId && sourceId !== "default") {
+        params.t = sourceId;
+      }
+      const data = await fetchList(params);
       const list: ScriptVodItem[] = (data.list || [])
         .map(toItem)
         .filter((x): x is ScriptVodItem => !!x);
@@ -166,9 +205,16 @@ export function makeCmsScriptModule(desc: ScriptDescriptor): ScriptModule {
       } satisfies ScriptSearchResult;
     },
 
-    async recommend(_ctx, { page }) {
-      // CMS 没有专门的推荐接口；返回首页列表（不带关键字）。
-      const data = await fetchList({ ac: "videolist", pg: page || 1 });
+    async recommend(_ctx, { page, sourceId }) {
+      // 浏览模式：?ac=videolist（不带 wd）+ 可选 t=<type_id>
+      const params: Record<string, string | number> = {
+        ac: "videolist",
+        pg: page || 1,
+      };
+      if (sourceId && sourceId !== "default") {
+        params.t = sourceId;
+      }
+      const data = await fetchList(params);
       const list: ScriptVodItem[] = (data.list || [])
         .map(toItem)
         .filter((x): x is ScriptVodItem => !!x);

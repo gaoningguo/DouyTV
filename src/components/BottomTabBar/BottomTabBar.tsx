@@ -2,24 +2,31 @@ import { NavLink } from "react-router-dom";
 import {
   IconHome,
   IconSearch,
-  IconLive,
+  IconMusic,
+  IconBook,
+  IconManga,
   IconLibrary,
-  IconSettings,
 } from "@/components/Icon";
 
 const TABS = [
   { to: "/", Icon: IconHome, label: "首页", end: true },
-  { to: "/search", Icon: IconSearch, label: "搜索", end: false },
-  { to: "/live", Icon: IconLive, label: "直播", end: false },
+  { to: "/search", Icon: IconSearch, label: "点播", end: false },
+  { to: "/music", Icon: IconMusic, label: "音乐", end: false },
+  { to: "/books", Icon: IconBook, label: "电子书", end: false },
+  { to: "/manga", Icon: IconManga, label: "漫画", end: false },
   { to: "/library", Icon: IconLibrary, label: "我的", end: false },
-  { to: "/settings", Icon: IconSettings, label: "设置", end: false },
 ];
 
 export default function BottomTabBar() {
   return (
     <nav
-      className="fixed bottom-0 inset-x-0 z-30 h-14 pb-[env(safe-area-inset-bottom)] backdrop-blur-xl"
+      className="fixed bottom-0 inset-x-0 z-30 backdrop-blur-xl"
       style={{
+        // 总高度 = 内容 56px + iOS Home Indicator safe-area
+        height: "calc(56px + env(safe-area-inset-bottom))",
+        paddingBottom: "env(safe-area-inset-bottom)",
+        paddingLeft: "env(safe-area-inset-left)",
+        paddingRight: "env(safe-area-inset-right)",
         background:
           "linear-gradient(180deg, rgba(14,15,17,0.6) 0%, rgba(14,15,17,0.92) 100%)",
         borderTop: "1px solid var(--cream-line)",

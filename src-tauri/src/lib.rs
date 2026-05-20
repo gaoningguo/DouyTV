@@ -1,11 +1,49 @@
 use std::collections::HashMap;
 use std::io::Read;
 use std::path::{Path, PathBuf};
+use std::sync::{Arc, OnceLock, RwLock};
 use std::time::Duration;
 
 use serde::{Deserialize, Serialize};
 use tauri_plugin_sql::{Migration, MigrationKind};
 use url::Url;
+
+/// 按 proxy_url（包括空串 = 直连）缓存复用 ureq Agent。
+///
+/// **为什么**：dyproxy 协议每条 HLS segment 都会重新调 proxy_fetch。
+/// 原实现每次 `AgentBuilder::new().build()` 都创建独立 agent，没有连接池，
+/// 每次都要走 DNS + TCP + TLS 握手 —— 一分钟视频 ~30 segments × 200-500ms 握手
+/// 累计 6-15s 额外延迟，就是"看一会儿就卡"的主因。
+///
+/// 复用同一 Agent 后，ureq 内部维护 keep-alive 连接池（默认 100 idle / 1 per host），
+/// 后续 segment 在同一 TCP 连接上拿，握手成本一次性。
+fn agent_for(proxy: Option<&str>) -> Result<Arc<ureq::Agent>, String> {
+    static POOL: OnceLock<RwLock<HashMap<String, Arc<ureq::Agent>>>> = OnceLock::new();
+    let pool = POOL.get_or_init(|| RwLock::new(HashMap::new()));
+
+    let key = proxy.unwrap_or("").trim().to_string();
+
+    if let Ok(read) = pool.read() {
+        if let Some(a) = read.get(&key) {
+            return Ok(a.clone());
+        }
+    }
+
+    let mut builder = ureq::AgentBuilder::new()
+        .timeout(Duration::from_secs(30))
+        .redirects(10);
+    if !key.is_empty() {
+        match ureq::Proxy::new(&key) {
+            Ok(p) => builder = builder.proxy(p),
+            Err(e) => return Err(format!("invalid proxy: {e}")),
+        }
+    }
+    let agent = Arc::new(builder.build());
+    if let Ok(mut write) = pool.write() {
+        write.insert(key, agent.clone());
+    }
+    Ok(agent)
+}
 
 #[derive(Debug, Deserialize)]
 pub struct HttpRequest {
@@ -38,19 +76,9 @@ pub struct HttpResponse {
 async fn script_http(req: HttpRequest) -> Result<HttpResponse, String> {
     tauri::async_runtime::spawn_blocking(move || -> Result<HttpResponse, String> {
         let timeout = std::time::Duration::from_millis(req.timeout_ms.unwrap_or(30_000));
-        let mut builder = ureq::AgentBuilder::new().timeout(timeout);
-        if let Some(p) = &req.proxy_url {
-            let trimmed = p.trim();
-            if !trimmed.is_empty() {
-                match ureq::Proxy::new(trimmed) {
-                    Ok(proxy) => builder = builder.proxy(proxy),
-                    Err(e) => return Err(format!("invalid proxy_url: {e}")),
-                }
-            }
-        }
-        let agent = builder.build();
+        let agent = agent_for(req.proxy_url.as_deref())?;
 
-        let mut request = agent.request(&req.method, &req.url);
+        let mut request = agent.request(&req.method, &req.url).timeout(timeout);
         for (k, v) in &req.headers {
             request = request.set(k, v);
         }
@@ -157,6 +185,52 @@ fn scan_local_videos(dir: String, max_depth: Option<u32>) -> Result<Vec<LocalVid
     Ok(out)
 }
 
+/// 读取操作系统级代理设置（Windows/macOS/Linux 桌面），返回标准化的 URL。
+/// 移动端 (Android/iOS) 不暴露此命令 —— OS 上的代理 / VPN 已经在网络栈层透明生效，
+/// 不需要应用再次显式配置。
+///
+/// 返回 URL 前会做一次 TCP 探活（800ms 超时）—— 用户设了系统代理但代理本身没启动
+/// (典型场景：Clash / V2Ray 关掉后 Windows 注册表里 ProxyEnable=1 仍残留) 时，
+/// 上层 mode="auto" 拾取这个死代理会让所有请求 10061。探活失败就报 None，
+/// 让上层退化为直连。
+#[cfg(not(any(target_os = "android", target_os = "ios")))]
+#[tauri::command]
+fn read_system_proxy() -> Result<Option<String>, String> {
+    use std::net::{TcpStream, ToSocketAddrs};
+    use std::time::Duration;
+    use sysproxy::Sysproxy;
+    let sp = Sysproxy::get_system_proxy().map_err(|e| e.to_string())?;
+    if !sp.enable {
+        return Ok(None);
+    }
+    let host = sp.host.trim();
+    if host.is_empty() || sp.port == 0 {
+        return Ok(None);
+    }
+    // 探活：本地代理常驻 127.0.0.1，connect 失败立即 RST；800ms 给非本地一点余量
+    let addr_str = format!("{}:{}", host, sp.port);
+    let mut reachable = false;
+    if let Ok(addrs) = addr_str.to_socket_addrs() {
+        for addr in addrs {
+            if TcpStream::connect_timeout(&addr, Duration::from_millis(800)).is_ok() {
+                reachable = true;
+                break;
+            }
+        }
+    }
+    if !reachable {
+        return Ok(None);
+    }
+    // sysproxy 在 Windows/macOS 都没区分 scheme，统一假定 http://（绝大多数本地代理 — Clash / V2Ray / Shadowsocks Mixed Port — 都是 http）
+    Ok(Some(format!("http://{}:{}", host, sp.port)))
+}
+
+#[cfg(any(target_os = "android", target_os = "ios"))]
+#[tauri::command]
+fn read_system_proxy() -> Result<Option<String>, String> {
+    Ok(None)
+}
+
 // ===========================================================================
 // dyproxy:// — 内嵌代理协议（解决跨域 / 防盗链 / 自定义 UA）
 // 移植自 MoonTV 的 /api/proxy/m3u8 + /api/proxy/segment + /api/proxy/key
@@ -198,19 +272,7 @@ fn proxy_fetch(
     referer: Option<&str>,
     proxy: Option<&str>,
 ) -> Result<ureq::Response, String> {
-    let mut builder = ureq::AgentBuilder::new()
-        .timeout(Duration::from_secs(30))
-        .redirects(10);
-    if let Some(p) = proxy {
-        let trimmed = p.trim();
-        if !trimmed.is_empty() {
-            match ureq::Proxy::new(trimmed) {
-                Ok(proxy) => builder = builder.proxy(proxy),
-                Err(e) => return Err(format!("invalid proxy: {e}")),
-            }
-        }
-    }
-    let agent = builder.build();
+    let agent = agent_for(proxy)?;
     let mut req = agent.get(target);
     req = req.set("User-Agent", ua.unwrap_or(DEFAULT_UA));
     // 防盗链：调用方未指定 Referer 时回落到 https://movie.douban.com/。
@@ -227,6 +289,8 @@ fn proxy_fetch(
     }
     req = req.set("Accept", "*/*");
     req = req.set("Accept-Language", "zh-CN,zh;q=0.9,en;q=0.8");
+    // 让上游分片走 HTTP keep-alive / 启用 gzip 协商（ureq 自动处理）
+    req = req.set("Connection", "keep-alive");
     // ureq 默认把 4xx/5xx 当 Err(Error::Status(code, resp))。我们要转发上游响应给前端
     // (例如 403 防盗链 / 404 资源不存在原样上抛，hls.js 能识别真实状态而非误以为是代理 502)。
     match req.call() {
@@ -397,6 +461,59 @@ fn rewrite_m3u8(
     out.join("\n")
 }
 
+/// 打开桌面歌词独立窗口 — 桌面端专用，无边框 + always-on-top + 透明。
+///
+/// 通过 hash route 加载 `#/music/desktop-lyric`，让 React 路由匹配到 DesktopLyric 页面。
+/// 主窗口通过 Tauri event 把 `music-state` 广播给该窗口。
+#[tauri::command]
+async fn open_lyric_window(app: tauri::AppHandle) -> Result<(), String> {
+    use tauri::{LogicalPosition, LogicalSize, Manager, WebviewUrl, WebviewWindowBuilder};
+
+    if let Some(win) = app.get_webview_window("lyric") {
+        let _ = win.set_focus();
+        return Ok(());
+    }
+
+    let win = WebviewWindowBuilder::new(
+        &app,
+        "lyric",
+        WebviewUrl::App("index.html#/music/desktop-lyric".into()),
+    )
+    .title("歌词")
+    .inner_size(560.0, 120.0)
+    .min_inner_size(320.0, 80.0)
+    .decorations(false)
+    .always_on_top(true)
+    .transparent(true)
+    .resizable(true)
+    .skip_taskbar(false)
+    .build()
+    .map_err(|e| e.to_string())?;
+
+    // 默认放在屏幕底部居中区域
+    if let Ok(Some(monitor)) = win.current_monitor() {
+        let size = monitor.size();
+        let scale = monitor.scale_factor();
+        let logical_w = size.width as f64 / scale;
+        let logical_h = size.height as f64 / scale;
+        let x = (logical_w - 560.0) / 2.0;
+        let y = logical_h - 200.0;
+        let _ = win.set_position(LogicalPosition::new(x.max(0.0), y.max(0.0)));
+        let _ = win.set_size(LogicalSize::new(560.0, 120.0));
+    }
+
+    Ok(())
+}
+
+#[tauri::command]
+fn close_lyric_window(app: tauri::AppHandle) -> Result<(), String> {
+    use tauri::Manager;
+    if let Some(win) = app.get_webview_window("lyric") {
+        win.close().map_err(|e| e.to_string())?;
+    }
+    Ok(())
+}
+
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
     let migrations = vec![
@@ -438,6 +555,139 @@ pub fn run() {
             sql: "ALTER TABLE history ADD COLUMN episodes_watched TEXT NOT NULL DEFAULT '[]';",
             kind: MigrationKind::Up,
         },
+        Migration {
+            version: 3,
+            description: "music: history + playlists + playlist items",
+            sql: "
+                CREATE TABLE IF NOT EXISTS music_history (
+                    song_id TEXT NOT NULL,
+                    source TEXT NOT NULL,
+                    name TEXT NOT NULL,
+                    artist TEXT,
+                    album TEXT,
+                    cover TEXT,
+                    duration_sec REAL NOT NULL DEFAULT 0,
+                    position_sec REAL NOT NULL DEFAULT 0,
+                    last_played_at INTEGER NOT NULL,
+                    play_count INTEGER NOT NULL DEFAULT 1,
+                    PRIMARY KEY (song_id, source)
+                );
+                CREATE INDEX IF NOT EXISTS idx_music_history_recent
+                    ON music_history(last_played_at DESC);
+
+                CREATE TABLE IF NOT EXISTS music_playlists (
+                    id TEXT PRIMARY KEY,
+                    name TEXT NOT NULL,
+                    description TEXT,
+                    cover TEXT,
+                    song_count INTEGER NOT NULL DEFAULT 0,
+                    created_at INTEGER NOT NULL,
+                    updated_at INTEGER NOT NULL
+                );
+
+                CREATE TABLE IF NOT EXISTS music_playlist_items (
+                    playlist_id TEXT NOT NULL,
+                    song_id TEXT NOT NULL,
+                    source TEXT NOT NULL,
+                    position INTEGER NOT NULL,
+                    name TEXT NOT NULL,
+                    artist TEXT,
+                    album TEXT,
+                    cover TEXT,
+                    duration_sec REAL NOT NULL DEFAULT 0,
+                    added_at INTEGER NOT NULL,
+                    PRIMARY KEY (playlist_id, song_id, source)
+                );
+                CREATE INDEX IF NOT EXISTS idx_music_playlist_items_pos
+                    ON music_playlist_items(playlist_id, position ASC);
+            ",
+            kind: MigrationKind::Up,
+        },
+        Migration {
+            version: 4,
+            description: "books: shelf + reading progress",
+            sql: "
+                CREATE TABLE IF NOT EXISTS book_shelf (
+                    source_id TEXT NOT NULL,
+                    book_id TEXT NOT NULL,
+                    title TEXT NOT NULL,
+                    author TEXT,
+                    cover TEXT,
+                    summary TEXT,
+                    acquisition_links TEXT NOT NULL DEFAULT '[]',
+                    saved_at INTEGER NOT NULL,
+                    PRIMARY KEY (source_id, book_id)
+                );
+                CREATE INDEX IF NOT EXISTS idx_book_shelf_saved
+                    ON book_shelf(saved_at DESC);
+
+                CREATE TABLE IF NOT EXISTS book_progress (
+                    source_id TEXT NOT NULL,
+                    book_id TEXT NOT NULL,
+                    locator_type TEXT NOT NULL,
+                    locator_value TEXT NOT NULL,
+                    chapter_title TEXT,
+                    percent REAL NOT NULL DEFAULT 0,
+                    updated_at INTEGER NOT NULL,
+                    PRIMARY KEY (source_id, book_id)
+                );
+            ",
+            kind: MigrationKind::Up,
+        },
+        Migration {
+            version: 5,
+            description: "manga: shelf + reading history",
+            sql: "
+                CREATE TABLE IF NOT EXISTS manga_shelf (
+                    source_id TEXT NOT NULL,
+                    manga_id TEXT NOT NULL,
+                    title TEXT NOT NULL,
+                    cover TEXT,
+                    author TEXT,
+                    status TEXT,
+                    last_chapter_id TEXT,
+                    last_chapter_name TEXT,
+                    saved_at INTEGER NOT NULL,
+                    PRIMARY KEY (source_id, manga_id)
+                );
+                CREATE INDEX IF NOT EXISTS idx_manga_shelf_saved
+                    ON manga_shelf(saved_at DESC);
+
+                CREATE TABLE IF NOT EXISTS manga_history (
+                    source_id TEXT NOT NULL,
+                    manga_id TEXT NOT NULL,
+                    chapter_id TEXT NOT NULL,
+                    chapter_name TEXT,
+                    page_index INTEGER NOT NULL DEFAULT 0,
+                    page_count INTEGER NOT NULL DEFAULT 0,
+                    updated_at INTEGER NOT NULL,
+                    PRIMARY KEY (source_id, manga_id, chapter_id)
+                );
+                CREATE INDEX IF NOT EXISTS idx_manga_history_recent
+                    ON manga_history(updated_at DESC);
+            ",
+            kind: MigrationKind::Up,
+        },
+        Migration {
+            version: 6,
+            description: "music: favorites table",
+            sql: "
+                CREATE TABLE IF NOT EXISTS music_favorites (
+                    song_id TEXT NOT NULL,
+                    source TEXT NOT NULL,
+                    name TEXT NOT NULL,
+                    artist TEXT,
+                    album TEXT,
+                    cover TEXT,
+                    duration_sec REAL NOT NULL DEFAULT 0,
+                    favorited_at INTEGER NOT NULL,
+                    PRIMARY KEY (song_id, source)
+                );
+                CREATE INDEX IF NOT EXISTS idx_music_favorites_recent
+                    ON music_favorites(favorited_at DESC);
+            ",
+            kind: MigrationKind::Up,
+        },
     ];
 
     tauri::Builder::default()
@@ -447,6 +697,16 @@ pub fn run() {
                 .add_migrations("sqlite:douytv.db", migrations)
                 .build(),
         )
+        .setup(|app| {
+            #[cfg(not(any(target_os = "android", target_os = "ios")))]
+            {
+                let _ = app.handle().plugin(tauri_plugin_updater::Builder::new().build());
+                let _ = app.handle().plugin(tauri_plugin_process::init());
+            }
+            #[cfg(any(target_os = "android", target_os = "ios"))]
+            let _ = app;
+            Ok(())
+        })
         .register_asynchronous_uri_scheme_protocol("dyproxy", |_ctx, request, responder| {
             // IPC 闭包立即返回；ureq 同步等待全部丢到 spawn_blocking。
             // 否则 HLS 高频拉 segment/key 会堵 IPC 主线程 → PostMessage failed / 0x80070578。
@@ -577,7 +837,13 @@ pub fn run() {
                 responder.respond(response);
             });
         })
-        .invoke_handler(tauri::generate_handler![script_http, scan_local_videos])
+        .invoke_handler(tauri::generate_handler![
+            script_http,
+            scan_local_videos,
+            read_system_proxy,
+            open_lyric_window,
+            close_lyric_window
+        ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");
 }

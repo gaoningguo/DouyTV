@@ -282,5 +282,71 @@ export function useFeed() {
         )
       );
     },
+    /**
+     * 跨脚本换源 — Home Feed 上用户从 SourceSwitcher 选了「其它脚本」的候选。
+     * 拿新脚本 + 新 vodId 重新走 detail → resolve，直接替换当前 item 的字段，
+     * Home Feed 继续播放新源（不跳到 Play 页）。
+     */
+    swapSource: async (
+      itemId: string,
+      newScriptKey: string,
+      newVodId: string
+    ) => {
+      const item = items.find((it) => it.id === itemId);
+      if (!item) return;
+      const newScript = useScriptStore
+        .getState()
+        .scripts.find((s) => s.key === newScriptKey);
+      if (!newScript) return;
+      try {
+        const detail = await callDetail(newScript, { id: newVodId });
+        const playback = detail.playbacks?.[0];
+        const ep: ScriptEpisode | undefined = playback?.episodes?.[0];
+        if (!playback || !ep) return;
+        const playUrl = typeof ep === "string" ? ep : ep.playUrl;
+        const needResolve =
+          typeof ep === "string" ? true : ep.needResolve !== false;
+        let resolved: {
+          url: string;
+          type: MediaItem["streamType"];
+          headers: Record<string, string>;
+        } = { url: playUrl, type: "auto", headers: {} };
+        if (needResolve) {
+          const r = await callResolvePlayUrl(newScript, {
+            playUrl,
+            sourceId: playback.sourceId,
+            episodeIndex: 0,
+          });
+          resolved = {
+            url: r.url,
+            type: (r.type ?? "auto") as MediaItem["streamType"],
+            headers: r.headers ?? {},
+          };
+        }
+        // 替换 items[itemId] —— **保留原 id**，避免 React key 切换导致播放器整体重挂。
+        // 注意我们改了 scriptKey / vodId / episodes 等：上下集 / 弹幕匹配会按新源走。
+        setItems((prev) =>
+          prev.map((it) =>
+            it.id === itemId
+              ? {
+                  ...it,
+                  url: resolved.url,
+                  streamType: resolved.type,
+                  headers: resolved.headers,
+                  scriptKey: newScript.key,
+                  vodId: newVodId,
+                  sourceId: playback.sourceId,
+                  sourceName: playback.sourceName,
+                  episodes: playback.episodes,
+                  episodesTitles: playback.episodes_titles,
+                  currentEpisodeIndex: 0,
+                }
+              : it
+          )
+        );
+      } catch (e) {
+        console.warn(`[useFeed] swapSource failed`, e);
+      }
+    },
   };
 }

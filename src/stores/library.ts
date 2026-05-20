@@ -268,7 +268,15 @@ export const useLibraryStore = create<LibraryStore>((set, get) => ({
     if (isSqlAvailable()) {
       try {
         await migrateLegacy();
+        // 产品决策：每次启动应用都清空历史，仅保留收藏。
+        // history 表只在当前会话有意义（用于"继续观看"起播点 / 详情页进度条）。
+        await sqlClearHistory().catch((e) =>
+          console.warn("[library] startup history clear failed", e)
+        );
         const { favorites, history } = await sqlLoadAll();
+        console.info(
+          `[library] SQL hydrate: ${favorites.length} favorites, ${history.length} history (history was cleared on startup)`
+        );
         set((s) => ({
           favorites: mergeFavorites(s.favorites, favorites),
           history: mergeHistory(s.history, history),
@@ -279,9 +287,15 @@ export const useLibraryStore = create<LibraryStore>((set, get) => ({
         console.error("[library] SQL hydrate failed, fallback to localStorage", e);
       }
     }
+    // 非 Tauri / SQL 失败的兜底路径：localStorage 也按同样规则——重启清历史
+    const favs = loadArr<FavoriteRecord>(FAV_KEY);
+    saveArr<HistoryRecord>(HIST_KEY, []);
+    console.info(
+      `[library] localStorage hydrate: ${favs.length} favorites, history cleared on startup`
+    );
     set((s) => ({
-      favorites: mergeFavorites(s.favorites, loadArr<FavoriteRecord>(FAV_KEY)),
-      history: mergeHistory(s.history, loadArr<HistoryRecord>(HIST_KEY)),
+      favorites: mergeFavorites(s.favorites, favs),
+      history: mergeHistory(s.history, []),
       hydrated: true,
     }));
   },

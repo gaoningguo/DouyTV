@@ -2,7 +2,7 @@
   "$schema": "../gen/schemas/desktop-schema.json",
   "identifier": "default",
   "description": "Default capability for the main window",
-  "windows": ["main"],
+  "windows": ["main", "lyric"],
   "permissions": [
     "core:default",
     "core:window:default",
@@ -14,6 +14,23 @@
     "core:menu:default",
     "core:tray:default",
     "fs:default",
-    "sql:default"
+    {
+      "identifier": "fs:scope",
+      "allow": [
+        { "path": "$AUDIO/**" },
+        { "path": "$DOWNLOAD/**" }
+      ]
+    },
+    "sql:default",
+    {
+      "identifier": "updater:default",
+      "allow": ["check", "download", "install", "downloadAndInstall"],
+      "platforms": ["windows", "macOS", "linux"]
+    },
+    {
+      "identifier": "process:default",
+      "allow": ["relaunch", "exit"],
+      "platforms": ["windows", "macOS", "linux"]
+    }
   ]
 }

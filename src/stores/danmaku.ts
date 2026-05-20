@@ -57,6 +57,11 @@ interface DanmakuStore extends Prefs {
   apiBase: string;
   token: string;
   hydrated: boolean;
+  /**
+   * Home Feed 弹幕"刷新令牌"。InteractionBar 用户在首页手动选择新弹幕源后 +1，
+   * ArtPlayerHost 的 Feed 自动加载 effect 依赖此值重跑，重新读 memory 并拉新评论。
+   */
+  feedRefreshNonce: number;
 
   hydrate: () => void;
   setSourceType: (t: DanmakuSourceType) => void;
@@ -66,6 +71,7 @@ interface DanmakuStore extends Prefs {
   addFilterRule: (rule: DanmakuFilterRule) => void;
   removeFilterRule: (index: number) => void;
   toggleFilterRule: (index: number) => void;
+  bumpFeedRefresh: () => void;
 }
 
 function loadPrefs(): Prefs {
@@ -92,6 +98,7 @@ export const useDanmakuStore = create<DanmakuStore>((set, get) => ({
   apiBase: "",
   token: "",
   hydrated: false,
+  feedRefreshNonce: 0,
   ...DEFAULT_PREFS,
 
   hydrate: () => {
@@ -171,6 +178,10 @@ export const useDanmakuStore = create<DanmakuStore>((set, get) => ({
       i === index ? { ...r, enabled: !r.enabled } : r
     );
     get().patchPrefs({ filterRules: next });
+  },
+
+  bumpFeedRefresh: () => {
+    set({ feedRefreshNonce: get().feedRefreshNonce + 1 });
   },
 }));
 

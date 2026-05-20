@@ -15,6 +15,12 @@ export interface ScriptMeta {
 export interface ScriptSourceItem {
   id: string;
   name: string;
+  /**
+   * 可选分组名 —— 用于点播页 BrowseSection 按 group 分行展示。
+   * 典型值：「分类」（电影/电视剧/综艺/动漫）、「标签」（科幻/喜剧/恐怖）、「年份」（2024/2023）。
+   * 不填默认归到 "分类" 分组。旧脚本（无 group 字段）兼容。
+   */
+  group?: string;
 }
 
 export interface ScriptVodItem {

@@ -30,6 +30,7 @@ import { wrapWithProxy } from "@/lib/proxy";
 import { useProxyStore } from "@/stores/proxy";
 import { useDanmakuStore } from "@/stores/danmaku";
 import { convertDanmakuFormat, getDanmakuById, matchAnime } from "@/lib/danmaku/api";
+import { loadDanmakuMemory } from "@/components/DanmakuPanel";
 
 export interface VideoPlayerHandle {
   play: () => void;
@@ -59,6 +60,10 @@ export interface VideoPlayerProps {
   onRequestReresolve?: () => Promise<void> | void;
   /** 错误页 / 工具栏「换源」按钮：调用方应打开线路选择面板 */
   onRequestSwitchSource?: () => void;
+  /** 工具栏「上一集」按钮回调；不传 = 隐藏按钮（无合集 / 已到首集） */
+  onPrevEpisode?: () => void;
+  /** 工具栏「下一集」按钮回调；不传 = 隐藏按钮（无合集 / 已到末集） */
+  onNextEpisode?: () => void;
   /** 弹幕数据。空数组时弹幕层仍挂载但无内容。 */
   danmuComments?: Danmu[];
   /** 弹幕是否显示。控件 toggle 和外部传值都会改这个。 */
@@ -67,19 +72,43 @@ export interface VideoPlayerProps {
 
 const FILTER_ADS_KEY = "douytv:filter-ads";
 const BUFFER_KEY = "douytv:buffer-strategy";
+// 工具栏用户偏好缓存（音量 / 倍速）—— 跨视频跨重启保留
+// 弹幕显示开关由 Play.tsx 自己读写 douytv:player-danmaku-visible
+const VOLUME_KEY = "douytv:player-volume";
+const RATE_KEY = "douytv:player-playback-rate";
 type BufferStrategy = "low" | "medium" | "high" | "ultra";
 
 function getBufferConfig(strategy: BufferStrategy) {
   switch (strategy) {
     case "low":
-      return { maxBufferLength: 20, backBufferLength: 15, maxBufferSize: 40 * 1024 * 1024 };
+      return { maxBufferLength: 30, backBufferLength: 15, maxBufferSize: 60 * 1024 * 1024 };
     case "high":
-      return { maxBufferLength: 90, backBufferLength: 60, maxBufferSize: 180 * 1024 * 1024 };
+      return { maxBufferLength: 120, backBufferLength: 60, maxBufferSize: 240 * 1024 * 1024 };
     case "ultra":
-      return { maxBufferLength: 180, backBufferLength: 90, maxBufferSize: 360 * 1024 * 1024 };
+      return { maxBufferLength: 240, backBufferLength: 90, maxBufferSize: 480 * 1024 * 1024 };
     default:
-      // medium — 比 hls.js 默认更大一档，长片体验更顺，秒播开销可忽略
-      return { maxBufferLength: 60, backBufferLength: 30, maxBufferSize: 100 * 1024 * 1024 };
+      // medium — 默认缓冲 90s（原 60s）。提高默认值，跳着看也能命中已缓冲段
+      return { maxBufferLength: 90, backBufferLength: 30, maxBufferSize: 150 * 1024 * 1024 };
+  }
+}
+
+function readNumberPref(key: string, fallback: number, min: number, max: number): number {
+  try {
+    const raw = localStorage.getItem(key);
+    if (raw == null) return fallback;
+    const n = Number(raw);
+    if (!Number.isFinite(n)) return fallback;
+    return Math.max(min, Math.min(max, n));
+  } catch {
+    return fallback;
+  }
+}
+
+function writeNumberPref(key: string, value: number) {
+  try {
+    localStorage.setItem(key, String(value));
+  } catch {
+    /* private */
   }
 }
 
@@ -233,13 +262,30 @@ const ArtPlayerHost = forwardRef<VideoPlayerHandle, VideoPlayerProps>(
 
     const containerRef = useRef<HTMLDivElement>(null);
     const artRef = useRef<Artplayer | null>(null);
+    // 工具栏上下集按钮 DOM 引用（mounted 时存，effect 改 display）
+    const prevEpElRef = useRef<HTMLElement | null>(null);
+    const nextEpElRef = useRef<HTMLElement | null>(null);
+    // ArtPlayer settings / controls onClick 闭包在 mount 时一次性创建，会冻结彼时的 props。
+    // 通过 ref 让闭包总能拿到最新的 prop 值（合集变 / 集号变后按钮仍能调对的 callback）。
+    const propsRef = useRef(props);
+    useEffect(() => {
+      propsRef.current = props;
+    });
     const hlsRef = useRef<Hls | null>(null);
     const lastProgressTs = useRef(0);
-    const proxyEnabled = useProxyStore((s) => s.enabled);
-    const proxyUrl = useProxyStore((s) => s.url);
+    const proxyEnabled = useProxyStore((s) => s.mode !== "off");
+    const proxyUrl = useProxyStore((s) =>
+      s.mode === "manual"
+        ? s.manualUrl
+        : s.mode === "auto"
+          ? s.systemProxyUrl
+          : ""
+    );
     // 用户在弹幕设置里勾的"首页 Feed 显示弹幕"。响应式读取，
     // 用户在设置页改了之后，Home 的播放器立即跟随显隐。
     const enabledInFeed = useDanmakuStore((s) => s.enabledInFeed);
+    // InteractionBar 用户在首页选完弹幕源 bumpFeedRefresh() +1 → 触发下面 effect 重读 memory
+    const feedRefreshNonce = useDanmakuStore((s) => s.feedRefreshNonce);
 
     const [filterAds, setFilterAds] = useState<boolean>(readFilterAds);
     const [error, setError] = useState<string | null>(null);
@@ -292,6 +338,13 @@ const ArtPlayerHost = forwardRef<VideoPlayerHandle, VideoPlayerProps>(
           maxStarvationDelay: 4,
           maxLoadingDelay: 4,
           highBufferWatchdogPeriod: 1,
+          // ── Seek 平滑：跨过缓冲洞 / 找最近 segment ──────
+          maxBufferHole: 0.5,
+          // 找不到精确匹配片段时，容忍 1s 内的 segment 复用，避免每次拖动都重拉
+          maxFragLookUpTolerance: 1.0,
+          // 卡顿时 nudge 微调当前时间，最多重试 10 次
+          nudgeMaxRetry: 10,
+          nudgeOffset: 0.2,
           // ── 超时 / 重试 ────────────────────────────────
           manifestLoadingTimeOut: 10_000,
           manifestLoadingMaxRetry: 2,
@@ -360,13 +413,16 @@ const ArtPlayerHost = forwardRef<VideoPlayerHandle, VideoPlayerProps>(
 
       const initialType = detectArtType(item);
       const skipMarks = readSkipMarks(item.id);
+      // 工具栏跨视频偏好：音量 + 倍速。换个视频不要被重置回默认
+      const savedVolume = readNumberPref(VOLUME_KEY, 0.7, 0, 1);
+      const savedRate = readNumberPref(RATE_KEY, 1, 0.25, 4);
 
       const art = new Artplayer({
         container: el,
         url: wrappedUrl,
         ...(initialType ? { type: initialType } : {}),
         ...(item.poster ? { poster: item.poster } : {}),
-        volume: 0.7,
+        volume: savedVolume,
         isLive: item.kind === "live",
         muted: mutedProp ?? false,
         autoplay: active,
@@ -405,10 +461,49 @@ const ArtPlayerHost = forwardRef<VideoPlayerHandle, VideoPlayerProps>(
           "webkit-playsinline": "true",
           referrerPolicy: "no-referrer",
           preload: "auto",
+          // 防止 <video> 获焦后浏览器吞掉 Space / 方向键 — 我们用 window-level
+          // handler 自己处理快捷键
+          tabIndex: -1,
         } as Partial<HTMLVideoElement>,
         customType: {
           m3u8: (video: HTMLVideoElement, url: string) => attachHls(video, url),
         },
+        // 工具栏左侧：上一集 / 下一集（合集时）。propsRef 让闭包始终读最新 prop，
+        // 避免切集后按钮调用旧 callback。隐藏由 CSS .art-control[data-state="off"] 控制。
+        controls: [
+          {
+            name: "prev-ep",
+            position: "left",
+            html: '<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M19 20L9 12l10-8v16zM5 19V5"/></svg>',
+            tooltip: "上一集",
+            style: { marginRight: "6px" },
+            click: () => {
+              const fn = propsRef.current.onPrevEpisode;
+              if (fn) fn();
+              else if (artRef.current?.notice) artRef.current.notice.show = "已是第一集";
+            },
+            mounted: (el: HTMLElement) => {
+              prevEpElRef.current = el;
+              el.style.display = propsRef.current.onPrevEpisode ? "" : "none";
+            },
+          },
+          {
+            name: "next-ep",
+            position: "left",
+            html: '<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M5 4l10 8-10 8V4zM19 5v14"/></svg>',
+            tooltip: "下一集",
+            style: { marginRight: "10px" },
+            click: () => {
+              const fn = propsRef.current.onNextEpisode;
+              if (fn) fn();
+              else if (artRef.current?.notice) artRef.current.notice.show = "已是最后一集";
+            },
+            mounted: (el: HTMLElement) => {
+              nextEpElRef.current = el;
+              el.style.display = propsRef.current.onNextEpisode ? "" : "none";
+            },
+          },
+        ],
         plugins: [
           artplayerPluginDanmuku({
             danmuku: danmuComments ?? [],
@@ -483,10 +578,9 @@ const ArtPlayerHost = forwardRef<VideoPlayerHandle, VideoPlayerProps>(
                   } catch {
                     /* private */
                   }
-                  // 立即生效：重新 attach HLS
-                  if (art.video) {
-                    attachHls(art.video as HTMLVideoElement, art.url);
-                  }
+                  // 不立即 attachHls —— 立即重挂 manifest 会导致部分源 URL（带 token / 一次性 nonce）
+                  // 二次拉取返回 403/404，HLS 报「无法加载视频清单」。保存后下次播放生效。
+                  art.notice.show = "已保存，切到下一集 / 重新打开后生效";
                   return it.html as string;
                 },
               },
@@ -518,20 +612,24 @@ const ArtPlayerHost = forwardRef<VideoPlayerHandle, VideoPlayerProps>(
       });
       artRef.current = art;
 
-      // 加载完成后跳到起播点
-      if (startPosition && startPosition > 0) {
-        art.once("ready", () => {
-          try {
-            art.currentTime = startPosition;
-          } catch {
-            /* duration 还没出来 */
-          }
-        });
-      }
+      // ready 后应用保存的倍速 + 起播点
+      art.once("ready", () => {
+        try {
+          if (savedRate !== 1) art.playbackRate = savedRate;
+          if (startPosition && startPosition > 0) art.currentTime = startPosition;
+        } catch {
+          /* duration 还没出来 */
+        }
+      });
 
-      // 静音状态同步给父组件（Home Feed 的全局静音状态）
+      // 静音 + 音量同步：写回 localStorage 跨视频生效
       art.on("video:volumechange", () => {
         onMutedChange?.(art.muted);
+        writeNumberPref(VOLUME_KEY, art.volume);
+      });
+      // 倍速变化：persist
+      art.on("video:ratechange", () => {
+        writeNumberPref(RATE_KEY, art.playbackRate);
       });
 
       // 进度上报（节流 2s，对齐原 VideoPlayer）
@@ -593,6 +691,16 @@ const ArtPlayerHost = forwardRef<VideoPlayerHandle, VideoPlayerProps>(
       art.switch = wrappedUrl;
     }, [wrappedUrl, item.streamType]);
 
+    // 上下集按钮显隐随 prop 变化（切到首集/末集时按钮要消失）
+    useEffect(() => {
+      if (prevEpElRef.current) {
+        prevEpElRef.current.style.display = props.onPrevEpisode ? "" : "none";
+      }
+      if (nextEpElRef.current) {
+        nextEpElRef.current.style.display = props.onNextEpisode ? "" : "none";
+      }
+    }, [props.onPrevEpisode, props.onNextEpisode]);
+
     // active 切换 → 播放/暂停
     useEffect(() => {
       const art = artRef.current;
@@ -604,14 +712,17 @@ const ArtPlayerHost = forwardRef<VideoPlayerHandle, VideoPlayerProps>(
       }
     }, [active]);
 
-    // 键盘快捷键 — window 级监听，不依赖 ArtPlayer 焦点。
-    // 仅 Play 模式启用（hotkeys=true && controls=true）。Feed 模式由 VideoFeed
-    // 自己接管 ↑↓/J/K，避免重复处理。
+    // 键盘快捷键 — window 级监听（capture 阶段），不依赖 ArtPlayer 焦点。
+    //   - Play 模式（controls=true）：所有键都处理（空格/方向/F/P/M/K）
+    //   - Feed 模式（controls=false）：跳过 ↑↓，让 VideoFeed 接管翻页；
+    //     其它（←→ seek / Space / F / P / M / K）仍交给当前 active 视频
+    // 只有 active 视频响应，避免相邻预加载视频也吃键。
     useEffect(() => {
-      if (!hotkeys || !controls) return;
+      if (!hotkeys) return;
       const onKey = (e: KeyboardEvent) => {
         const art = artRef.current;
         if (!art) return;
+        if (!active) return;
         const t = e.target as HTMLElement | null;
         if (
           t &&
@@ -622,50 +733,46 @@ const ArtPlayerHost = forwardRef<VideoPlayerHandle, VideoPlayerProps>(
         ) {
           return;
         }
-        switch (e.key) {
-          case " ":
-          case "k":
-          case "K":
-            e.preventDefault();
-            if (art.playing) art.pause();
-            else art.play().catch(() => {});
-            break;
-          case "ArrowLeft":
-            e.preventDefault();
-            art.currentTime = Math.max(0, art.currentTime - 5);
-            break;
-          case "ArrowRight":
-            e.preventDefault();
-            art.currentTime = Math.min(art.duration || 0, art.currentTime + 5);
-            break;
-          case "ArrowUp":
-            e.preventDefault();
-            art.volume = Math.min(1, art.volume + 0.1);
-            break;
-          case "ArrowDown":
-            e.preventDefault();
-            art.volume = Math.max(0, art.volume - 0.1);
-            break;
-          case "m":
-          case "M":
-            e.preventDefault();
-            art.muted = !art.muted;
-            break;
-          case "f":
-          case "F":
-            e.preventDefault();
-            art.fullscreen = !art.fullscreen;
-            break;
-          case "p":
-          case "P":
-            e.preventDefault();
-            art.pip = !art.pip;
-            break;
+        const code = e.code;
+        const key = e.key;
+        const isSpace = key === " " || code === "Space";
+        const isLeft = code === "ArrowLeft" || key === "ArrowLeft";
+        const isRight = code === "ArrowRight" || key === "ArrowRight";
+        const isUp = code === "ArrowUp" || key === "ArrowUp";
+        const isDown = code === "ArrowDown" || key === "ArrowDown";
+
+        if ((isUp || isDown) && !controls) return;
+
+        if (isSpace || key === "k" || key === "K") {
+          e.preventDefault();
+          if (art.playing) art.pause();
+          else art.play().catch(() => {});
+        } else if (isLeft) {
+          e.preventDefault();
+          art.currentTime = Math.max(0, art.currentTime - 5);
+        } else if (isRight) {
+          e.preventDefault();
+          art.currentTime = Math.min(art.duration || 0, art.currentTime + 5);
+        } else if (isUp) {
+          e.preventDefault();
+          art.volume = Math.min(1, art.volume + 0.1);
+        } else if (isDown) {
+          e.preventDefault();
+          art.volume = Math.max(0, art.volume - 0.1);
+        } else if (key === "m" || key === "M") {
+          e.preventDefault();
+          art.muted = !art.muted;
+        } else if (key === "f" || key === "F") {
+          e.preventDefault();
+          art.fullscreen = !art.fullscreen;
+        } else if (key === "p" || key === "P") {
+          e.preventDefault();
+          art.pip = !art.pip;
         }
       };
-      window.addEventListener("keydown", onKey);
-      return () => window.removeEventListener("keydown", onKey);
-    }, [hotkeys, controls]);
+      window.addEventListener("keydown", onKey, true);
+      return () => window.removeEventListener("keydown", onKey, true);
+    }, [hotkeys, controls, active]);
 
     // muted 外部受控
     useEffect(() => {
@@ -701,12 +808,13 @@ const ArtPlayerHost = forwardRef<VideoPlayerHandle, VideoPlayerProps>(
       else plugin.hide?.();
     }, [danmakuVisible, enabledInFeed, controls]);
 
-    // Home Feed 自动匹配（仅 Feed 模式生效；Play 模式由 Play.tsx 自己拉 danmaku）：
-    // active + 没有 props 传入的 danmuComments + 用户开启 enabledInFeed →
-    // 按 title 触发 matchAnime → getDanmakuById。
+    // Home Feed 弹幕自动加载（Play 模式由 Play.tsx 自己拉，不在这里）。
+    //   1) 优先用 InteractionBar 手动选择过的弹幕源（DanmakuPanel memory 按 title）
+    //   2) memory 不存在时 fallback 到 matchAnime（按 title 精确匹配）
+    //   3) bumpFeedRefresh 后 effect 重跑读最新 memory
     const [feedDanmu, setFeedDanmu] = useState<Danmu[] | null>(null);
     useEffect(() => {
-      if (controls) return; // Play 页走 props 传入，不在这里自动匹配
+      if (controls) return;
       if (!active) return;
       if (danmuComments && danmuComments.length > 0) return;
       if (!enabledInFeed) return;
@@ -714,6 +822,17 @@ const ArtPlayerHost = forwardRef<VideoPlayerHandle, VideoPlayerProps>(
       let cancelled = false;
       (async () => {
         try {
+          const mem = loadDanmakuMemory(item.title);
+          if (mem) {
+            const comments = await getDanmakuById(mem.episodeId, item.title, 0, {
+              animeId: mem.animeId,
+              animeTitle: mem.animeTitle,
+              episodeTitle: mem.episodeTitle,
+            });
+            if (cancelled || comments.length === 0) return;
+            setFeedDanmu(convertDanmakuFormat(comments));
+            return;
+          }
           const matchRes = await matchAnime(item.title);
           if (cancelled) return;
           if (!matchRes.isMatched || matchRes.matches.length === 0) return;
@@ -731,13 +850,13 @@ const ArtPlayerHost = forwardRef<VideoPlayerHandle, VideoPlayerProps>(
           if (cancelled || comments.length === 0) return;
           setFeedDanmu(convertDanmakuFormat(comments));
         } catch (e) {
-          console.warn("[ArtPlayerHost] feed danmaku auto-match failed", e);
+          console.warn("[ArtPlayerHost] feed danmaku load failed", e);
         }
       })();
       return () => {
         cancelled = true;
       };
-    }, [controls, active, item.title, danmuComments, enabledInFeed]);
+    }, [controls, active, item.title, danmuComments, enabledInFeed, feedRefreshNonce]);
 
     // 把 Feed 自动匹配到的弹幕推给插件
     useEffect(() => {
@@ -814,10 +933,26 @@ const ArtPlayerHost = forwardRef<VideoPlayerHandle, VideoPlayerProps>(
                     setError(null);
                     Promise.resolve(onRequestReresolve()).catch(() => {});
                   }}
+                  className="px-4 py-2 rounded-full text-xs font-display font-semibold tap text-cream"
+                  style={{
+                    background: "var(--ink-2)",
+                    border: "1px solid var(--cream-line)",
+                  }}
+                >
+                  重新解析
+                </button>
+              )}
+              {onRequestSwitchSource && (
+                <button
+                  type="button"
+                  onClick={() => {
+                    setError(null);
+                    onRequestSwitchSource();
+                  }}
                   className="px-5 py-2 rounded-full text-xs font-display font-semibold tap glow-ember"
                   style={{ background: "var(--ember)", color: "var(--ink)" }}
                 >
-                  换源 / 重新解析
+                  换源 / 测速
                 </button>
               )}
             </div>

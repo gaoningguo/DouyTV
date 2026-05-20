@@ -232,6 +232,18 @@ export const IconList = (p: Props) => (
   </svg>
 );
 
+export const IconBookmark = (p: Props) => (
+  <svg {...base(p)}>
+    <path d="M6 4h12v17l-6-4-6 4V4z" />
+  </svg>
+);
+
+export const IconBookmarkFill = (p: Props) => (
+  <svg {...base(p)}>
+    <path d="M6 4h12v17l-6-4-6 4V4z" fill="currentColor" />
+  </svg>
+);
+
 export const IconSettings = (p: Props) => (
   <svg {...base(p)}>
     <circle cx="12" cy="12" r="3" />
@@ -406,5 +418,114 @@ export const IconDanmaku = (p: Props) => (
     <path d="M4 6a2 2 0 012-2h12a2 2 0 012 2v8a2 2 0 01-2 2h-7l-4 3v-3H6a2 2 0 01-2-2V6z" />
     <path d="M8 9h6" />
     <path d="M8 12h4" />
+  </svg>
+);
+
+export const IconMusic = (p: Props) => (
+  <svg {...base(p)}>
+    {/* 音符 + 音轨 */}
+    <path d="M9 18V5l11-2v13" />
+    <circle cx="6" cy="18" r="3" />
+    <circle cx="17" cy="16" r="3" />
+  </svg>
+);
+
+export const IconBook = (p: Props) => (
+  <svg {...base(p)}>
+    {/* 翻开的书 */}
+    <path d="M3 4h7a3 3 0 013 3v13a2 2 0 00-2-2H3V4z" />
+    <path d="M21 4h-7a3 3 0 00-3 3v13a2 2 0 012-2h8V4z" />
+  </svg>
+);
+
+export const IconManga = (p: Props) => (
+  <svg {...base(p)}>
+    {/* 漫画分镜：四宫格 */}
+    <rect x="3" y="3" width="8" height="8" rx="1.5" />
+    <rect x="13" y="3" width="8" height="8" rx="1.5" />
+    <rect x="3" y="13" width="8" height="8" rx="1.5" />
+    <rect x="13" y="13" width="8" height="8" rx="1.5" />
+  </svg>
+);
+
+export const IconGrid = (p: Props) => (
+  <svg {...base(p)}>
+    <rect x="3" y="3" width="7" height="7" rx="1" />
+    <rect x="14" y="3" width="7" height="7" rx="1" />
+    <rect x="3" y="14" width="7" height="7" rx="1" />
+    <rect x="14" y="14" width="7" height="7" rx="1" />
+  </svg>
+);
+
+export const IconFilter = (p: Props) => (
+  <svg {...base(p)}>
+    <path d="M4 5h16l-6 8v6l-4-2v-4L4 5z" />
+  </svg>
+);
+
+export const IconRepeat = (p: Props) => (
+  <svg {...base(p)}>
+    <path d="M17 2l4 4-4 4" />
+    <path d="M3 12V8a3 3 0 0 1 3-3h15" />
+    <path d="M7 22l-4-4 4-4" />
+    <path d="M21 12v4a3 3 0 0 1-3 3H3" />
+  </svg>
+);
+
+export const IconRepeatOne = (p: Props) => (
+  <svg {...base(p)}>
+    <path d="M17 2l4 4-4 4" />
+    <path d="M3 12V8a3 3 0 0 1 3-3h15" />
+    <path d="M7 22l-4-4 4-4" />
+    <path d="M21 12v4a3 3 0 0 1-3 3H3" />
+    <path d="M12 13V9.5L11 10" />
+  </svg>
+);
+
+export const IconShuffle = (p: Props) => (
+  <svg {...base(p)}>
+    <path d="M16 3h5v5" />
+    <path d="M4 20l17-17" />
+    <path d="M21 16v5h-5" />
+    <path d="M15 15l6 6" />
+    <path d="M4 4l5 5" />
+  </svg>
+);
+
+export const IconQueue = (p: Props) => (
+  <svg {...base(p)}>
+    <path d="M3 6h13" />
+    <path d="M3 12h13" />
+    <path d="M3 18h9" />
+    <path d="M16 16l5 3-5 3z" fill="currentColor" stroke="none" />
+  </svg>
+);
+
+export const IconArtist = (p: Props) => (
+  <svg {...base(p)}>
+    <circle cx="12" cy="8" r="4" />
+    <path d="M4 21c0-4 4-7 8-7s8 3 8 7" />
+  </svg>
+);
+
+export const IconAlbum = (p: Props) => (
+  <svg {...base(p)}>
+    <circle cx="12" cy="12" r="9" />
+    <circle cx="12" cy="12" r="3" />
+    <circle cx="12" cy="12" r="0.6" fill="currentColor" stroke="none" />
+  </svg>
+);
+
+export const IconHistoryClock = (p: Props) => (
+  <svg {...base(p)}>
+    <circle cx="12" cy="12" r="9" />
+    <path d="M12 7v5l3 2" />
+    <path d="M3 12a9 9 0 0 1 4-7.5" />
+  </svg>
+);
+
+export const IconFire = (p: Props) => (
+  <svg {...base(p)}>
+    <path d="M12 22c-4 0-7-2.5-7-7 0-3 2-5 3-6 0 2 1 3 2 3 0-4 2-7 5-9 0 4 2 5 3 7s1 3 1 5c0 4-3 7-7 7z" />
   </svg>
 );

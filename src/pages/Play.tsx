@@ -40,7 +40,25 @@ export default function Play() {
     null
   );
   const [danmuComments, setDanmuComments] = useState<Danmu[]>([]);
-  const [danmakuVisible, setDanmakuVisible] = useState(true);
+  // 弹幕显示开关 — 跨视频跨重启持久化
+  const [danmakuVisible, setDanmakuVisible] = useState<boolean>(() => {
+    try {
+      const v = localStorage.getItem("douytv:player-danmaku-visible");
+      return v == null ? true : v === "1" || v === "true";
+    } catch {
+      return true;
+    }
+  });
+  useEffect(() => {
+    try {
+      localStorage.setItem(
+        "douytv:player-danmaku-visible",
+        danmakuVisible ? "1" : "0"
+      );
+    } catch {
+      /* private */
+    }
+  }, [danmakuVisible]);
 
   // 换源 / 线路切换状态
   const [showSourceSwitcher, setShowSourceSwitcher] = useState(false);
@@ -252,12 +270,20 @@ export default function Play() {
   const totalEps = playback?.episodes.length ?? 0;
 
   return (
-    <div className="h-screen w-screen bg-black relative overflow-hidden">
+    <div
+      className="h-screen w-screen bg-black relative overflow-hidden"
+      // iOS WKWebView 默认会把水平 swipe 当作"返回手势"、垂直 swipe 当作页面滚动，
+      // 导致 ArtPlayer 内部的左右 seek / 上下音量・亮度 拿不到 touchmove。
+      // 这里把整页 touch-action 关掉，全部交给 ArtPlayer 自己处理。
+      style={{ touchAction: "none" }}
+    >
       <button
         type="button"
         onClick={() => navigate(-1)}
-        className="absolute top-4 left-4 z-20 w-9 h-9 flex items-center justify-center rounded-full backdrop-blur-md tap"
+        className="absolute z-20 w-9 h-9 flex items-center justify-center rounded-full backdrop-blur-md tap"
         style={{
+          top: "calc(env(safe-area-inset-top) + 16px)",
+          left: "calc(env(safe-area-inset-left) + 16px)",
           background: "rgba(14,15,17,0.6)",
           border: "1px solid var(--cream-line)",
           color: "var(--cream)",
@@ -268,7 +294,13 @@ export default function Play() {
       </button>
 
       {/* 弹幕开关 + 选源按钮 + 切线路 */}
-      <div className="absolute top-4 right-4 z-20 flex items-center gap-2">
+      <div
+        className="absolute z-20 flex items-center gap-2"
+        style={{
+          top: "calc(env(safe-area-inset-top) + 16px)",
+          right: "calc(env(safe-area-inset-right) + 16px)",
+        }}
+      >
         <button
           type="button"
           onClick={() => setDanmakuVisible((v) => !v)}
@@ -349,6 +381,24 @@ export default function Play() {
         startPosition={continueFrom}
         danmuComments={danmuComments}
         danmakuVisible={danmakuVisible && danmakuStore.enabled}
+        onPrevEpisode={
+          epIdx > 0
+            ? () =>
+                navigate(
+                  `/play/${encodeURIComponent(scriptKey)}/${encodeURIComponent(vodId)}/${pbIdx}/${epIdx - 1}`,
+                  { replace: true }
+                )
+            : undefined
+        }
+        onNextEpisode={
+          epIdx + 1 < totalEps
+            ? () =>
+                navigate(
+                  `/play/${encodeURIComponent(scriptKey)}/${encodeURIComponent(vodId)}/${pbIdx}/${epIdx + 1}`,
+                  { replace: true }
+                )
+            : undefined
+        }
         onRequestSwitchSource={
           (detail?.playbacks?.length ?? 0) > 1
             ? () => setShowSourceSwitcher(true)
@@ -370,7 +420,14 @@ export default function Play() {
         }}
       />
 
-      <div className="absolute bottom-6 left-4 right-4 text-cream pointer-events-none">
+      <div
+        className="absolute left-4 right-4 text-cream pointer-events-none"
+        style={{
+          bottom: "calc(env(safe-area-inset-bottom) + 24px)",
+          paddingLeft: "env(safe-area-inset-left)",
+          paddingRight: "env(safe-area-inset-right)",
+        }}
+      >
         <div className="flex items-center gap-2 mb-1">
           <span className="chip-ch">
             CH {String(epIdx + 1).padStart(2, "0")}
@@ -400,6 +457,13 @@ export default function Play() {
         script={script}
         videoTitle={videoTitle}
         onPick={handlePickPlayback}
+        onPickCrossScript={(newScriptKey, newVodId, newPbIdx) => {
+          setShowSourceSwitcher(false);
+          // 跨脚本切换：开新视频页（同集号尽量保留）
+          navigate(
+            `/play/${encodeURIComponent(newScriptKey)}/${encodeURIComponent(newVodId)}/${newPbIdx}/${epIdx}`
+          );
+        }}
         onClose={() => setShowSourceSwitcher(false)}
       />
     </div>

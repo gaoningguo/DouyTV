@@ -11,6 +11,7 @@ import {
   formatProgrammeTime,
 } from "@/lib/epg";
 import VideoPlayer from "@/components/VideoPlayer";
+import NetworkLivePanel from "@/pages/live/Network";
 import type { MediaItem } from "@/types/media";
 import {
   IconAntenna,
@@ -110,6 +111,66 @@ const ChannelRow = memo(function ChannelRow({
 });
 
 export default function Live() {
+  // 顶级 tab —— IPTV (传统 m3u 频道) / Network (直播平台房间)
+  const [tab, setTab] = useState<"iptv" | "network">(() => {
+    try {
+      const v = localStorage.getItem("douytv:live-tab");
+      return v === "network" ? "network" : "iptv";
+    } catch {
+      return "iptv";
+    }
+  });
+  useEffect(() => {
+    try {
+      localStorage.setItem("douytv:live-tab", tab);
+    } catch {
+      /* private */
+    }
+  }, [tab]);
+
+  return (
+    <div className="h-screen bg-ink text-cream flex flex-col overflow-hidden">
+      <div
+        className="flex items-center gap-2 px-3 pt-3 pb-2 shrink-0"
+        style={{ borderBottom: "1px solid var(--cream-line)" }}
+      >
+        <button
+          type="button"
+          onClick={() => setTab("iptv")}
+          className="px-3 py-1.5 rounded-full text-[11px] font-display font-semibold tap"
+          style={{
+            background: tab === "iptv" ? "var(--ember-soft)" : "var(--ink-2)",
+            border: `1px solid ${
+              tab === "iptv" ? "rgba(255,107,53,0.5)" : "var(--cream-line)"
+            }`,
+            color: tab === "iptv" ? "var(--ember)" : "var(--cream-dim)",
+          }}
+        >
+          IPTV · 电视
+        </button>
+        <button
+          type="button"
+          onClick={() => setTab("network")}
+          className="px-3 py-1.5 rounded-full text-[11px] font-display font-semibold tap"
+          style={{
+            background: tab === "network" ? "var(--ember-soft)" : "var(--ink-2)",
+            border: `1px solid ${
+              tab === "network" ? "rgba(255,107,53,0.5)" : "var(--cream-line)"
+            }`,
+            color: tab === "network" ? "var(--ember)" : "var(--cream-dim)",
+          }}
+        >
+          网络直播
+        </button>
+      </div>
+      <div className="flex-1 overflow-y-auto">
+        {tab === "iptv" ? <IPTVLive /> : <NetworkLivePanel />}
+      </div>
+    </div>
+  );
+}
+
+function IPTVLive() {
   const channels = useLiveStore((s) => s.channels);
   const hydrate = useLiveStore((s) => s.hydrate);
   const remove = useLiveStore((s) => s.remove);

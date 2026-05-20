@@ -123,7 +123,14 @@ export default function InteractionBar({ item, onShare, onSelectEpisode }: Props
 
   return (
     <>
-      <div className="absolute right-3 bottom-32 md:bottom-40 flex flex-col gap-3.5 z-30 pointer-events-none">
+      <div
+        className="absolute flex flex-col gap-3.5 z-30 pointer-events-none"
+        style={{
+          // BottomTabBar 56 + safe-area-bottom + 文字层 + 间距
+          bottom: "calc(env(safe-area-inset-bottom) + 56px + 96px)",
+          right: "calc(env(safe-area-inset-right) + 12px)",
+        }}
+      >
         <IconBtn
           active={isFav}
           label={isFav ? "收藏" : "收藏"}
@@ -224,6 +231,7 @@ export default function InteractionBar({ item, onShare, onSelectEpisode }: Props
         </div>,
         document.body
       )}
+
     </>
   );
 }
