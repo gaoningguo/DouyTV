@@ -21,16 +21,6 @@
         { "path": "$DOWNLOAD/**" }
       ]
     },
-    "sql:default",
-    {
-      "identifier": "updater:default",
-      "allow": ["check", "download", "install", "downloadAndInstall"],
-      "platforms": ["windows", "macOS", "linux"]
-    },
-    {
-      "identifier": "process:default",
-      "allow": ["relaunch", "exit"],
-      "platforms": ["windows", "macOS", "linux"]
-    }
+    "sql:default"
   ]
 }
