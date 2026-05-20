@@ -485,7 +485,6 @@ async fn open_lyric_window(app: tauri::AppHandle) -> Result<(), String> {
     .min_inner_size(320.0, 80.0)
     .decorations(false)
     .always_on_top(true)
-    .transparent(true)
     .resizable(true)
     .skip_taskbar(false)
     .build()

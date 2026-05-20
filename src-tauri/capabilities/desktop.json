@@ -3,11 +3,11 @@
   "identifier": "desktop",
   "description": "Desktop-only capability for updater and process plugins",
   "windows": ["main"],
-  "platforms": ["windows", "macos", "linux"],
+  "platforms": ["windows", "macOS", "linux"],
   "permissions": [
     "updater:allow-check",
     "updater:allow-download-and-install",
     "process:allow-exit",
-    "process:allow-relaunch"
+    "process:allow-restart"
   ]
 }
