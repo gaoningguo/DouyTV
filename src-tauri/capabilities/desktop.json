@@ -3,7 +3,7 @@
   "identifier": "desktop",
   "description": "Desktop-only capability for updater and process plugins",
   "windows": ["main"],
-  "platforms": ["windows", "macOS", "linux"],
+  "platforms": ["windows", "macos", "linux"],
   "permissions": [
     "updater:allow-check",
     "updater:allow-download-and-install",

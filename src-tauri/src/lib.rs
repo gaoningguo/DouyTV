@@ -465,6 +465,7 @@ fn rewrite_m3u8(
 ///
 /// 通过 hash route 加载 `#/music/desktop-lyric`，让 React 路由匹配到 DesktopLyric 页面。
 /// 主窗口通过 Tauri event 把 `music-state` 广播给该窗口。
+#[cfg(desktop)]
 #[tauri::command]
 async fn open_lyric_window(app: tauri::AppHandle) -> Result<(), String> {
     use tauri::{LogicalPosition, LogicalSize, Manager, WebviewUrl, WebviewWindowBuilder};
@@ -505,6 +506,7 @@ async fn open_lyric_window(app: tauri::AppHandle) -> Result<(), String> {
     Ok(())
 }
 
+#[cfg(desktop)]
 #[tauri::command]
 fn close_lyric_window(app: tauri::AppHandle) -> Result<(), String> {
     use tauri::Manager;
@@ -841,7 +843,9 @@ pub fn run() {
             script_http,
             scan_local_videos,
             read_system_proxy,
+            #[cfg(desktop)]
             open_lyric_window,
+            #[cfg(desktop)]
             close_lyric_window
         ])
         .run(tauri::generate_context!())
