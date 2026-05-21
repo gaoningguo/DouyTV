@@ -1,10 +1,12 @@
 import { useCallback, useState } from "react";
-import { Link, useNavigate, useParams } from "react-router-dom";
+import { useNavigate, useParams } from "react-router-dom";
 import { useBooksStore } from "@/stores/books";
 import { searchBooks } from "@/lib/books/client";
 import type { BookListItem } from "@/lib/books/types";
-import { wrapImage } from "@/lib/proxy";
 import { IconArrowLeft, IconBook, IconSearch } from "@/components/Icon";
+import { CoverCard } from "@/components/CoverCard";
+import { MediaGrid } from "@/components/MediaGrid";
+import { EmptyState } from "@/components/EmptyState";
 
 export default function BooksSearch() {
   const navigate = useNavigate();
@@ -101,40 +103,31 @@ export default function BooksSearch() {
         </p>
       )}
 
-      <ul className="grid grid-cols-2 md:grid-cols-3 gap-3">
-        {results.map((b) => {
-          const cover = wrapImage(b.cover);
-          return (
-            <li key={b.id}>
-              <Link
-                to={`/books/detail/${encodeURIComponent(sourceId)}/${encodeURIComponent(b.id)}`}
-                state={b}
-                className="block rounded-lg overflow-hidden tap"
-                style={{ background: "var(--ink-2)", border: "1px solid var(--cream-line)" }}
-              >
-                {cover ? (
-                  <img
-                    src={cover}
-                    alt={b.title}
-                    loading="lazy"
-                    className="w-full aspect-[2/3] object-cover"
-                  />
-                ) : (
-                  <div className="w-full aspect-[2/3] flex items-center justify-center bg-ink-3">
-                    <IconBook size={32} className="text-cream-faint" />
-                  </div>
-                )}
-                <div className="p-2">
-                  <p className="text-xs font-display font-semibold line-clamp-2">{b.title}</p>
-                  {b.author && (
-                    <p className="text-[10px] text-cream-faint mt-1 line-clamp-1">{b.author}</p>
-                  )}
-                </div>
-              </Link>
-            </li>
-          );
-        })}
-      </ul>
+      {results.length === 0 && !loading && !error ? (
+        <EmptyState
+          icon={<IconBook size={48} />}
+          title={keyword ? "暂无搜索结果" : "输入关键词开始搜索"}
+          subtitle={keyword ? "换个关键词试试" : undefined}
+        />
+      ) : (
+        <MediaGrid>
+          {results.map((b) => (
+            <CoverCard
+              key={b.id}
+              cover={b.cover}
+              title={b.title}
+              subtitle={b.author}
+              proxyCover
+              onClick={() =>
+                navigate(
+                  `/books/detail/${encodeURIComponent(sourceId)}/${encodeURIComponent(b.id)}`,
+                  { state: b }
+                )
+              }
+            />
+          ))}
+        </MediaGrid>
+      )}
     </div>
   );
 }

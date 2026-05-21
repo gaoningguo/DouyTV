@@ -115,3 +115,32 @@ export interface MangaReadProgressV2 {
   pageCount: number;
   updatedAt: number;
 }
+
+/* ───────────────── Tachiyomi / Mihon 扩展索引（只读目录） ─────────────────
+ * 这类条目无法在 DouyTV 客户端直接抓取（逻辑封装在 .apk 内），
+ * 但用户拿到的「漫画源仓库 URL」很多是这种格式，我们把它当成
+ * 「需 Suwayomi 才能消费」的只读目录展示，避免一键导入直接报错。
+ */
+export interface TachiyomiCatalogSource {
+  id: string;
+  name: string;
+  lang?: string;
+  baseUrl?: string;
+}
+
+export interface TachiyomiExtension {
+  /** 拓展显示名（如 "Tachiyomi: CopyManga"） */
+  name: string;
+  /** 包名（如 eu.kanade.tachiyomi.extension.zh.copymanga） */
+  pkg: string;
+  /** apk 文件名（仅用于展示，DouyTV 不实际下载） */
+  apk?: string;
+  lang?: string;
+  version?: string;
+  nsfw?: boolean;
+  /** 扩展内包含的站点（同一 apk 可能有多个站） */
+  sources: TachiyomiCatalogSource[];
+  /** 索引仓库 URL（导入来源） */
+  fromRepo?: string;
+  importedAt: number;
+}

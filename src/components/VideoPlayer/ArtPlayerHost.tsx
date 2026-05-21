@@ -25,6 +25,7 @@ import Artplayer from "artplayer";
 import artplayerPluginDanmuku from "artplayer-plugin-danmuku";
 import type { Danmu } from "artplayer-plugin-danmuku";
 import Hls from "hls.js";
+import mpegts from "mpegts.js";
 import type { MediaItem } from "@/types/media";
 import { wrapWithProxy } from "@/lib/proxy";
 import { useProxyStore } from "@/stores/proxy";
@@ -272,6 +273,7 @@ const ArtPlayerHost = forwardRef<VideoPlayerHandle, VideoPlayerProps>(
       propsRef.current = props;
     });
     const hlsRef = useRef<Hls | null>(null);
+    const mpegtsRef = useRef<mpegts.Player | null>(null);
     const lastProgressTs = useRef(0);
     const proxyEnabled = useProxyStore((s) => s.mode !== "off");
     const proxyUrl = useProxyStore((s) =>
@@ -289,6 +291,10 @@ const ArtPlayerHost = forwardRef<VideoPlayerHandle, VideoPlayerProps>(
 
     const [filterAds, setFilterAds] = useState<boolean>(readFilterAds);
     const [error, setError] = useState<string | null>(null);
+    // 视频实际宽高比 —— loadedmetadata 后读 videoWidth/Height 算出，
+    // 让播放器容器自适应贴合视频画面，工具栏自然落在视频底部而非屏幕底部。
+    // 默认 16/9 占位避免初次挂载时的 layout shift。仅 controls=true 时生效。
+    const [videoAspect, setVideoAspect] = useState<number>(16 / 9);
 
     const wrappedUrl = useMemo(
       () =>
@@ -406,10 +412,83 @@ const ArtPlayerHost = forwardRef<VideoPlayerHandle, VideoPlayerProps>(
       [item.kind, onError]
     );
 
+    // mpegts.js loader —— 处理 FLV / MPEG-TS over HTTP（斗鱼 / 虎牙 / 抖音 RTMP-over-FLV）。
+    // mpegts.js 是 flv.js 的现代化 fork，体积小、能正常处理直播流的 HTTP chunked 响应。
+    const attachFlv = useCallback(
+      (video: HTMLVideoElement, url: string) => {
+        if (!mpegts.getFeatureList().mseLivePlayback) {
+          // 浏览器不支持 MSE Live —— 兜底走原生 src（多数会失败但给个机会）
+          video.src = url;
+          return;
+        }
+        if (mpegtsRef.current) {
+          try {
+            mpegtsRef.current.destroy();
+          } catch {
+            /* ignore */
+          }
+          mpegtsRef.current = null;
+        }
+        const isLive = item.kind === "live";
+        const isMpegTs = /\.ts(\?|$)/i.test(url);
+        const player = mpegts.createPlayer(
+          {
+            type: isMpegTs ? "mpegts" : "flv",
+            url,
+            isLive,
+            cors: true,
+          },
+          {
+            enableWorker: true,
+            enableStashBuffer: !isLive, // 直播禁用 stash 减少延迟
+            stashInitialSize: isLive ? 128 : 384,
+            liveBufferLatencyChasing: isLive,
+            liveBufferLatencyMaxLatency: 3,
+            liveBufferLatencyMinRemain: 0.5,
+            lazyLoad: false,
+            autoCleanupSourceBuffer: true,
+          }
+        );
+        mpegtsRef.current = player;
+        // hls 同款 video.hls 字段；这里挂个 mpegtsPlayer 字段，cleanup 钩子认得到
+        (video as HTMLVideoElement & { mpegtsPlayer?: mpegts.Player }).mpegtsPlayer = player;
+        player.on(mpegts.Events.ERROR, (errType, errDetail) => {
+          const msg = `FLV ${errType}${errDetail ? `: ${errDetail}` : ""}`;
+          setError(msg);
+          onError?.(new Error(msg));
+          try {
+            player.destroy();
+          } catch {
+            /* ignore */
+          }
+          mpegtsRef.current = null;
+        });
+        player.attachMediaElement(video);
+        player.load();
+        // 直播流 autoplay
+        if (isLive) {
+          try {
+            const p = player.play() as unknown as Promise<void> | undefined;
+            if (p && typeof (p as Promise<void>).catch === "function") {
+              p.catch(() => {
+                /* user gesture required */
+              });
+            }
+          } catch {
+            /* user gesture required */
+          }
+        }
+      },
+      [item.kind, onError]
+    );
+
     // 实例化 ArtPlayer（仅在挂载时一次）
     useEffect(() => {
       const el = containerRef.current;
       if (!el) return;
+
+      // 切到新 item → 重置宽高比占位；新视频的 loadedmetadata 触发后再更新
+      setVideoAspect(16 / 9);
 
       const initialType = detectArtType(item);
       const skipMarks = readSkipMarks(item.id);
@@ -467,6 +546,7 @@ const ArtPlayerHost = forwardRef<VideoPlayerHandle, VideoPlayerProps>(
         } as Partial<HTMLVideoElement>,
         customType: {
           m3u8: (video: HTMLVideoElement, url: string) => attachHls(video, url),
+          flv: (video: HTMLVideoElement, url: string) => attachFlv(video, url),
         },
         // 工具栏左侧：上一集 / 下一集（合集时）。propsRef 让闭包始终读最新 prop，
         // 避免切集后按钮调用旧 callback。隐藏由 CSS .art-control[data-state="off"] 控制。
@@ -653,6 +733,17 @@ const ArtPlayerHost = forwardRef<VideoPlayerHandle, VideoPlayerProps>(
         }
       });
 
+      // metadata 就绪 → 读视频真实宽高比；用于把容器收成视频实际比例，
+      // 让 ArtPlayer 的 .art-bottom 工具栏自然贴在视频画面下沿。
+      art.on("video:loadedmetadata", () => {
+        const v = art.video as HTMLVideoElement | undefined;
+        if (!v || !v.videoWidth || !v.videoHeight) return;
+        const ratio = v.videoWidth / v.videoHeight;
+        if (Number.isFinite(ratio) && ratio > 0) {
+          setVideoAspect(ratio);
+        }
+      });
+
       art.on("video:ended", () => {
         onProgress?.(art.duration || 0, art.duration || 0);
         onEnded?.();
@@ -669,6 +760,14 @@ const ArtPlayerHost = forwardRef<VideoPlayerHandle, VideoPlayerProps>(
           if (hlsRef.current) {
             hlsRef.current.destroy();
             hlsRef.current = null;
+          }
+          if (mpegtsRef.current) {
+            try {
+              mpegtsRef.current.destroy();
+            } catch {
+              /* ignore */
+            }
+            mpegtsRef.current = null;
           }
           art.destroy(false);
         } catch (e) {
@@ -889,13 +988,31 @@ const ArtPlayerHost = forwardRef<VideoPlayerHandle, VideoPlayerProps>(
     );
 
     return (
-      <div className="relative w-full h-full bg-black">
+      <div className="relative w-full h-full bg-black flex items-center justify-center overflow-hidden">
         <div
           ref={containerRef}
           // `art-host-feed` 触发 styles.css 里的 hover-to-show 规则，
           // Feed 模式下底栏默认不可见，鼠标进入 .art-bottom 区域才浮现
-          className={`absolute inset-0 art-host ${controls ? "" : "art-host-feed"}`}
-          style={{ width: "100%", height: "100%" }}
+          className={`art-host ${controls ? "" : "art-host-feed"}`}
+          style={
+            controls
+              ? {
+                  // 把播放器尺寸收成视频实际宽高比，让 ArtPlayer 的 .art-bottom
+                  // 工具栏自然落在视频画面下沿，而非全屏底部。
+                  // width:100% + maxHeight:100% + aspectRatio 让浏览器在两条约束
+                  // 间自动取小，保持比例 + fit 容器。
+                  width: "100%",
+                  maxHeight: "100%",
+                  aspectRatio: String(videoAspect),
+                }
+              : {
+                  // Feed (短视频) 模式仍铺满整屏，保持原沉浸感。
+                  position: "absolute",
+                  inset: 0,
+                  width: "100%",
+                  height: "100%",
+                }
+          }
         />
         {error && (
           <div

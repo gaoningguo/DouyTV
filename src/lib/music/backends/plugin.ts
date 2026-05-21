@@ -15,6 +15,7 @@
 import { scriptFetch } from "@/source-script/fetch";
 import { useMusicStore } from "@/stores/music";
 import * as cheerio from "cheerio";
+import CryptoJS from "crypto-js";
 import type {
   IRecommendSheet,
   IRecommendSheetTag,
@@ -158,12 +159,13 @@ function makeRequireShim(axios: ReturnType<typeof makeAxiosShim>) {
     axios,
     qs: makeQsShim(),
     he: makeHeShim(),
+    "crypto-js": CryptoJS,
   };
   return (name: string): unknown => {
     const pkg = packages[name];
     if (pkg === undefined) {
       throw new Error(
-        `MusicFreePlugin 依赖了未提供的 npm 包: ${name}（DouyTV 仅内置 cheerio/axios/qs/he）`
+        `MusicFreePlugin 依赖了未提供的 npm 包: ${name}（DouyTV 仅内置 cheerio/axios/qs/he/crypto-js）`
       );
     }
     return pkg;

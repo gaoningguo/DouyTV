@@ -10,7 +10,7 @@
 import { useEffect, useRef } from "react";
 import { Link, useLocation } from "react-router-dom";
 import { useMusicStore } from "@/stores/music";
-import { wrapImage } from "@/lib/proxy";
+import { wrapAudio, wrapImage } from "@/lib/proxy";
 import {
   IconHeart,
   IconHeartFill,
@@ -35,7 +35,8 @@ export default function MusicMiniPlayer() {
 
   const hidden = HIDE_PREFIXES.some((p) => location.pathname.startsWith(p));
 
-  // current 变化 → 重新加载
+  // current 变化 → 重新加载（音频走 wrapAudio 经由 dyproxy 注入 source-aware Referer，
+  // 解决 NetEase outer/url 302 跳 CDN 时 WebView 直连被防盗链拒的问题）
   useEffect(() => {
     const audio = audioRef.current;
     if (!audio) return;
@@ -44,8 +45,13 @@ export default function MusicMiniPlayer() {
       audio.load();
       return;
     }
-    if (audio.src !== store.current.url) {
-      audio.src = store.current.url;
+    const proxiedUrl = wrapAudio(
+      store.current.url,
+      store.current.source,
+      store.current.headers
+    );
+    if (audio.src !== proxiedUrl) {
+      audio.src = proxiedUrl;
       audio.load();
       if (!store.paused) {
         audio.play().catch((e) => {
@@ -55,7 +61,7 @@ export default function MusicMiniPlayer() {
       }
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [store.current?.url]);
+  }, [store.current?.url, store.current?.source]);
 
   // paused 状态同步
   useEffect(() => {
@@ -120,9 +126,20 @@ export default function MusicMiniPlayer() {
         onPlay={() => store.setPaused(false)}
         onPause={() => store.setPaused(true)}
         onEnded={() => void store.next()}
-        onError={() => {
+        onError={(e) => {
+          const el = e.currentTarget;
+          const code = el.error?.code;
+          // code 含义：1 ABORTED / 2 NETWORK / 3 DECODE / 4 SRC_NOT_SUPPORTED
+          const reasonMap: Record<number, string> = {
+            1: "请求被中断",
+            2: "网络错误",
+            3: "无法解码 (上游返回非音频内容，可能是 VIP/灰色曲)",
+            4: "URL 不被支持 (上游可能 404 或返回 HTML)",
+          };
+          const why = code != null ? reasonMap[code] || `code=${code}` : "未知";
+          console.warn("[MiniPlayer] audio error", { code, url: el.src });
           store.setPaused(true);
-          store.setError("音频加载失败");
+          store.setError(`音频加载失败：${why}`);
         }}
       />
       {!hidden && (

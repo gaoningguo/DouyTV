@@ -16,8 +16,10 @@ import {
   type MangaExploreCategory,
 } from "@/lib/mangasources/runtime";
 import type { MangaItem, MangaSourceV2 } from "@/lib/mangasources/types";
-import { wrapImage } from "@/lib/proxy";
 import { IconManga, IconRefresh, IconSearch, IconSettings } from "@/components/Icon";
+import { CoverCard } from "@/components/CoverCard";
+import { MediaGrid } from "@/components/MediaGrid";
+import { EmptyState } from "@/components/EmptyState";
 
 type Tab = "search" | "explore" | "shelf";
 const TAB_KEY = "douytv:mangasrc-home-tab";
@@ -232,23 +234,20 @@ export default function MangaSrcHome() {
       </div>
 
       {enabled.length === 0 && (
-        <div
-          className="rounded-xl p-6 text-center mb-4"
-          style={{
-            background: "var(--ink-2)",
-            border: "1px dashed var(--cream-line)",
-          }}
-        >
-          <IconManga size={36} className="inline mb-2 opacity-40" />
-          <p className="text-[12px] text-cream-dim mb-3">尚无可用漫画源</p>
-          <Link
-            to="/settings/manga-src"
-            className="inline-block px-4 py-2 rounded-lg text-[11px] font-display font-semibold tap"
-            style={{ background: "var(--ember)", color: "var(--ink)" }}
-          >
-            去添加源
-          </Link>
-        </div>
+        <EmptyState
+          icon={<IconManga size={48} />}
+          title="尚无可用漫画源"
+          subtitle="先去添加 / 启用至少一个漫画源"
+          action={
+            <Link
+              to="/settings/manga-src"
+              className="inline-block px-4 py-2 rounded-lg text-[11px] font-display font-semibold tap"
+              style={{ background: "var(--ember)", color: "var(--ink)" }}
+            >
+              去添加源
+            </Link>
+          }
+        />
       )}
 
       {/* ── 搜索 tab ── */}
@@ -428,9 +427,11 @@ export default function MangaSrcHome() {
       {tab === "shelf" && (
         <>
           {shelf.length === 0 ? (
-            <p className="text-[12px] text-cream-dim p-6 text-center">
-              书架空空。先去搜索或探索找几本喜欢的漫画加入吧。
-            </p>
+            <EmptyState
+              icon={<IconManga size={48} />}
+              title="书架空空"
+              subtitle="先去搜索或探索找几本喜欢的漫画加入吧"
+            />
           ) : (
             <>
               <button
@@ -524,58 +525,37 @@ function Grid({
   onOpen: (m: MangaItem) => void;
 }) {
   return (
-    <div className="grid grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-2">
+    <MediaGrid>
       {items.map((it) => (
-        <div
+        <CoverCard
           key={it.manga.id}
-          onClick={() => onOpen(it.manga)}
-          className="rounded-lg overflow-hidden cursor-pointer tap relative"
-          style={{
-            background: "var(--ink-2)",
-            border: "1px solid var(--cream-line)",
-          }}
-        >
-          {it.showUpdate && (
-            <span
-              className="absolute top-1.5 right-1.5 z-10 w-2 h-2 rounded-full"
-              style={{ background: "#E14F4F" }}
-              title="有新章节"
-            />
-          )}
-          <div
-            className="aspect-[2/3] bg-cover bg-center"
-            style={{
-              backgroundImage: it.manga.cover
-                ? `url(${wrapImage(it.manga.cover)})`
-                : undefined,
-              background: !it.manga.cover ? "var(--ink-3)" : undefined,
-            }}
-          />
-          <div className="p-2">
-            <p className="text-[11px] font-display font-semibold line-clamp-2 text-cream">
-              {it.manga.name}
-            </p>
-            {it.manga.author && (
-              <p className="text-[10px] font-mono text-cream-faint line-clamp-1 mt-0.5">
-                {it.manga.author}
-              </p>
-            )}
-            {it.sourceName && (
-              <p className="text-[10px] text-cream-dim mt-0.5 font-mono line-clamp-1">
+          cover={it.manga.cover}
+          title={it.manga.name}
+          subtitle={it.manga.author}
+          proxyCover
+          meta={
+            it.sourceName ? (
+              <>
                 {it.sourceName}
-                {it.altCount && it.altCount > 0 && (
+                {it.altCount && it.altCount > 0 ? (
                   <span className="ml-1 text-ember">+{it.altCount}</span>
-                )}
-              </p>
-            )}
-            {it.badge && (
-              <p className="text-[10px] text-ember mt-0.5 line-clamp-1 font-mono">
-                {it.badge}
-              </p>
-            )}
-          </div>
-        </div>
+                ) : null}
+              </>
+            ) : undefined
+          }
+          bottomBadge={it.badge}
+          topBadge={
+            it.showUpdate ? (
+              <span
+                className="inline-block w-2 h-2 rounded-full"
+                style={{ background: "#E14F4F" }}
+                title="有新章节"
+              />
+            ) : undefined
+          }
+          onClick={() => onOpen(it.manga)}
+        />
       ))}
-    </div>
+    </MediaGrid>
   );
 }

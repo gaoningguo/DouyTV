@@ -1,20 +1,32 @@
 /**
- * 在线歌单 / 榜单详情 —— 长按菜单 + 心形按钮。
+ * 在线歌单 / 榜单详情 —— 三段头部 + 播放全部条 + 统一列表行。
+ *
+ * 参考 lx-music `songList/Detail` 头部布局 (cover 左 / 描述中 / 操作右)
+ * 与 MusicFree `sheetDetail/components/header` + `PlayAllBar` 模式。
  */
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import { useNavigate, useParams, useSearchParams } from "react-router-dom";
 import { useMusicStore } from "@/stores/music";
 import { getPlaylistDetail, getToplistDetail } from "@/lib/music/client";
 import type { MusicPlaylistDetail, MusicSource } from "@/lib/music/types";
-import { wrapImage } from "@/lib/proxy";
-import { MusicHeart } from "@/components/MusicHeart";
+import { MusicDetailHeader } from "@/components/MusicDetailHeader";
+import { MusicPlayAllBar } from "@/components/MusicPlayAllBar";
+import { MusicListItem } from "@/components/MusicListItem";
 import { showMusicMenu } from "@/components/MusicContextMenu";
-import {
-  IconArrowLeft,
-  IconMusic,
-  IconPlay,
-  IconShuffle,
-} from "@/components/Icon";
+
+function formatDuration(sec?: number): string | undefined {
+  if (!sec || !Number.isFinite(sec)) return undefined;
+  const m = Math.floor(sec / 60);
+  const s = Math.floor(sec % 60);
+  return `${m}:${s.toString().padStart(2, "0")}`;
+}
+
+function formatPlayCount(n?: number): string | undefined {
+  if (n == null) return undefined;
+  if (n >= 100_000_000) return `${(n / 100_000_000).toFixed(1)}亿播放`;
+  if (n >= 10_000) return `${(n / 10_000).toFixed(1)}万播放`;
+  return `${n}播放`;
+}
 
 export default function MusicPlaylist() {
   const navigate = useNavigate();
@@ -52,26 +64,27 @@ export default function MusicPlaylist() {
     void store.playQueue(detail.songs, 0);
   };
 
+  const meta = useMemo(() => {
+    if (!detail) return [];
+    return [
+      detail.creator,
+      `${detail.songs.length} 首`,
+      formatPlayCount(detail.playCount),
+    ];
+  }, [detail]);
+
   return (
     <div className="min-h-screen bg-ink text-cream p-4 pb-24">
-      <div className="flex items-center gap-3 mb-5">
+      {/* 顶部小标题 + 返回按钮（移动端尤为需要） */}
+      <div className="flex items-center mb-2">
         <button
           type="button"
           onClick={() => navigate(-1)}
-          className="w-9 h-9 flex items-center justify-center rounded-full tap text-cream"
-          style={{ background: "var(--ink-2)", border: "1px solid var(--cream-line)" }}
+          className="font-mono text-[10px] tracking-[0.2em] text-cream-faint tap"
           aria-label="返回"
         >
-          <IconArrowLeft size={16} />
+          ← 返回
         </button>
-        <div className="flex-1 min-w-0">
-          <p className="font-mono text-[10px] tracking-[0.25em] text-cream-faint">
-            {isToplist ? "MUSIC · TOPLIST" : "MUSIC · PLAYLIST"}
-          </p>
-          <h1 className="font-display text-xl font-extrabold tracking-tight line-clamp-1">
-            {detail?.name || "歌单"}
-          </h1>
-        </div>
       </div>
 
       {error && (
@@ -95,77 +108,39 @@ export default function MusicPlaylist() {
         </div>
       ) : detail ? (
         <>
-          {detail.songs.length > 0 && (
-            <div className="flex gap-2 mb-4">
-              <button
-                type="button"
-                onClick={() => void store.playQueue(detail.songs, 0)}
-                className="flex-1 flex items-center justify-center gap-2 py-2.5 rounded-lg text-sm font-display font-semibold tap"
-                style={{ background: "var(--ember)", color: "var(--ink)" }}
-              >
-                <IconPlay size={14} />
-                播放全部 ({detail.songs.length})
-              </button>
-              <button
-                type="button"
-                onClick={handleShuffle}
-                className="px-3 py-2.5 rounded-lg text-sm tap text-cream"
-                style={{ background: "var(--ink-2)", border: "1px solid var(--cream-line)" }}
-                aria-label="随机播放"
-              >
-                <IconShuffle size={14} />
-              </button>
-            </div>
-          )}
+          <MusicDetailHeader
+            eyebrow={isToplist ? "MUSIC · TOPLIST" : "MUSIC · PLAYLIST"}
+            title={detail.name || "歌单"}
+            cover={detail.cover}
+            meta={meta}
+            description={detail.description}
+          />
 
-          <ul className="space-y-1.5">
-            {detail.songs.map((s, i) => (
-              <li key={`${s.source}-${s.songId}`}>
-                <div
-                  className="w-full flex items-center gap-3 p-2 rounded-lg tap text-left"
-                  style={{
-                    background: "var(--ink-2)",
-                    border: "1px solid var(--cream-line)",
-                  }}
-                >
-                  <button
-                    type="button"
+          <MusicPlayAllBar
+            count={detail.songs.length}
+            onPlayAll={() => void store.playQueue(detail.songs, 0)}
+            onShuffle={handleShuffle}
+          />
+
+          {detail.songs.length === 0 ? (
+            <p className="text-center text-xs text-cream-faint font-mono py-12">
+              这个歌单是空的
+            </p>
+          ) : (
+            <ul className="space-y-1.5">
+              {detail.songs.map((s, i) => (
+                <li key={`${s.source}-${s.songId}`}>
+                  <MusicListItem
+                    song={s}
+                    index={i + 1}
+                    duration={formatDuration(s.durationSec)}
                     onClick={() => void store.playQueue(detail.songs, i)}
-                    onContextMenu={(e) => {
-                      e.preventDefault();
-                      showMusicMenu(s);
-                    }}
-                    className="flex items-center gap-3 flex-1 min-w-0 text-left"
-                  >
-                    <span className="w-6 text-center font-mono text-[10px] text-cream-faint shrink-0">
-                      {String(i + 1).padStart(2, "0")}
-                    </span>
-                    {s.cover ? (
-                      <img
-                        src={wrapImage(s.cover)}
-                        alt=""
-                        loading="lazy"
-                        className="w-10 h-10 rounded shrink-0 object-cover"
-                      />
-                    ) : (
-                      <div className="w-10 h-10 rounded shrink-0 flex items-center justify-center bg-ink-3">
-                        <IconMusic size={16} className="text-cream-faint" />
-                      </div>
-                    )}
-                    <div className="flex-1 min-w-0">
-                      <p className="text-xs font-display font-semibold line-clamp-1">
-                        {s.name}
-                      </p>
-                      <p className="text-[10px] font-mono text-cream-faint line-clamp-1">
-                        {s.artist || "—"}
-                      </p>
-                    </div>
-                  </button>
-                  <MusicHeart song={s} size={14} className="w-8 h-8 flex items-center justify-center" />
-                </div>
-              </li>
-            ))}
-          </ul>
+                    onMenu={() => showMusicMenu(s)}
+                  />
+                </li>
+              ))}
+            </ul>
+          )}
         </>
       ) : null}
     </div>

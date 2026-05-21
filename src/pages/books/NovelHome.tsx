@@ -17,6 +17,9 @@ import {
 } from "@/lib/booksources/runtime";
 import type { BookSourceV2, NovelBook } from "@/lib/booksources/types";
 import { IconBook, IconSearch, IconSettings } from "@/components/Icon";
+import { CoverCard } from "@/components/CoverCard";
+import { MediaGrid } from "@/components/MediaGrid";
+import { EmptyState } from "@/components/EmptyState";
 
 type Tab = "search" | "explore" | "shelf";
 const TAB_KEY = "douytv:novel-home-tab";
@@ -218,23 +221,20 @@ export default function NovelHome() {
 
       {/* 无源引导 */}
       {enabledSources.length === 0 && (
-        <div
-          className="rounded-xl p-6 text-center mb-4"
-          style={{
-            background: "var(--ink-2)",
-            border: "1px dashed var(--cream-line)",
-          }}
-        >
-          <IconBook size={36} className="inline mb-2 opacity-40" />
-          <p className="text-[12px] text-cream-dim mb-3">尚无可用书源</p>
-          <Link
-            to="/settings/novel"
-            className="inline-block px-4 py-2 rounded-lg text-[11px] font-display font-semibold tap"
-            style={{ background: "var(--ember)", color: "var(--ink)" }}
-          >
-            去添加书源
-          </Link>
-        </div>
+        <EmptyState
+          icon={<IconBook size={48} />}
+          title="尚无可用书源"
+          subtitle="先去添加 / 启用至少一个书源"
+          action={
+            <Link
+              to="/settings/novel"
+              className="inline-block px-4 py-2 rounded-lg text-[11px] font-display font-semibold tap"
+              style={{ background: "var(--ember)", color: "var(--ink)" }}
+            >
+              去添加书源
+            </Link>
+          }
+        />
       )}
 
       {/* ── 搜索 tab ── */}
@@ -271,25 +271,31 @@ export default function NovelHome() {
               <p className="font-mono text-[10px] tracking-[0.2em] text-cream-faint mb-2">
                 SEARCH RESULTS · {results.length}
               </p>
-              <ul className="space-y-2">
+              <MediaGrid>
                 {results.map((r) => (
-                  <BookRow
+                  <CoverCard
                     key={r.book.id}
-                    book={r.book}
-                    sourceName={
-                      sources.find((s) => s.id === r.book.sourceId)
-                        ?.bookSourceName
+                    cover={r.book.cover}
+                    title={r.book.name}
+                    subtitle={r.book.author}
+                    meta={
+                      <>
+                        {sources.find((s) => s.id === r.book.sourceId)?.bookSourceName ?? ""}
+                        {r.alternates.length > 0 && (
+                          <span className="ml-1 text-ember">+{r.alternates.length}</span>
+                        )}
+                      </>
                     }
-                    alternates={r.alternates}
-                    onOpen={(b) =>
+                    bottomBadge={r.book.kind}
+                    onClick={() =>
                       navigate(
-                        `/books/novel/detail/${b.sourceId}/${encodeURIComponent(b.url)}`,
-                        { state: { book: b } }
+                        `/books/novel/detail/${r.book.sourceId}/${encodeURIComponent(r.book.url)}`,
+                        { state: { book: r.book } }
                       )
                     }
                   />
                 ))}
-              </ul>
+              </MediaGrid>
             </section>
           )}
         </>
@@ -376,15 +382,16 @@ export default function NovelHome() {
           {exploreError && <ErrorBox text={exploreError} />}
 
           {exploreList.length > 0 && (
-            <ul className="space-y-2">
+            <MediaGrid>
               {exploreList.map((b) => (
-                <BookRow
+                <CoverCard
                   key={b.id}
-                  book={b}
-                  sourceName={
-                    sources.find((s) => s.id === b.sourceId)?.bookSourceName
-                  }
-                  onOpen={() =>
+                  cover={b.cover}
+                  title={b.name}
+                  subtitle={b.author}
+                  meta={sources.find((s) => s.id === b.sourceId)?.bookSourceName}
+                  bottomBadge={b.kind}
+                  onClick={() =>
                     navigate(
                       `/books/novel/detail/${b.sourceId}/${encodeURIComponent(b.url)}`,
                       { state: { book: b } }
@@ -392,7 +399,7 @@ export default function NovelHome() {
                   }
                 />
               ))}
-            </ul>
+            </MediaGrid>
           )}
         </>
       )}
@@ -401,20 +408,26 @@ export default function NovelHome() {
       {tab === "shelf" && (
         <>
           {shelf.length === 0 ? (
-            <p className="text-[12px] text-cream-dim p-6 text-center">
-              书架空空。先去搜索或探索找几本喜欢的书加入吧。
-            </p>
+            <EmptyState
+              icon={<IconBook size={48} />}
+              title="书架空空"
+              subtitle="先去搜索或探索找几本喜欢的书加入吧"
+            />
           ) : (
-            <ul className="space-y-2">
+            <MediaGrid>
               {shelf.map((b) => (
-                <BookRow
+                <CoverCard
                   key={b.id}
-                  book={b}
-                  badge={b.lastReadChapterTitle}
-                  sourceName={
-                    sources.find((s) => s.id === b.sourceId)?.bookSourceName
+                  cover={b.cover}
+                  title={b.name}
+                  subtitle={b.author}
+                  meta={sources.find((s) => s.id === b.sourceId)?.bookSourceName}
+                  bottomBadge={
+                    b.lastReadChapterTitle
+                      ? `上次：${b.lastReadChapterTitle}`
+                      : undefined
                   }
-                  onOpen={() => {
+                  onClick={() => {
                     navigate(
                       `/books/novel/detail/${b.sourceId}/${encodeURIComponent(b.url)}`,
                       { state: { book: b } }
@@ -422,7 +435,7 @@ export default function NovelHome() {
                   }}
                 />
               ))}
-            </ul>
+            </MediaGrid>
           )}
         </>
       )}
@@ -487,71 +500,5 @@ function ErrorBox({ text }: { text: string }) {
     >
       ✗ {text}
     </p>
-  );
-}
-
-function BookRow({
-  book,
-  badge,
-  sourceName,
-  alternates,
-  onOpen,
-}: {
-  book: NovelBook;
-  badge?: string;
-  sourceName?: string;
-  alternates?: NovelBook[];
-  onOpen: (book: NovelBook) => void;
-}) {
-  return (
-    <li
-      onClick={() => onOpen(book)}
-      className="flex items-center gap-3 p-2 rounded-lg cursor-pointer tap"
-      style={{
-        background: "var(--ink-2)",
-        border: "1px solid var(--cream-line)",
-      }}
-    >
-      <div
-        className="w-12 h-16 rounded shrink-0 overflow-hidden flex items-center justify-center"
-        style={{ background: "var(--ink-3)" }}
-      >
-        {book.cover ? (
-          <img
-            src={book.cover}
-            alt=""
-            loading="lazy"
-            referrerPolicy="no-referrer"
-            className="w-full h-full object-cover"
-          />
-        ) : (
-          <IconBook size={16} className="text-cream-faint" />
-        )}
-      </div>
-      <div className="flex-1 min-w-0">
-        <p className="text-sm font-display font-semibold line-clamp-1 text-cream">
-          {book.name}
-        </p>
-        <p className="text-[11px] text-cream-faint mt-0.5 line-clamp-1">
-          {book.author ?? "—"}
-          {book.kind ? ` · ${book.kind}` : ""}
-        </p>
-        {sourceName && (
-          <p className="text-[10px] text-cream-dim mt-0.5 font-mono">
-            来源：{sourceName}
-            {alternates && alternates.length > 0 && (
-              <span className="ml-2 text-ember">
-                +{alternates.length} 源
-              </span>
-            )}
-          </p>
-        )}
-        {badge && (
-          <p className="text-[10px] text-ember mt-0.5 line-clamp-1 font-mono">
-            上次：{badge}
-          </p>
-        )}
-      </div>
-    </li>
   );
 }

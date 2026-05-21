@@ -1,16 +1,15 @@
 /**
- * 虎牙直播 adapter —— 移植自 pure_live `lib/core/site/huya_site.dart`。
+ * 虎牙直播 adapter —— 完全按 dart_simple_live `simple_live_core/lib/src/huya_site.dart` 移植。
  *
- * 实现范围：
- *   - getRecommend / getCategories / getCategoryRooms / search / getRoomDetail：公开 JSON，无登录
- *   - resolve：从 mp.huya.com profileRoom 拿 baseSteamInfoList，挑首条 HLS line，
- *     使用 client-side `buildAntiCode` 直接构造可播 m3u8（不走 TARS getCdnTokenInfoEx）。
- *     TARS 主要给 FLV 拿 sFlvToken；HLS 不依赖该 token，所以纯 web 实现足够。
+ * 关键路径变更（vs 旧版用 mp.huya.com/cache.php）：
+ *   - getRoomDetail/resolve 从 `m.huya.com/{roomId}` HTML 提取 `window.HNF_GLOBAL_INIT`
+ *     正则 + 替换 function() 块为 "" → JSON.parse → roomInfo
+ *   - topSid/subSid 从原始文本正则提（lChannelId / lSubChannelId）
+ *   - vStreamInfo.value 是 line 列表，每个含 sFlvUrl / sFlvAntiCode / sHlsAntiCode / sStreamName / sCdnType
+ *   - resolve：选首条 line，使用 sFlvAntiCode + buildAntiCode（不调 TARS getCdnTokenInfoEx；
+ *     web 平台没 TARS 客户端，sFlvAntiCode 够用）
  *
- * 注意：
- *   - 虎牙 sHlsAntiCode 中 base64(fm) 解码后包含 `_` 分隔字符串，secretPrefix = 第一段
- *   - convertUid = rotl64(presenterUid) —— 低 32 位左移 8 位，高位不变（uid 通常 <= 32bit，所以等价于 (uid<<8 | uid>>24) & 0xffffffff）
- *   - 匿名 uid 走 anonymousLogin 接口，避免登录态依赖
+ * 推荐 / 分类 / 搜索 / 状态 endpoint 与之前一致（与 pure_live 同）。
  */
 import CryptoJS from "crypto-js";
 import { scriptFetch } from "@/source-script/fetch";
@@ -30,6 +29,34 @@ const HEADERS_BASE: Record<string, string> = {
   Referer: "https://www.huya.com/",
 };
 
+async function fetchJson<T>(
+  url: string,
+  init: { headers?: Record<string, string> } = {}
+): Promise<T> {
+  const res = await scriptFetch(url, {
+    method: "GET",
+    headers: { ...HEADERS_BASE, ...init.headers },
+    timeout: 20_000,
+  });
+  if (!res.ok) throw new Error(`HTTP ${res.status} ${url}`);
+  return res.json<T>();
+}
+
+async function fetchText(
+  url: string,
+  init: { headers?: Record<string, string> } = {}
+): Promise<string> {
+  const res = await scriptFetch(url, {
+    method: "GET",
+    headers: { ...HEADERS_BASE, ...init.headers },
+    timeout: 20_000,
+  });
+  if (!res.ok) throw new Error(`HTTP ${res.status} ${url}`);
+  return res.text();
+}
+
+/* ─────────────── 列表映射 ─────────────── */
+
 interface HuyaListItem {
   profileRoom?: number | string;
   introduction?: string;
@@ -40,36 +67,6 @@ interface HuyaListItem {
   avatar180?: string;
   gameFullName?: string;
 }
-
-async function fetchJson<T>(
-  url: string,
-  init: { headers?: Record<string, string>; method?: string; body?: string } = {}
-): Promise<T> {
-  const res = await scriptFetch(url, {
-    method: init.method ?? "GET",
-    headers: { ...HEADERS_BASE, ...init.headers },
-    body: init.body,
-    timeout: 20_000,
-  });
-  if (!res.ok) throw new Error(`HTTP ${res.status} ${url}`);
-  return res.json<T>();
-}
-
-async function fetchText(
-  url: string,
-  init: { headers?: Record<string, string>; method?: string; body?: string } = {}
-): Promise<string> {
-  const res = await scriptFetch(url, {
-    method: init.method ?? "GET",
-    headers: { ...HEADERS_BASE, ...init.headers },
-    body: init.body,
-    timeout: 20_000,
-  });
-  if (!res.ok) throw new Error(`HTTP ${res.status} ${url}`);
-  return res.text();
-}
-
-/* ─────────────── 列表卡片公共映射 ─────────────── */
 
 function mapRoom(item: HuyaListItem): NetLiveRoom | undefined {
   const rid = item.profileRoom;
@@ -150,7 +147,6 @@ async function getCategories(): Promise<NetLiveCategory[]> {
         });
       }
     } catch (e) {
-      // 单父类失败不影响其他
       console.warn(`[huya] category ${parent.name} failed`, e);
     }
   }
@@ -188,22 +184,8 @@ interface HuyaSearchDoc {
 interface HuyaSearchResp {
   response?: {
     "1"?: { docs?: HuyaSearchDoc[]; numFound?: number };
-    "3"?: { docs?: HuyaSearchDoc[] };
+    "3"?: { docs?: HuyaSearchDoc[]; numFound?: number };
   };
-}
-
-function findRoomIdFromList(
-  list: HuyaSearchDoc[],
-  uid: number | undefined,
-  yyid: number | undefined
-): string | undefined {
-  if (uid === undefined || yyid === undefined) return undefined;
-  for (const item of list) {
-    if (item.uid === uid && item.yyid === yyid) {
-      return item.room_id !== undefined ? String(item.room_id) : undefined;
-    }
-  }
-  return undefined;
 }
 
 async function search(
@@ -215,18 +197,15 @@ async function search(
     keyword
   )}&uid=0&v=4&typ=-5&livestate=0&rows=20&start=${start}`;
   const data = await fetchJson<HuyaSearchResp>(url);
-  const queryList = data.response?.["3"]?.docs ?? [];
-  const responseList = data.response?.["1"]?.docs ?? [];
+  const docs = data.response?.["3"]?.docs ?? [];
   const list: NetLiveRoom[] = [];
-  for (const item of queryList) {
+  for (const item of docs) {
     let cover = item.game_screenshot ?? "";
     if (cover && !cover.includes("?")) {
       cover += "?x-oss-process=style/w338_h190&";
     }
     const title = item.game_introduction || item.game_roomName || "";
-    const roomId =
-      findRoomIdFromList(responseList, item.uid, item.yyid) ??
-      String(item.room_id ?? "");
+    const roomId = String(item.room_id ?? "");
     if (!roomId) continue;
     list.push({
       platform: "huya",
@@ -244,46 +223,18 @@ async function search(
       link: `https://www.huya.com/${roomId}`,
     });
   }
-  return { list, hasMore: queryList.length > 0 };
+  const numFound = data.response?.["3"]?.numFound ?? 0;
+  return { list, hasMore: numFound > page * 20 };
 }
 
-/* ─────────────── 房间详情 + 流信息 ─────────────── */
+/* ─────────────── m.huya.com HTML 提取 roomInfo（dart_simple_live 同款） ─────────────── */
 
-interface HuyaStreamInfo {
-  sCdnType: string;
+interface HuyaLineInfo {
+  sCdnType?: string;
   sFlvUrl?: string;
-  sHlsUrl?: string;
   sFlvAntiCode?: string;
   sHlsAntiCode?: string;
   sStreamName?: string;
-  lChannelId?: number | string;
-  lSubChannelId?: number | string;
-}
-
-interface HuyaProfileResp {
-  status?: number;
-  data?: {
-    liveStatus?: "ON" | "REPLAY" | "OFF";
-    liveData?: {
-      screenshot?: string;
-      userCount?: number | string;
-      gameFullName?: string;
-      introduction?: string;
-      bitRateInfo?: string;
-      gid?: number;
-    };
-    profileInfo?: {
-      nick?: string;
-      avatar180?: string;
-      yyid?: number;
-    };
-    welcomeText?: string;
-    stream?: {
-      baseSteamInfoList?: HuyaStreamInfo[];
-      flv?: { multiLine?: Array<{ url?: string; cdnType?: string }>; rateArray?: HuyaBitRate[] };
-      hls?: { multiLine?: Array<{ url?: string; cdnType?: string }>; rateArray?: HuyaBitRate[] };
-    };
-  };
 }
 
 interface HuyaBitRate {
@@ -291,112 +242,165 @@ interface HuyaBitRate {
   iBitRate?: number;
 }
 
-async function fetchProfile(roomId: string): Promise<HuyaProfileResp> {
-  const url = `https://mp.huya.com/cache.php?m=Live&do=profileRoom&roomid=${roomId}&showSecret=1`;
-  return fetchJson<HuyaProfileResp>(url, {
-    headers: {
-      Accept: "*/*",
-      "Sec-Fetch-Dest": "empty",
-      "Sec-Fetch-Mode": "cors",
-      "Sec-Fetch-Site": "same-site",
-    },
-  });
+interface HuyaRoomInfoJson {
+  roomInfo?: {
+    tLiveInfo?: {
+      sIntroduction?: string;
+      sRoomName?: string;
+      sScreenshot?: string;
+      lTotalCount?: number;
+      lProfileRoom?: number | string;
+      sGameFullName?: string;
+      tLiveStreamInfo?: {
+        vStreamInfo?: { value?: HuyaLineInfo[] };
+        vBitRateInfo?: { value?: HuyaBitRate[] };
+      };
+    };
+    tProfileInfo?: {
+      sNick?: string;
+      sAvatar180?: string;
+    };
+    eLiveStatus?: number;
+  };
+  welcomeText?: string;
+  topSid?: number;
+  subSid?: number;
 }
 
-async function getRoomDetail(roomId: string): Promise<NetLiveRoom> {
-  const resp = await fetchProfile(roomId);
-  if (resp.status !== 200 || !resp.data) {
-    throw new Error(`虎牙 status=${resp.status}（房间可能不存在）`);
+async function fetchRoomInfoFromHtml(roomId: string): Promise<HuyaRoomInfoJson> {
+  const html = await fetchText(`https://m.huya.com/${roomId}`, {
+    headers: { Accept: "*/*" },
+  });
+  // dart_simple_live 正则的更宽松版本：允许 `=` 两侧 0+ 空白，结尾 `;</script>` 或 `</script>`
+  // 原版 `\.=.` 强制 = 后面正好 1 个字符，对最近的 m.huya.com HTML 不再匹配
+  const m =
+    html.match(
+      /window\.HNF_GLOBAL_INIT\s*=\s*(\{[\s\S]*?\})\s*;?\s*<\/script>/
+    ) ||
+    html.match(/window\.HNF_GLOBAL_INIT\s*=\s*(\{[\s\S]*?\})\s*;/);
+  let jsonText = m?.[1];
+  if (!jsonText) {
+    // 最后的 fallback —— 老接口 mp.huya.com/cache.php
+    return fetchRoomInfoViaBetard(roomId);
   }
-  const d = resp.data;
-  const live = d.liveStatus === "ON" || d.liveStatus === "REPLAY";
+  // 把所有 function() {...} 替换成 ""
+  jsonText = jsonText.replace(/function.*?\(.*?\).\{[\s\S]*?\}/g, '""');
+  // 解析
+  let jsonObj: HuyaRoomInfoJson;
+  try {
+    jsonObj = JSON.parse(jsonText) as HuyaRoomInfoJson;
+  } catch (e) {
+    console.warn("[huya] HTML JSON parse failed, fallback to betard", e);
+    return fetchRoomInfoViaBetard(roomId);
+  }
+  // 从原文本提 topSid / subSid（vStreamInfo 内部嵌套，主对象上可能没有）
+  const topSidMatch = html.match(/lChannelId":([0-9]+)/);
+  const subSidMatch = html.match(/lSubChannelId":([0-9]+)/);
+  jsonObj.topSid = topSidMatch ? parseInt(topSidMatch[1], 10) : 0;
+  jsonObj.subSid = subSidMatch ? parseInt(subSidMatch[1], 10) : 0;
+  return jsonObj;
+}
+
+/**
+ * Fallback：m.huya.com HTML 拿不到时，调 mp.huya.com profileRoom API。
+ * 不如 HTML 完整（缺 vStreamInfo），但至少 detail 可用。
+ */
+async function fetchRoomInfoViaBetard(roomId: string): Promise<HuyaRoomInfoJson> {
+  interface ProfileResp {
+    status?: number;
+    data?: {
+      liveStatus?: "ON" | "REPLAY" | "OFF";
+      liveData?: {
+        introduction?: string;
+        screenshot?: string;
+        userCount?: number;
+        gameFullName?: string;
+      };
+      profileInfo?: {
+        nick?: string;
+        avatar180?: string;
+      };
+      welcomeText?: string;
+      stream?: {
+        baseSteamInfoList?: HuyaLineInfo[];
+      };
+    };
+  }
+  const data = await fetchJson<ProfileResp>(
+    `https://mp.huya.com/cache.php?m=Live&do=profileRoom&roomid=${roomId}&showSecret=1`,
+    {
+      headers: {
+        Accept: "*/*",
+        "Sec-Fetch-Dest": "empty",
+        "Sec-Fetch-Mode": "cors",
+        "Sec-Fetch-Site": "same-site",
+      },
+    }
+  );
+  if (data.status !== 200 || !data.data) {
+    throw new Error("虎牙 m.huya.com 与 mp.huya.com 都拿不到房间信息");
+  }
+  // 把 betard 响应模拟为 HuyaRoomInfoJson 结构
+  const baseList = data.data.stream?.baseSteamInfoList ?? [];
+  return {
+    roomInfo: {
+      tLiveInfo: {
+        sIntroduction: data.data.liveData?.introduction,
+        sScreenshot: data.data.liveData?.screenshot,
+        lTotalCount: data.data.liveData?.userCount,
+        lProfileRoom: roomId,
+        sGameFullName: data.data.liveData?.gameFullName,
+        tLiveStreamInfo: {
+          vStreamInfo: { value: baseList },
+        },
+      },
+      tProfileInfo: {
+        sNick: data.data.profileInfo?.nick,
+        sAvatar180: data.data.profileInfo?.avatar180,
+      },
+      eLiveStatus:
+        data.data.liveStatus === "ON" || data.data.liveStatus === "REPLAY"
+          ? 2
+          : 0,
+    },
+    welcomeText: data.data.welcomeText,
+    topSid: 0,
+    subSid: 0,
+  };
+}
+
+/* ─────────────── 详情 ─────────────── */
+
+async function getRoomDetail(roomId: string): Promise<NetLiveRoom> {
+  const info = await fetchRoomInfoFromHtml(roomId);
+  const r = info.roomInfo;
+  if (!r) throw new Error("虎牙 roomInfo 为空");
+  const live = r.eLiveStatus === 2;
+  const title = r.tLiveInfo?.sIntroduction || r.tLiveInfo?.sRoomName || "";
   return {
     platform: "huya",
-    roomId,
-    title: d.liveData?.introduction ?? "",
-    cover: d.liveData?.screenshot,
-    uname: d.profileInfo?.nick,
-    avatar: d.profileInfo?.avatar180,
-    online:
-      typeof d.liveData?.userCount === "string"
-        ? parseInt(d.liveData.userCount, 10) || 0
-        : d.liveData?.userCount,
-    category: d.liveData?.gameFullName,
-    introduction: d.liveData?.introduction,
-    notice: d.welcomeText,
+    roomId: String(r.tLiveInfo?.lProfileRoom ?? roomId),
+    title,
+    cover: r.tLiveInfo?.sScreenshot,
+    uname: r.tProfileInfo?.sNick,
+    avatar: r.tProfileInfo?.sAvatar180,
+    online: r.tLiveInfo?.lTotalCount,
+    category: r.tLiveInfo?.sGameFullName,
+    introduction: r.tLiveInfo?.sIntroduction,
+    notice: info.welcomeText,
     live,
     link: `https://www.huya.com/${roomId}`,
   };
 }
 
-/* ─────────────── 在线状态查询（轻量） ─────────────── */
-
-async function getLiveStatus(roomId: string): Promise<boolean> {
-  const html = await fetchText(`https://m.huya.com/${roomId}`, {
-    headers: { Accept: "*/*" },
-  });
-  const m = html.match(/window\.HNF_GLOBAL_INIT.=.\{([\s\S]*?)\}.<\/script>/);
-  if (!m) return false;
-  try {
-    const obj = JSON.parse(`{${m[1]}}`);
-    return obj?.roomInfo?.eLiveStatus === 2;
-  } catch {
-    return false;
-  }
-}
-
-/* ─────────────── 匿名 uid ─────────────── */
-
-let cachedAnonymousUid: string | null = null;
-
-async function getAnonymousUid(): Promise<string> {
-  if (cachedAnonymousUid) return cachedAnonymousUid;
-  try {
-    const resp = await scriptFetch(
-      "https://udblgn.huya.com/web/anonymousLogin",
-      {
-        method: "POST",
-        headers: {
-          ...HEADERS_BASE,
-          Accept: "*/*",
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify({
-          appId: 5002,
-          byPass: 3,
-          context: "",
-          version: "2.4",
-          data: {},
-        }),
-        timeout: 15_000,
-      }
-    );
-    const json = await resp.json<{ data?: { uid?: string | number } }>();
-    const uid = json.data?.uid;
-    if (uid !== undefined && uid !== null) {
-      cachedAnonymousUid = String(uid);
-      return cachedAnonymousUid;
-    }
-  } catch (e) {
-    console.warn("[huya] anonymousLogin failed", e);
-  }
-  // 兜底：随机 13 位数
-  cachedAnonymousUid = String(
-    1400000000000 + Math.floor(Math.random() * 100000000000)
-  );
-  return cachedAnonymousUid;
-}
-
 /* ─────────────── AntiCode 构造（client-side） ─────────────── */
 
 function rotl64Low32(t: number): number {
-  // 低 32 位左移 8 位 + 高 8 位回卷
   const low = t >>> 0;
   return ((low << 8) | (low >>> 24)) >>> 0;
 }
 
 function base64Decode(s: string): string {
-  // 兼容 atob：先做 percent-decode，再用 atob
   try {
     return atob(decodeURIComponent(s));
   } catch {
@@ -426,10 +430,6 @@ function parseQuery(qs: string): Record<string, string> {
   return out;
 }
 
-/**
- * 把 sHlsAntiCode / sFlvAntiCode 转成可播 query string。
- * presenterUid 通常用 lChannelId（topSid）；HLS 路径下也可用匿名 uid。
- */
 function buildAntiCode(
   streamName: string,
   presenterUid: number,
@@ -446,7 +446,7 @@ function buildAntiCode(
   const secretHash = md5Hex(`${seqId}|${ctype}|${platformId}`);
   const convertUid = rotl64Low32(presenterUid);
   const calcUid = isWap ? presenterUid : convertUid;
-  const fm = base64Decode(map.fm);
+  const fm = base64Decode(decodeURIComponent(map.fm));
   const secretPrefix = (fm.split("_")[0] ?? "") || "";
   const wsTime = map.wsTime ?? "";
   const secretStr = `${secretPrefix}_${calcUid}_${streamName}_${secretHash}_${wsTime}`;
@@ -481,96 +481,52 @@ function buildAntiCode(
 /* ─────────────── resolve ─────────────── */
 
 async function resolve(roomId: string): Promise<NetLiveStream> {
-  const resp = await fetchProfile(roomId);
-  if (resp.status !== 200 || !resp.data?.stream) {
-    throw new Error("虎牙未返回 stream 数据（房间可能已下播）");
+  const info = await fetchRoomInfoFromHtml(roomId);
+  const lines = info.roomInfo?.tLiveInfo?.tLiveStreamInfo?.vStreamInfo?.value ?? [];
+  const presenterUid = info.topSid ?? 0;
+  if (lines.length === 0) {
+    throw new Error("虎牙 vStreamInfo 为空（房间未开播 / 风控）");
   }
-  const baseList = resp.data.stream.baseSteamInfoList ?? [];
-  if (baseList.length === 0) throw new Error("虎牙 baseSteamInfoList 为空");
-
-  // 选首条 HLS（多数 CDN 都给齐）
-  const flvLines = resp.data.stream.flv?.multiLine ?? [];
-  const hlsLines = resp.data.stream.hls?.multiLine ?? [];
-
-  // 优先匹配 HLS 中的 cdn type，再 fallback 到 FLV
-  let chosen: HuyaStreamInfo | undefined;
-  let streamType: NetLiveStream["streamType"] = "hls";
-  let antiCode = "";
-  let baseUrl = "";
-
-  for (const line of hlsLines) {
-    if (!line.url) continue;
-    const found = baseList.find((b) => b.sCdnType === line.cdnType);
-    if (found?.sHlsUrl && found.sHlsAntiCode && found.sStreamName) {
-      chosen = found;
-      antiCode = found.sHlsAntiCode;
-      baseUrl = found.sHlsUrl;
-      streamType = "hls";
+  // 取首条有效 line —— 按 dart_simple_live：所有 line 都有 sFlvUrl
+  let chosen: HuyaLineInfo | undefined;
+  for (const line of lines) {
+    if (line.sFlvUrl && line.sFlvAntiCode && line.sStreamName) {
+      chosen = line;
       break;
     }
   }
-  if (!chosen) {
-    for (const line of flvLines) {
-      if (!line.url) continue;
-      const found = baseList.find((b) => b.sCdnType === line.cdnType);
-      if (found?.sFlvUrl && found.sFlvAntiCode && found.sStreamName) {
-        chosen = found;
-        antiCode = found.sFlvAntiCode;
-        baseUrl = found.sFlvUrl;
-        streamType = "flv";
-        break;
-      }
-    }
-  }
-  if (!chosen) throw new Error("虎牙无可用 line（cdn 全部下线？）");
+  if (!chosen) throw new Error("虎牙未匹配到可播流");
+  const anti = buildAntiCode(chosen.sStreamName!, presenterUid, chosen.sFlvAntiCode!);
+  const url = `${chosen.sFlvUrl}/${chosen.sStreamName}.flv?${anti}&codec=264`;
 
-  // presenterUid：优先用 lChannelId，再 fallback 匿名 uid
-  let presenterUid = 0;
-  if (chosen.lChannelId !== undefined && chosen.lChannelId !== null) {
-    presenterUid =
-      typeof chosen.lChannelId === "string"
-        ? parseInt(chosen.lChannelId, 10) || 0
-        : chosen.lChannelId;
-  }
-  if (!presenterUid) {
-    const anon = await getAnonymousUid();
-    presenterUid = parseInt(anon, 10) || 0;
-  }
-
-  const anti = buildAntiCode(chosen.sStreamName!, presenterUid, antiCode);
-  const ext = streamType === "hls" ? "m3u8" : "flv";
-  const url = `${baseUrl}/${chosen.sStreamName}.${ext}?${anti}&codec=264`;
-
-  // 收集可选清晰度（仅 label，URL 留空，UI 选了再重拉）
-  const biterates: HuyaBitRate[] = [];
-  if (resp.data.liveData?.bitRateInfo) {
-    try {
-      const parsed = JSON.parse(resp.data.liveData.bitRateInfo);
-      if (Array.isArray(parsed)) biterates.push(...parsed);
-    } catch {
-      /* ignore */
-    }
-  }
-  if (biterates.length === 0 && resp.data.stream.flv?.rateArray) {
-    biterates.push(...resp.data.stream.flv.rateArray);
-  }
+  // 清晰度（仅 label）
+  const biterates = info.roomInfo?.tLiveInfo?.tLiveStreamInfo?.vBitRateInfo?.value ?? [];
   const alternatives = biterates
-    .filter((b) => b.sDisplayName && b.iBitRate !== undefined)
+    .filter((b) => b.sDisplayName && !b.sDisplayName.includes("HDR"))
     .map((b) => ({
-      qn: String(b.iBitRate),
-      label: String(b.sDisplayName),
+      qn: String(b.iBitRate ?? 0),
+      label: b.sDisplayName!,
       url: b.iBitRate === 0 ? url : "",
     }));
 
   return {
     url,
-    streamType,
+    streamType: "flv",
     qn: "0",
     qnLabel: alternatives.find((a) => a.qn === "0")?.label ?? "原画",
     alternatives: alternatives.length > 0 ? alternatives : undefined,
     referer: "https://www.huya.com/",
     ua: UA,
   };
+}
+
+async function getLiveStatus(roomId: string): Promise<boolean> {
+  try {
+    const info = await fetchRoomInfoFromHtml(roomId);
+    return info.roomInfo?.eLiveStatus === 2;
+  } catch {
+    return false;
+  }
 }
 
 /* ─────────────── 导出 ─────────────── */

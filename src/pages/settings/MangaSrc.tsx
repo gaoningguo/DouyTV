@@ -150,6 +150,8 @@ export function MangaSrcPanel() {
       {mode === "paste" && <PasteJsonPanel onClose={() => setMode("list")} importByText={importByText} />}
       {mode === "manual" && <ManualPanel onClose={() => setMode("list")} addManual={addManual} />}
 
+      <TachiyomiCatalogSection />
+
       <div
         className="rounded-xl p-3.5 text-[11px] text-cream-dim leading-relaxed"
         style={{ background: "var(--ink-2)", border: "1px solid var(--cream-line)" }}
@@ -172,7 +174,7 @@ function ImportByUrlPanel({
   importByUrl,
 }: {
   onClose: () => void;
-  importByUrl: (url: string) => Promise<{ ok: boolean; added: number; message?: string }>;
+  importByUrl: (url: string) => Promise<{ ok: boolean; added: number; tachiyomi?: number; message?: string }>;
 }) {
   const [url, setUrl] = useState("");
   const [loading, setLoading] = useState(false);
@@ -184,10 +186,14 @@ function ImportByUrlPanel({
     setResult(null);
     try {
       const r = await importByUrl(url.trim());
-      setResult({
-        ok: r.ok,
-        msg: r.ok ? `成功导入 ${r.added} 个源` : r.message ?? "导入失败",
-      });
+      const tachi = r.tachiyomi ?? 0;
+      const msg = r.ok
+        ? r.message ??
+          (tachi > 0
+            ? `导入 ${r.added} 个源 · Tachiyomi 扩展 ${tachi} 条（需 Suwayomi）`
+            : `成功导入 ${r.added} 个源`)
+        : r.message ?? "导入失败";
+      setResult({ ok: r.ok, msg });
     } finally {
       setLoading(false);
     }
@@ -253,20 +259,31 @@ function PasteJsonPanel({
   importByText,
 }: {
   onClose: () => void;
-  importByText: (text: string) => { ok: boolean; added: number; message?: string };
+  importByText: (text: string) => Promise<{ ok: boolean; added: number; tachiyomi?: number; message?: string }>;
 }) {
   const [text, setText] = useState("");
+  const [loading, setLoading] = useState(false);
   const [result, setResult] = useState<{ ok: boolean; msg: string } | null>(null);
   const fileRef = useRef<HTMLInputElement>(null);
 
-  const run = () => {
+  const run = async () => {
     if (!text.trim()) return;
-    const r = importByText(text);
-    setResult({
-      ok: r.ok,
-      msg: r.ok ? `成功导入 ${r.added} 个源` : r.message ?? "导入失败",
-    });
-    if (r.ok) setText("");
+    setLoading(true);
+    setResult(null);
+    try {
+      const r = await importByText(text);
+      const tachi = r.tachiyomi ?? 0;
+      const msg = r.ok
+        ? r.message ??
+          (tachi > 0
+            ? `导入 ${r.added} 个源 · Tachiyomi 扩展 ${tachi} 条（需 Suwayomi）`
+            : `成功导入 ${r.added} 个源`)
+        : r.message ?? "导入失败";
+      setResult({ ok: r.ok, msg });
+      if (r.ok) setText("");
+    } finally {
+      setLoading(false);
+    }
   };
 
   const onFile = async (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -321,12 +338,12 @@ function PasteJsonPanel({
       />
       <button
         type="button"
-        onClick={run}
-        disabled={!text.trim()}
+        onClick={() => void run()}
+        disabled={loading || !text.trim()}
         className="w-full py-2 rounded-lg text-xs font-display font-semibold tap disabled:opacity-50"
         style={{ background: "var(--ember)", color: "var(--ink)" }}
       >
-        导入
+        {loading ? "导入中…" : "导入"}
       </button>
       {result && (
         <p
@@ -491,6 +508,112 @@ function ManualPanel({
       >
         添加
       </button>
+    </section>
+  );
+}
+
+/**
+ * Tachiyomi / Mihon 扩展索引目录 ——
+ * DouyTV 不能直接消费这些扩展（逻辑在 .apk 内），但导入仓库索引时把扩展元信息
+ * 存下来展示给用户，告诉他们需要 Suwayomi 才能实际抓取。
+ */
+function TachiyomiCatalogSection() {
+  const catalog = useMangaSourceStore((s) => s.tachiyomiCatalog);
+  const clear = useMangaSourceStore((s) => s.clearTachiyomiCatalog);
+  const removeOne = useMangaSourceStore((s) => s.removeTachiyomiExtension);
+
+  if (catalog.length === 0) return null;
+
+  return (
+    <section
+      className="rounded-xl p-4 mb-4"
+      style={{
+        background: "var(--ink-2)",
+        border: "1px solid rgba(124,255,178,0.25)",
+      }}
+    >
+      <div className="flex items-center mb-3">
+        <p className="font-mono text-[10px] tracking-[0.2em] text-phosphor">
+          TACHIYOMI · 扩展索引（只读 · 需 Suwayomi）
+        </p>
+        <button
+          type="button"
+          onClick={() => {
+            if (confirm(`清空 Tachiyomi 目录中的 ${catalog.length} 条扩展？`)) clear();
+          }}
+          className="ml-auto text-[10px] font-mono text-cream-faint hover:text-[#FF6B6B] tap"
+        >
+          清空
+        </button>
+      </div>
+
+      <p className="text-[11px] text-cream-faint mb-3 leading-relaxed">
+        这些是 Tachiyomi / Mihon 格式的扩展条目（如 CopyManga / vomic / 包子漫画）。
+        DouyTV 客户端无法直接抓取（逻辑封装在 .apk 内），需要在 PC/NAS 部署
+        Suwayomi-Server 后装上对应扩展，再通过设置页「Suwayomi」连接服务端使用。
+      </p>
+
+      <ul className="space-y-1.5 max-h-80 overflow-y-auto">
+        {catalog.map((ext) => (
+          <li
+            key={ext.pkg}
+            className="px-2 py-2 rounded"
+            style={{
+              background: "var(--ink-3)",
+              border: "1px solid var(--cream-line)",
+            }}
+          >
+            <div className="flex items-center gap-2">
+              <div className="flex-1 min-w-0">
+                <p className="text-[11px] font-display font-semibold text-cream truncate">
+                  {ext.name}
+                  {ext.version && (
+                    <span className="ml-2 text-[10px] font-mono text-cream-faint">
+                      v{ext.version}
+                    </span>
+                  )}
+                  {ext.nsfw && (
+                    <span className="ml-2 text-[10px] font-mono text-[#FF6B6B]">
+                      NSFW
+                    </span>
+                  )}
+                </p>
+                <p className="text-[10px] font-mono text-cream-faint truncate">
+                  {ext.pkg}
+                </p>
+              </div>
+              <button
+                type="button"
+                onClick={() => removeOne(ext.pkg)}
+                className="w-6 h-6 flex items-center justify-center tap text-cream-faint hover:text-[#FF6B6B]"
+                aria-label="移除"
+              >
+                <IconTrash size={12} />
+              </button>
+            </div>
+            {ext.sources.length > 0 && (
+              <ul className="mt-1.5 ml-1 space-y-0.5">
+                {ext.sources.map((s) => (
+                  <li
+                    key={`${ext.pkg}-${s.id}`}
+                    className="text-[10px] font-mono text-cream-dim flex items-center gap-1.5"
+                  >
+                    <span className="inline-block w-1 h-1 rounded-full bg-phosphor shrink-0" />
+                    <span className="truncate">
+                      {s.name}
+                      {s.baseUrl && (
+                        <span className="ml-1.5 text-cream-faint">
+                          {s.baseUrl}
+                        </span>
+                      )}
+                    </span>
+                  </li>
+                ))}
+              </ul>
+            )}
+          </li>
+        ))}
+      </ul>
     </section>
   );
 }

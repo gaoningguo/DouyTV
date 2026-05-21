@@ -72,16 +72,19 @@ async function tauriFetch(
   const method = init.method ?? (bodyStr !== null ? "POST" : "GET");
   const proxyUrl = getActiveProxyUrl();
 
-  const res = await invoke<RustHttpResponse>("script_http", {
-    req: {
-      url: finalUrl,
-      method,
-      headers,
-      body: bodyStr,
-      timeout_ms: init.timeout ?? null,
-      proxy_url: proxyUrl ?? null,
-    },
-  });
+  const res = await invoke<RustHttpResponse>(
+    init.http2 ? "script_http_h2" : "script_http",
+    {
+      req: {
+        url: finalUrl,
+        method,
+        headers,
+        body: bodyStr,
+        timeout_ms: init.timeout ?? null,
+        proxy_url: proxyUrl ?? null,
+      },
+    }
+  );
 
   const lowered: Record<string, string> = {};
   for (const [k, v] of Object.entries(res.headers)) lowered[k.toLowerCase()] = v;

@@ -102,8 +102,10 @@ export default function Local() {
         <button
           type="button"
           onClick={() => setActive(undefined)}
-          className="absolute top-4 left-4 z-20 w-9 h-9 flex items-center justify-center rounded-full backdrop-blur-md tap"
+          className="absolute z-20 w-9 h-9 flex items-center justify-center rounded-full backdrop-blur-md tap"
           style={{
+            top: "calc(env(safe-area-inset-top) + 16px)",
+            left: "calc(env(safe-area-inset-left) + 16px)",
             background: "rgba(14,15,17,0.6)",
             border: "1px solid var(--cream-line)",
             color: "var(--cream)",
@@ -114,7 +116,14 @@ export default function Local() {
         {mediaItem && (
           <VideoPlayer item={mediaItem} active loop={false} muted={false} controls />
         )}
-        <div className="absolute bottom-6 left-4 right-4 text-cream pointer-events-none">
+        <div
+          className="absolute left-4 right-4 text-cream pointer-events-none"
+          style={{
+            bottom: "calc(env(safe-area-inset-bottom) + 24px)",
+            paddingLeft: "env(safe-area-inset-left)",
+            paddingRight: "env(safe-area-inset-right)",
+          }}
+        >
           <p className="text-base font-display font-bold text-shadow line-clamp-1">
             {active.name}
           </p>

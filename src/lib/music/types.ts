@@ -100,6 +100,8 @@ export interface MusicPlaylistDetail {
   cover?: string;
   description?: string;
   creator?: string;
+  /** 播放次数，仅在线歌单有 */
+  playCount?: number;
   songs: MusicSong[];
   /** 分页：是否到底 */
   isEnd?: boolean;

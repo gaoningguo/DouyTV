@@ -1,7 +1,10 @@
 import { useEffect } from "react";
-import { Link, useNavigate } from "react-router-dom";
+import { useNavigate } from "react-router-dom";
 import { useMangaStore } from "@/stores/manga";
 import { IconArrowLeft, IconManga } from "@/components/Icon";
+import { CoverCard } from "@/components/CoverCard";
+import { MediaGrid } from "@/components/MediaGrid";
+import { EmptyState } from "@/components/EmptyState";
 
 export default function MangaShelf() {
   const navigate = useNavigate();
@@ -33,35 +36,27 @@ export default function MangaShelf() {
       </div>
 
       {store.shelf.length === 0 ? (
-        <p className="text-[11px] text-cream-faint text-center py-12">书架为空</p>
+        <EmptyState
+          icon={<IconManga size={48} />}
+          title="书架为空"
+          subtitle="去发现 / 探索找几本喜欢的漫画加入"
+        />
       ) : (
-        <ul className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-3">
+        <MediaGrid>
           {store.shelf.map((m) => (
-            <li key={`${m.sourceId}-${m.mangaId}`}>
-              <Link
-                to={`/manga/detail/${encodeURIComponent(m.sourceId)}/${encodeURIComponent(m.mangaId)}`}
-                className="block rounded-lg overflow-hidden tap"
-                style={{ background: "var(--ink-2)", border: "1px solid var(--cream-line)" }}
-              >
-                {m.cover ? (
-                  <img src={m.cover} alt={m.title} loading="lazy" className="w-full aspect-[3/4] object-cover" />
-                ) : (
-                  <div className="w-full aspect-[3/4] flex items-center justify-center bg-ink-3">
-                    <IconManga size={32} className="text-cream-faint" />
-                  </div>
-                )}
-                <div className="p-2">
-                  <p className="text-xs font-display font-semibold line-clamp-2">{m.title}</p>
-                  {m.lastChapterName && (
-                    <p className="text-[10px] font-mono text-cream-faint mt-1 line-clamp-1">
-                      上次：{m.lastChapterName}
-                    </p>
-                  )}
-                </div>
-              </Link>
-            </li>
+            <CoverCard
+              key={`${m.sourceId}-${m.mangaId}`}
+              cover={m.cover}
+              title={m.title}
+              bottomBadge={m.lastChapterName ? `上次：${m.lastChapterName}` : undefined}
+              onClick={() =>
+                navigate(
+                  `/manga/detail/${encodeURIComponent(m.sourceId)}/${encodeURIComponent(m.mangaId)}`
+                )
+              }
+            />
           ))}
-        </ul>
+        </MediaGrid>
       )}
     </div>
   );

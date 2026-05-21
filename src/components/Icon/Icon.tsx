@@ -529,3 +529,23 @@ export const IconFire = (p: Props) => (
     <path d="M12 22c-4 0-7-2.5-7-7 0-3 2-5 3-6 0 2 1 3 2 3 0-4 2-7 5-9 0 4 2 5 3 7s1 3 1 5c0 4-3 7-7 7z" />
   </svg>
 );
+
+export const IconTv = (p: Props) => (
+  <svg {...base(p)}>
+    <rect x="3" y="6" width="18" height="13" rx="2" />
+    <path d="M8 3l4 3 4-3" />
+    <path d="M8 22h8" />
+  </svg>
+);
+
+export const IconChevronUp = (p: Props) => (
+  <svg {...base(p)}>
+    <polyline points="6 15 12 9 18 15" />
+  </svg>
+);
+
+export const IconChevronLeft = (p: Props) => (
+  <svg {...base(p)}>
+    <polyline points="15 18 9 12 15 6" />
+  </svg>
+);

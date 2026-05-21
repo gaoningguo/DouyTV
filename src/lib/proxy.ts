@@ -14,6 +14,34 @@ const PROXY_ORIGIN = (() => {
     : "dyproxy://localhost";
 })();
 
+/**
+ * 本地 hyper 流式代理端口 —— Tauri 启动时调一次 get_stream_proxy_port 缓存。
+ * FLV / MPEG-TS 直播必须走这个 server（不是 dyproxy），因为 Tauri URI scheme
+ * 不支持 chunked streaming，FLV 无限流必然 buffer 死。
+ */
+let cachedStreamProxyPort: number | null = null;
+
+export async function initStreamProxyPort(): Promise<number | null> {
+  if (!isTauri) return null;
+  if (cachedStreamProxyPort !== null) return cachedStreamProxyPort;
+  try {
+    const { invoke } = await import("@tauri-apps/api/core");
+    const port = (await invoke("get_stream_proxy_port")) as number | null;
+    if (typeof port === "number" && port > 0) {
+      cachedStreamProxyPort = port;
+      return port;
+    }
+  } catch (e) {
+    console.warn("[proxy] init stream proxy port failed", e);
+  }
+  return null;
+}
+
+/** 同步读端口（init 之后才有）。给 wrapWithProxy 这种 sync 用。 */
+export function getStreamProxyPort(): number | null {
+  return cachedStreamProxyPort;
+}
+
 /** 不区分大小写读取 header，HLS 源脚本设头键大小写不一致。 */
 function getHeader(
   headers: Record<string, string> | undefined,
@@ -95,18 +123,45 @@ export function wrapWithProxy(
 
   // streamType 判定：显式优先；"auto" / undefined / 未知 → URL 启发式
   let isHls: boolean;
+  let isFlv: boolean;
   switch (item.streamType) {
     case "hls":
       isHls = true;
+      isFlv = false;
+      break;
+    case "flv":
+      isHls = false;
+      isFlv = true;
       break;
     case "mp4":
-    case "flv":
     case "dash":
       isHls = false;
+      isFlv = false;
       break;
     default:
       // "auto" / undefined / 任何未知值
       isHls = urlLooksLikeHls(item.url);
+      isFlv = !isHls && /\.flv(\?|$)/i.test(item.url);
+  }
+
+  // FLV 直播：走本地 hyper 流代理（chunked streaming，dyproxy 没法做）
+  if (isFlv) {
+    const port = getStreamProxyPort();
+    if (port) {
+      const u = new URL(`http://127.0.0.1:${port}/`);
+      u.searchParams.set("url", item.url);
+      if (ua) u.searchParams.set("ua", ua);
+      if (referer) u.searchParams.set("referer", referer);
+      return u.toString();
+    }
+    // 端口未就绪 fallback：走 dyproxy（功能有限但起码 referer 注入到位）
+    return buildProxyUrl("stream", item.url, {
+      ua,
+      referer,
+      filterAds: opts.filterAds,
+      proxyUrl: opts.proxyUrl,
+      bypassSystemProxy: opts.bypassSystemProxy,
+    });
   }
 
   const endpoint = isHls ? "m3u8" : "stream";
@@ -147,5 +202,40 @@ export function wrapImage(
   if (!isTauri) return imgUrl;
   return buildProxyUrl("image", imgUrl, {
     referer: getHeader(headers, "Referer"),
+  });
+}
+
+/** 平台 → Referer 默认值（NetEase MP3 CDN 等节点对盗链有 host 校验）。 */
+const SOURCE_REFERER: Record<string, string> = {
+  wy: "https://music.163.com/",
+  kw: "http://www.kuwo.cn/",
+  tx: "https://y.qq.com/",
+  kg: "http://www.kugou.com/",
+  mg: "http://music.migu.cn/",
+};
+
+/**
+ * 包装音频 URL 走 dyproxy 的 segment 端点 ——
+ *  - Rust ureq follows 302 redirects 自动（NetEase outer/url 跳到 m702 CDN）
+ *  - 注入 source-aware Referer，对应平台 CDN 才放行
+ *  - 拿到 binary passthrough + CORS 头，<audio> 元素能直接消费
+ *
+ * 非 Tauri 环境（dev 浏览器）直接返回原始 URL（受 CORS 限制，多数会失败）。
+ */
+export function wrapAudio(
+  audioUrl: string | undefined,
+  source: string | undefined,
+  extraHeaders?: Record<string, string>
+): string {
+  if (!audioUrl) return "";
+  if (!isTauri) return audioUrl;
+  const referer =
+    getHeader(extraHeaders, "Referer") ||
+    (source ? SOURCE_REFERER[source] : "") ||
+    "https://music.163.com/";
+  const ua = getHeader(extraHeaders, "User-Agent");
+  return buildProxyUrl("segment", audioUrl, {
+    ua: ua || undefined,
+    referer,
   });
 }

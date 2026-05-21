@@ -13,6 +13,8 @@ import { useMusicStore } from "@/stores/music";
 import { createMusicApiRuntime } from "./backends/musicapi";
 import { createLxMusicRuntime } from "./backends/lxmusic";
 import { createPluginRuntime } from "./backends/plugin";
+import { createNcmRuntime } from "./backends/ncm";
+import { createListen1Runtime } from "./backends/listen1";
 import { createBuiltinRuntime } from "./backends/builtin";
 import type { MusicBackend, MusicBackendRuntime } from "./backends/types";
 import type {
@@ -53,6 +55,10 @@ function createRuntime(backend: MusicBackend, platform: MusicSource): MusicBacke
       return createLxMusicRuntime(backend, platform);
     case "plugin":
       return createPluginRuntime(backend);
+    case "ncm":
+      return createNcmRuntime(backend);
+    case "listen1":
+      return createListen1Runtime(backend);
     case "builtin":
       return createBuiltinRuntime(backend, platform);
   }
@@ -64,20 +70,7 @@ function runtime(): MusicBackendRuntime {
   return createRuntime(backend, platform);
 }
 
-/** 找一个可以解析 URL 的 backend（builtin 自己不能解析，回落到其他类型） */
-function parseRuntime(songSource: MusicSource): MusicBackendRuntime {
-  const s = useMusicStore.getState();
-  const active = s.backends.find((b) => b.id === s.activeBackendId && b.enabled);
-  if (active && active.kind !== "builtin") {
-    return createRuntime(active, songSource);
-  }
-  // builtin → 找第一个 enabled 的非 builtin
-  const fallback = s.backends.find((b) => b.enabled && b.kind !== "builtin");
-  if (!fallback) {
-    throw new Error("当前后端不支持 URL 解析 — 需配置 MusicApi/LX-Music Server/MusicFree 插件");
-  }
-  return createRuntime(fallback, songSource);
-}
+// （parseRuntime 已并入 parseSong 的 fallback 循环；保留注释只为记录架构变更点）
 
 export function hasMusicBackend(): boolean {
   const s = useMusicStore.getState();
@@ -260,15 +253,33 @@ export async function parseSong(
   song: MusicSong,
   quality: MusicQuality
 ): Promise<MusicResolvedSong> {
-  const rt = parseRuntime(song.source);
-  const r = await rt.parse(song, quality);
-  return {
-    ...song,
-    url: r.url,
-    quality,
-    cached: r.cached,
-    headers: r.headers,
-  };
+  const s = useMusicStore.getState();
+  const enabled = s.backends.filter((b) => b.enabled);
+  if (enabled.length === 0) {
+    throw new Error("尚未配置音乐后端 —— 去 设置 · 音乐 添加一个");
+  }
+  // 优先 active，失败后按 enabled 顺序回退（参考 MusicFree trackPlayer:482-562 多次尝试逻辑）
+  const ordered = [
+    ...enabled.filter((b) => b.id === s.activeBackendId),
+    ...enabled.filter((b) => b.id !== s.activeBackendId),
+  ];
+  let lastErr: Error | null = null;
+  for (const b of ordered) {
+    try {
+      const rt = createRuntime(b, song.source);
+      const r = await rt.parse(song, quality);
+      return {
+        ...song,
+        url: r.url,
+        quality,
+        cached: r.cached,
+        headers: r.headers,
+      };
+    } catch (e) {
+      lastErr = e as Error;
+    }
+  }
+  throw lastErr ?? new Error("所有 backend 都无法解析此歌曲");
 }
 
 export async function fetchLyrics(song: MusicSong): Promise<string> {

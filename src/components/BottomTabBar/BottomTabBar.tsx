@@ -1,3 +1,4 @@
+import { useEffect } from "react";
 import { NavLink } from "react-router-dom";
 import {
   IconHome,
@@ -18,6 +19,18 @@ const TABS = [
 ];
 
 export default function BottomTabBar() {
+  // 把底栏总高度同步成 CSS var，让 MusicMiniPlayer 等浮层能正确避让，
+  // 否则 MiniPlayer 会落在 bottom:0 把底栏盖住（user-reported bug）。
+  useEffect(() => {
+    document.documentElement.style.setProperty(
+      "--bottom-tab-h",
+      "calc(56px + env(safe-area-inset-bottom))"
+    );
+    return () => {
+      document.documentElement.style.removeProperty("--bottom-tab-h");
+    };
+  }, []);
+
   return (
     <nav
       className="fixed bottom-0 inset-x-0 z-30 backdrop-blur-xl"
@@ -32,13 +45,18 @@ export default function BottomTabBar() {
         borderTop: "1px solid var(--cream-line)",
       }}
     >
-      <div className="h-full flex items-stretch justify-around">
+      {/* 横向可滚 —— 窄屏 / tab 增多时右侧 tab 仍可滑到 + 点击 */}
+      <div
+        className="h-full flex items-stretch overflow-x-auto scrollbar-hide"
+        style={{ scrollSnapType: "x proximity" }}
+      >
         {TABS.map(({ to, Icon, label, end }) => (
           <NavLink
             key={to}
             to={to}
             end={end}
-            className="relative flex-1 flex flex-col items-center justify-center gap-0.5 tap text-cream-faint hover:text-cream-dim transition-colors"
+            className="relative flex-shrink-0 flex flex-col items-center justify-center gap-0.5 tap text-cream-faint hover:text-cream-dim transition-colors px-2"
+            style={{ minWidth: 72, scrollSnapAlign: "start" }}
           >
             {({ isActive }) => (
               <>

@@ -73,6 +73,9 @@ export interface ScriptFetchInit {
   query?: Record<string, string | number | boolean | undefined | null>;
   json?: unknown;
   timeout?: number;
+  /** 走 HTTP/2 客户端（reqwest+rustls） —— 给 live.douyin.com 这类强制 ALPN h2 的端点用。
+   *  默认 false 走 ureq HTTP/1.1。 */
+  http2?: boolean;
 }
 
 export interface ScriptFetchResponse {

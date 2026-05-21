@@ -11,18 +11,21 @@ import type {
   MangaReadProgressV2,
   MangaShelfItemV2,
   MangaSourceV2,
+  TachiyomiCatalogSource,
+  TachiyomiExtension,
 } from "@/lib/mangasources/types";
-import { scriptFetch } from "@/source-script/fetch";
 import {
   validateMangaSource,
   getMangaChapters,
 } from "@/lib/mangasources/runtime";
+import { loadSourceObjects, stripBom, parseLegadoLike } from "@/lib/sourceImport";
 
 const SOURCES_KEY = "douytv:manga-sources-v2";
 const SHELF_KEY = "douytv:manga-shelf-v2";
 const PROGRESS_KEY = "douytv:manga-progress-v2";
 const HEALTH_KEY = "douytv:manga-health-v2";
 const LAST_CHAPTERS_KEY = "douytv:manga-last-chapters-v2";
+const TACHIYOMI_KEY = "douytv:manga-tachiyomi-catalog-v2";
 
 export interface MangaHealth {
   ok: boolean;
@@ -53,40 +56,153 @@ function save<T>(key: string, value: T) {
   }
 }
 
+function mapToMangaSource(it: Record<string, unknown>): MangaSourceV2 | null {
+  const name = (it.name as string | undefined) ?? (it.bookSourceName as string | undefined);
+  const baseUrl = (it.baseUrl as string | undefined) ?? (it.bookSourceUrl as string | undefined);
+  if (!name || !baseUrl) return null;
+  return {
+    id: genId("ms"),
+    addedAt: Date.now(),
+    enabled: it.enabled !== false,
+    name,
+    baseUrl,
+    group: (it.group as string | undefined) ?? (it.bookSourceGroup as string | undefined),
+    comment: (it.comment as string | undefined) ?? (it.bookSourceComment as string | undefined),
+    header: it.header as string | undefined,
+    searchUrl: it.searchUrl as string | undefined,
+    exploreUrl: it.exploreUrl as string | undefined,
+    ruleList: (it.ruleList as MangaSourceV2["ruleList"]) ?? undefined,
+    ruleDetail: (it.ruleDetail as MangaSourceV2["ruleDetail"]) ?? undefined,
+    ruleChapters: (it.ruleChapters as MangaSourceV2["ruleChapters"]) ?? undefined,
+    rulePages: (it.rulePages as MangaSourceV2["rulePages"]) ?? undefined,
+  };
+}
+
+/** 兼容旧导出 —— 直接解析 JSON 文本（不处理 sourceUrls wrap，遇到会抛错） */
 export function parseMangaSourceJson(text: string): MangaSourceV2[] {
-  let raw: unknown;
-  try {
-    raw = JSON.parse(text);
-  } catch (e) {
-    throw new Error(`JSON 解析失败: ${(e as Error).message}`);
+  const parsed = parseLegadoLike(stripBom(text));
+  if (parsed.sourceUrls.length > 0) {
+    throw new Error(
+      `输入是 legado 订阅 wrap（含 sourceUrls）—— 请用「一键导入」按钮拉取`
+    );
   }
-  const arr = Array.isArray(raw) ? raw : [raw];
   const out: MangaSourceV2[] = [];
-  const now = Date.now();
-  for (const item of arr) {
-    if (!item || typeof item !== "object") continue;
-    const it = item as Record<string, unknown>;
-    const name = (it.name as string | undefined) ?? (it.bookSourceName as string | undefined);
-    const baseUrl = (it.baseUrl as string | undefined) ?? (it.bookSourceUrl as string | undefined);
-    if (!name || !baseUrl) continue;
-    out.push({
-      id: genId("ms"),
-      addedAt: now,
-      enabled: it.enabled !== false,
-      name,
-      baseUrl,
-      group: (it.group as string | undefined) ?? (it.bookSourceGroup as string | undefined),
-      comment: (it.comment as string | undefined) ?? (it.bookSourceComment as string | undefined),
-      header: it.header as string | undefined,
-      searchUrl: it.searchUrl as string | undefined,
-      exploreUrl: it.exploreUrl as string | undefined,
-      ruleList: (it.ruleList as MangaSourceV2["ruleList"]) ?? undefined,
-      ruleDetail: (it.ruleDetail as MangaSourceV2["ruleDetail"]) ?? undefined,
-      ruleChapters: (it.ruleChapters as MangaSourceV2["ruleChapters"]) ?? undefined,
-      rulePages: (it.rulePages as MangaSourceV2["rulePages"]) ?? undefined,
-    });
+  for (const it of parsed.sources) {
+    const m = mapToMangaSource(it);
+    if (m) out.push(m);
   }
   return out;
+}
+
+/**
+ * 识别 Tachiyomi / Mihon 扩展条目。
+ * 规范形态：`{ pkg: string, apk: string, sources: [{ id, name, baseUrl }] }`。
+ * 不能在 DouyTV 内消费，但保存为"目录"展示给用户。
+ */
+function tryParseTachiyomi(
+  it: Record<string, unknown>,
+  fromRepo?: string
+): TachiyomiExtension | null {
+  const pkg = typeof it.pkg === "string" ? it.pkg : undefined;
+  const apk = typeof it.apk === "string" ? it.apk : undefined;
+  const name = typeof it.name === "string" ? it.name : undefined;
+  const sources = Array.isArray(it.sources) ? it.sources : null;
+  if (!pkg || !sources || !name) return null;
+  const parsedSources: TachiyomiCatalogSource[] = [];
+  for (const s of sources) {
+    if (!s || typeof s !== "object") continue;
+    const o = s as Record<string, unknown>;
+    const sid = o.id;
+    const sname = o.name;
+    if (typeof sname !== "string") continue;
+    parsedSources.push({
+      id: typeof sid === "string" || typeof sid === "number" ? String(sid) : pkg,
+      name: sname,
+      lang: typeof o.lang === "string" ? o.lang : undefined,
+      baseUrl: typeof o.baseUrl === "string" ? o.baseUrl : undefined,
+    });
+  }
+  if (parsedSources.length === 0) return null;
+  return {
+    name,
+    pkg,
+    apk,
+    lang: typeof it.lang === "string" ? it.lang : undefined,
+    version: typeof it.version === "string" ? it.version : undefined,
+    nsfw: typeof it.nsfw === "number" ? it.nsfw !== 0 : Boolean(it.nsfw),
+    sources: parsedSources,
+    fromRepo,
+    importedAt: Date.now(),
+  };
+}
+
+function mergeFromRawObjects(
+  rawList: Array<Record<string, unknown>>,
+  get: () => MangaSourceStore,
+  set: (patch: Partial<MangaSourceStore>) => void,
+  fromRepo?: string
+): { ok: boolean; added: number; tachiyomi: number; message?: string } {
+  const parsed: MangaSourceV2[] = [];
+  const tachiyomiExts: TachiyomiExtension[] = [];
+  for (const it of rawList) {
+    // 优先识别 Tachiyomi 形态（pkg + apk + sources[]）—— 不可在 DouyTV 内消费，
+    // 但保留为只读目录展示，避免直接报"缺 name/baseUrl"。
+    const tachi = tryParseTachiyomi(it, fromRepo);
+    if (tachi) {
+      tachiyomiExts.push(tachi);
+      continue;
+    }
+    const m = mapToMangaSource(it);
+    if (m) parsed.push(m);
+  }
+  // 即便 parsed 为空，只要识别到 Tachiyomi 也算 ok（用户能在目录页看到结果）
+  if (parsed.length === 0 && tachiyomiExts.length === 0) {
+    return {
+      ok: false,
+      added: 0,
+      tachiyomi: 0,
+      message: "没有有效漫画源（每条都缺 name / baseUrl，也不是 Tachiyomi 格式）",
+    };
+  }
+  // 合并 Tachiyomi 目录（按 pkg 去重）
+  if (tachiyomiExts.length > 0) {
+    const existingPkgs = new Set(get().tachiyomiCatalog.map((e) => e.pkg));
+    const mergedCatalog = [...get().tachiyomiCatalog];
+    for (const ext of tachiyomiExts) {
+      if (existingPkgs.has(ext.pkg)) {
+        const idx = mergedCatalog.findIndex((e) => e.pkg === ext.pkg);
+        if (idx >= 0) mergedCatalog[idx] = ext;
+      } else {
+        mergedCatalog.push(ext);
+        existingPkgs.add(ext.pkg);
+      }
+    }
+    save(TACHIYOMI_KEY, mergedCatalog);
+    set({ tachiyomiCatalog: mergedCatalog });
+  }
+  const existing = new Map(get().sources.map((s) => [s.baseUrl, s.id]));
+  const merged = [...get().sources];
+  let added = 0;
+  for (const item of parsed) {
+    const dupId = existing.get(item.baseUrl);
+    if (dupId) {
+      const idx = merged.findIndex((s) => s.id === dupId);
+      if (idx >= 0) {
+        merged[idx] = { ...item, id: dupId, addedAt: merged[idx].addedAt };
+        continue;
+      }
+    }
+    merged.push(item);
+    added++;
+  }
+  save(SOURCES_KEY, merged);
+  set({ sources: merged });
+  const tachi = tachiyomiExts.length;
+  const msg =
+    tachi > 0
+      ? `成功 ${added} 个漫画源；另识别到 ${tachi} 个 Tachiyomi 扩展（需 Suwayomi 才能实际抓取，已存为只读目录）`
+      : undefined;
+  return { ok: true, added, tachiyomi: tachi, message: msg };
 }
 
 interface MangaSourceStore {
@@ -98,17 +214,23 @@ interface MangaSourceStore {
   lastChapters: Record<string, number>;
   /** 页面字节缓存 —— 进入章节时按 chapterId 缓存图片 URL/Blob URL，关闭 app 清空 */
   pageCache: Map<string, string[]>;
+  /** Tachiyomi/Mihon 扩展索引目录（只读，需 Suwayomi 才能实际抓取） */
+  tachiyomiCatalog: TachiyomiExtension[];
   hydrated: boolean;
 
   hydrate: () => void;
 
-  importByUrl: (url: string) => Promise<{ ok: boolean; added: number; message?: string }>;
-  importByText: (text: string) => { ok: boolean; added: number; message?: string };
+  importByUrl: (url: string) => Promise<{ ok: boolean; added: number; tachiyomi?: number; message?: string }>;
+  importByText: (text: string) => Promise<{ ok: boolean; added: number; tachiyomi?: number; message?: string }>;
   addManual: (source: Omit<MangaSourceV2, "id" | "addedAt">) => MangaSourceV2;
   updateSource: (id: string, patch: Partial<MangaSourceV2>) => void;
   removeSource: (id: string) => void;
   toggleEnabled: (id: string) => void;
   clearAll: () => void;
+  /** 清空 Tachiyomi 扩展索引目录 */
+  clearTachiyomiCatalog: () => void;
+  /** 从 Tachiyomi 目录里移除单个扩展（按 pkg） */
+  removeTachiyomiExtension: (pkg: string) => void;
 
   addToShelf: (item: MangaShelfItemV2) => void;
   removeFromShelf: (id: string) => void;
@@ -141,6 +263,7 @@ export const useMangaSourceStore = create<MangaSourceStore>((set, get) => ({
   health: {},
   lastChapters: {},
   pageCache: new Map(),
+  tachiyomiCatalog: [],
   hydrated: false,
 
   hydrate: () => {
@@ -151,49 +274,24 @@ export const useMangaSourceStore = create<MangaSourceStore>((set, get) => ({
       progress: load<MangaReadProgressV2[]>(PROGRESS_KEY, []),
       health: load<Record<string, MangaHealth>>(HEALTH_KEY, {}),
       lastChapters: load<Record<string, number>>(LAST_CHAPTERS_KEY, {}),
+      tachiyomiCatalog: load<TachiyomiExtension[]>(TACHIYOMI_KEY, []),
       hydrated: true,
     });
   },
 
   importByUrl: async (url) => {
     try {
-      const res = await scriptFetch(url, { method: "GET", timeout: 30_000 });
-      if (!res.ok) throw new Error(`HTTP ${res.status}`);
-      const text = await res.text();
-      return get().importByText(text);
+      const raw = await loadSourceObjects(url);
+      return mergeFromRawObjects(raw, get, set, url);
     } catch (e) {
       return { ok: false, added: 0, message: (e as Error).message ?? String(e) };
     }
   },
 
-  importByText: (text) => {
+  importByText: async (text) => {
     try {
-      const parsed = parseMangaSourceJson(text);
-      if (parsed.length === 0) {
-        return {
-          ok: false,
-          added: 0,
-          message: "JSON 中没有有效源（缺 name/baseUrl）",
-        };
-      }
-      const existing = new Map(get().sources.map((s) => [s.baseUrl, s.id]));
-      const merged = [...get().sources];
-      let added = 0;
-      for (const item of parsed) {
-        const dupId = existing.get(item.baseUrl);
-        if (dupId) {
-          const idx = merged.findIndex((s) => s.id === dupId);
-          if (idx >= 0) {
-            merged[idx] = { ...item, id: dupId, addedAt: merged[idx].addedAt };
-            continue;
-          }
-        }
-        merged.push(item);
-        added++;
-      }
-      save(SOURCES_KEY, merged);
-      set({ sources: merged });
-      return { ok: true, added };
+      const raw = await loadSourceObjects(text);
+      return mergeFromRawObjects(raw, get, set);
     } catch (e) {
       return { ok: false, added: 0, message: (e as Error).message ?? String(e) };
     }
@@ -236,6 +334,17 @@ export const useMangaSourceStore = create<MangaSourceStore>((set, get) => ({
   clearAll: () => {
     save(SOURCES_KEY, []);
     set({ sources: [] });
+  },
+
+  clearTachiyomiCatalog: () => {
+    save(TACHIYOMI_KEY, []);
+    set({ tachiyomiCatalog: [] });
+  },
+
+  removeTachiyomiExtension: (pkg) => {
+    const next = get().tachiyomiCatalog.filter((e) => e.pkg !== pkg);
+    save(TACHIYOMI_KEY, next);
+    set({ tachiyomiCatalog: next });
   },
 
   addToShelf: (item) => {

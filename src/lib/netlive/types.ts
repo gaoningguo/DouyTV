@@ -18,13 +18,24 @@ export type NetLivePlatformId =
   | "douyin"
   | "kuaishou"
   | "cc"
-  | "twitch";
+  | "twitch"
+  | "youtube"
+  | "kick"
+  | "trovo"
+  | "bigo"
+  | "live17"
+  | "chaturbate"
+  | "stripchat"
+  | "bongacams"
+  | "camsoda";
 
 export interface NetLivePlatformMeta {
   id: NetLivePlatformId;
   label: string;
   /** 该平台是否需要登录才能拉清晰度更高的流（DouyTV MVP 用匿名公共接口） */
   loginRequired?: boolean;
+  /** 18+ 成人内容平台 —— 默认隐藏，需用户在设置中开启 adultEnabled 才显示 */
+  adult?: boolean;
 }
 
 export const NETLIVE_PLATFORMS: NetLivePlatformMeta[] = [
@@ -34,7 +45,16 @@ export const NETLIVE_PLATFORMS: NetLivePlatformMeta[] = [
   { id: "douyin", label: "抖音" },
   { id: "kuaishou", label: "快手" },
   { id: "cc", label: "网易 CC" },
-  { id: "twitch", label: "Twitch", loginRequired: true },
+  { id: "twitch", label: "Twitch" },
+  { id: "youtube", label: "YouTube" },
+  { id: "kick", label: "Kick" },
+  { id: "trovo", label: "Trovo" },
+  { id: "bigo", label: "Bigo Live" },
+  { id: "live17", label: "17 Live" },
+  { id: "chaturbate", label: "Chaturbate", adult: true },
+  { id: "stripchat", label: "Stripchat", adult: true },
+  { id: "bongacams", label: "BongaCams", adult: true },
+  { id: "camsoda", label: "CamSoda", adult: true },
 ];
 
 export interface NetLiveCategory {

@@ -8,6 +8,8 @@ use serde::{Deserialize, Serialize};
 use tauri_plugin_sql::{Migration, MigrationKind};
 use url::Url;
 
+mod stream_proxy;
+
 /// 按 proxy_url（包括空串 = 直连）缓存复用 ureq Agent。
 ///
 /// **为什么**：dyproxy 协议每条 HLS segment 都会重新调 proxy_fetch。
@@ -107,6 +109,52 @@ async fn script_http(req: HttpRequest) -> Result<HttpResponse, String> {
     })
     .await
     .map_err(|e| format!("{e}"))?
+}
+
+/// HTTP/2-capable fetch —— 给 live.douyin.com 之类强制 HTTP/2 + ALPN h2 的端点用。
+/// 实现用 reqwest（rustls-tls + http2，无 encoding_rs 依赖）。
+#[tauri::command]
+async fn script_http_h2(req: HttpRequest) -> Result<HttpResponse, String> {
+    let timeout = std::time::Duration::from_millis(req.timeout_ms.unwrap_or(30_000));
+    let mut builder = reqwest::Client::builder()
+        .timeout(timeout)
+        .redirect(reqwest::redirect::Policy::limited(10))
+        .user_agent("Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/125.0.0.0 Safari/537.36");
+    if let Some(p) = req.proxy_url.as_deref() {
+        if !p.is_empty() {
+            builder = builder
+                .proxy(reqwest::Proxy::all(p).map_err(|e| format!("proxy: {e}"))?);
+        }
+    }
+    let client = builder.build().map_err(|e| format!("client: {e}"))?;
+
+    let method = reqwest::Method::from_bytes(req.method.as_bytes())
+        .map_err(|e| format!("bad method: {e}"))?;
+    let mut request = client.request(method, &req.url);
+    for (k, v) in &req.headers {
+        request = request.header(k, v);
+    }
+    if let Some(body) = req.body {
+        if !body.is_empty() {
+            request = request.body(body);
+        }
+    }
+    let response = request.send().await.map_err(|e| format!("{e}"))?;
+    let url = response.url().to_string();
+    let status = response.status().as_u16();
+    let mut headers = HashMap::new();
+    for (k, v) in response.headers().iter() {
+        if let Ok(vs) = v.to_str() {
+            headers.insert(k.as_str().to_string(), vs.to_string());
+        }
+    }
+    let body = response.text().await.map_err(|e| format!("body: {e}"))?;
+    Ok(HttpResponse {
+        url,
+        status,
+        headers,
+        body,
+    })
 }
 
 #[derive(Debug, Serialize)]
@@ -252,7 +300,8 @@ const ADS_KEYWORDS: &[&str] = &[
     "/adjump",
     "redtraffic",
 ];
-const PROXY_SEGMENT_MAX_BYTES: u64 = 64 * 1024 * 1024; // 64MB 上限避免内存爆
+const PROXY_SEGMENT_MAX_BYTES: u64 = 256 * 1024 * 1024; // 256MB —— 给 FLV live 30~60s 缓冲一次
+const PROXY_STREAM_TIMEOUT_SECS: u64 = 600; // 10 分钟 —— 单次 FLV/MPEG-TS live 拉取超时
 
 fn percent_encode_uri_component(s: &str) -> String {
     let mut out = String::with_capacity(s.len() * 3);
@@ -271,9 +320,13 @@ fn proxy_fetch(
     ua: Option<&str>,
     referer: Option<&str>,
     proxy: Option<&str>,
+    timeout_secs: Option<u64>,
 ) -> Result<ureq::Response, String> {
     let agent = agent_for(proxy)?;
     let mut req = agent.get(target);
+    if let Some(secs) = timeout_secs {
+        req = req.timeout(Duration::from_secs(secs));
+    }
     req = req.set("User-Agent", ua.unwrap_or(DEFAULT_UA));
     // 防盗链：调用方未指定 Referer 时回落到 https://movie.douban.com/。
     // 对齐 MoonTV 的 video-proxy / image-proxy 默认行为 —— Douban 关联的 VOD
@@ -515,6 +568,11 @@ fn close_lyric_window(app: tauri::AppHandle) -> Result<(), String> {
     Ok(())
 }
 
+#[tauri::command]
+fn get_stream_proxy_port() -> Option<u16> {
+    stream_proxy::port()
+}
+
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
     let migrations = vec![
@@ -706,6 +764,8 @@ pub fn run() {
             }
             #[cfg(any(target_os = "android", target_os = "ios"))]
             let _ = app;
+            // 启动本地流式 HTTP 代理（FLV / MPEG-TS 直播用）
+            stream_proxy::start();
             Ok(())
         })
         .register_asynchronous_uri_scheme_protocol("dyproxy", |_ctx, request, responder| {
@@ -751,8 +811,17 @@ pub fn run() {
                     params.get("proxy").map(String::as_str)
                 };
                 let is_m3u8_path = path.ends_with("/m3u8");
+                let is_stream_path = path.ends_with("/stream");
 
-                let resp = match proxy_fetch(target_url, ua, referer, proxy) {
+                // 直播 FLV / MPEG-TS 通常无 EOF，read_to_end 会一直读到上限。
+                // 给 /proxy/stream 路径放宽 timeout —— 否则 30s 内 ureq 超时会把流断成 502。
+                let timeout_override = if is_stream_path {
+                    Some(PROXY_STREAM_TIMEOUT_SECS)
+                } else {
+                    None
+                };
+
+                let resp = match proxy_fetch(target_url, ua, referer, proxy, timeout_override) {
                     Ok(r) => r,
                     Err(e) => {
                         responder.respond(cors(502, format!("upstream error: {e}").into_bytes()));
@@ -840,8 +909,10 @@ pub fn run() {
         })
         .invoke_handler(tauri::generate_handler![
             script_http,
+            script_http_h2,
             scan_local_videos,
             read_system_proxy,
+            get_stream_proxy_port,
             #[cfg(desktop)]
             open_lyric_window,
             #[cfg(desktop)]

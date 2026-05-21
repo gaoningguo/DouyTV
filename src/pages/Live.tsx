@@ -12,6 +12,7 @@ import {
 } from "@/lib/epg";
 import VideoPlayer from "@/components/VideoPlayer";
 import NetworkLivePanel from "@/pages/live/Network";
+import { EmptyState } from "@/components/EmptyState";
 import type { MediaItem } from "@/types/media";
 import {
   IconAntenna,
@@ -131,42 +132,44 @@ export default function Live() {
   return (
     <div className="h-screen bg-ink text-cream flex flex-col overflow-hidden">
       <div
-        className="flex items-center gap-2 px-3 pt-3 pb-2 shrink-0"
+        className="flex items-end gap-1 px-3 pt-3 shrink-0"
         style={{ borderBottom: "1px solid var(--cream-line)" }}
       >
-        <button
-          type="button"
-          onClick={() => setTab("iptv")}
-          className="px-3 py-1.5 rounded-full text-[11px] font-display font-semibold tap"
-          style={{
-            background: tab === "iptv" ? "var(--ember-soft)" : "var(--ink-2)",
-            border: `1px solid ${
-              tab === "iptv" ? "rgba(255,107,53,0.5)" : "var(--cream-line)"
-            }`,
-            color: tab === "iptv" ? "var(--ember)" : "var(--cream-dim)",
-          }}
-        >
-          IPTV · 电视
-        </button>
-        <button
-          type="button"
-          onClick={() => setTab("network")}
-          className="px-3 py-1.5 rounded-full text-[11px] font-display font-semibold tap"
-          style={{
-            background: tab === "network" ? "var(--ember-soft)" : "var(--ink-2)",
-            border: `1px solid ${
-              tab === "network" ? "rgba(255,107,53,0.5)" : "var(--cream-line)"
-            }`,
-            color: tab === "network" ? "var(--ember)" : "var(--cream-dim)",
-          }}
-        >
-          网络直播
-        </button>
+        <TopTab label="IPTV · 电视" active={tab === "iptv"} onClick={() => setTab("iptv")} />
+        <TopTab label="网络直播" active={tab === "network"} onClick={() => setTab("network")} />
       </div>
-      <div className="flex-1 overflow-y-auto">
+      <div className="flex-1 min-h-0">
         {tab === "iptv" ? <IPTVLive /> : <NetworkLivePanel />}
       </div>
     </div>
+  );
+}
+
+function TopTab({
+  label,
+  active,
+  onClick,
+}: {
+  label: string;
+  active: boolean;
+  onClick: () => void;
+}) {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      className={`relative px-4 py-2 font-display whitespace-nowrap tap text-[13px] ${
+        active ? "text-ember font-bold" : "text-cream-dim hover:text-cream font-medium"
+      }`}
+    >
+      {label}
+      {active && (
+        <span
+          className="absolute left-2 right-2 -bottom-px h-0.5 rounded-full"
+          style={{ background: "var(--ember)" }}
+        />
+      )}
+    </button>
   );
 }
 
@@ -621,31 +624,28 @@ function IPTVLive() {
               {/* 频道列表（垂直滚动） */}
               <div className="flex-1 overflow-y-auto p-3 min-h-0">
                 {channels.length === 0 ? (
-                  <div className="text-center py-12">
-                    <IconAntenna
-                      size={48}
-                      className="mx-auto text-cream-faint opacity-50 mb-3"
-                    />
-                    <p className="text-sm text-cream-dim mb-1">还没有频道</p>
-                    <p className="text-xs text-cream-faint mb-5">
-                      前往设置添加频道或订阅 M3U
-                    </p>
-                    <Link
-                      to="/settings"
-                      onClick={() => setPanelOpen(false)}
-                      className="inline-flex items-center gap-1.5 px-4 py-2 rounded-full text-xs font-display font-semibold tap glow-ember"
-                      style={{ background: "var(--ember)", color: "var(--ink)" }}
-                    >
-                      <IconSettings size={13} />
-                      前往设置
-                    </Link>
-                  </div>
+                  <EmptyState
+                    icon={<IconAntenna size={48} />}
+                    title="还没有频道"
+                    subtitle="前往设置添加频道或订阅 M3U"
+                    action={
+                      <Link
+                        to="/settings"
+                        onClick={() => setPanelOpen(false)}
+                        className="inline-flex items-center gap-1.5 px-4 py-2 rounded-full text-xs font-display font-semibold tap glow-ember"
+                        style={{ background: "var(--ember)", color: "var(--ink)" }}
+                      >
+                        <IconSettings size={13} />
+                        前往设置
+                      </Link>
+                    }
+                  />
                 ) : filtered.length === 0 ? (
-                  <p className="text-sm text-cream-faint">
-                    没有匹配
-                    {filter ? `「${filter}」` : ""}
-                    的频道
-                  </p>
+                  <EmptyState
+                    icon={<IconAntenna size={40} />}
+                    title="无匹配频道"
+                    subtitle={filter ? `没有匹配「${filter}」的频道` : "切换订阅源 / 改搜索词试试"}
+                  />
                 ) : (
                   grouped.map(([group, list]) => {
                     const isExpanded = expandedGroups.has(group);

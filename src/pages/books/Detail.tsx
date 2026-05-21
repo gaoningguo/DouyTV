@@ -3,7 +3,8 @@ import { Link, useLocation, useNavigate, useParams } from "react-router-dom";
 import { useBooksStore } from "@/stores/books";
 import type { BookListItem } from "@/lib/books/types";
 import { wrapImage } from "@/lib/proxy";
-import { IconArrowLeft, IconBook, IconHeart, IconHeartFill } from "@/components/Icon";
+import { IconHeart, IconHeartFill } from "@/components/Icon";
+import { DetailHero, MetaChip } from "@/components/DetailHero";
 
 export default function BooksDetail() {
   const navigate = useNavigate();
@@ -56,7 +57,6 @@ export default function BooksDetail() {
     );
   }
 
-  const cover = wrapImage(item.cover);
   const epubLink = item.acquisitionLinks.find((l) =>
     l.type.toLowerCase().includes("epub")
   );
@@ -68,107 +68,67 @@ export default function BooksDetail() {
 
   return (
     <div className="min-h-screen bg-ink text-cream p-4 pb-24">
-      <div className="flex items-center gap-3 mb-5">
-        <button
-          type="button"
-          onClick={() => navigate(-1)}
-          className="w-9 h-9 flex items-center justify-center rounded-full tap text-cream"
-          style={{ background: "var(--ink-2)", border: "1px solid var(--cream-line)" }}
-          aria-label="返回"
-        >
-          <IconArrowLeft size={16} />
-        </button>
-      </div>
-
-      <div className="flex gap-4 mb-5">
-        <div className="w-28 shrink-0">
-          {cover ? (
-            <img
-              src={cover}
-              alt={item.title}
-              className="w-full aspect-[2/3] rounded-lg object-cover"
-              style={{ boxShadow: "0 12px 24px -12px rgba(0,0,0,0.7)" }}
-            />
-          ) : (
-            <div className="w-full aspect-[2/3] rounded-lg flex items-center justify-center bg-ink-2">
-              <IconBook size={32} className="text-cream-faint" />
-            </div>
-          )}
-        </div>
-        <div className="flex-1 min-w-0">
-          <h1 className="font-display text-lg font-extrabold tracking-tight">
-            {item.title}
-          </h1>
-          {item.author && (
-            <p className="text-xs text-cream-dim mt-1">{item.author}</p>
-          )}
-          {item.language && (
-            <p className="text-[10px] font-mono text-cream-faint mt-2">
-              {item.language}
-            </p>
-          )}
-          {progress && (
-            <p
-              className="text-[10px] font-mono mt-2 px-2 py-1 rounded inline-block"
-              style={{
-                background: "var(--ember-soft)",
-                color: "var(--ember)",
-                border: "1px solid rgba(255,107,53,0.3)",
+      <DetailHero
+        cover={item.cover}
+        proxyCover
+        title={item.title}
+        subtitle={item.author}
+        onBack={() => navigate(-1)}
+        metaChips={
+          <>
+            {item.language && <MetaChip>{item.language}</MetaChip>}
+            {progress && (
+              <MetaChip color="ember">
+                已读 {Math.round(progress.percent * 100)}%
+              </MetaChip>
+            )}
+          </>
+        }
+        description={item.summary}
+        actions={
+          <>
+            {epubLink && (
+              <Link
+                to={`/books/read/${encodeURIComponent(sourceId)}/${encodeURIComponent(bookId)}`}
+                state={item}
+                className="flex-1 min-w-[140px] text-center py-2.5 rounded-lg text-sm font-display font-semibold tap"
+                style={{ background: "var(--ember)", color: "var(--ink)" }}
+              >
+                {progress ? "继续阅读" : "开始阅读"}
+              </Link>
+            )}
+            {!epubLink && pdfLink && (
+              <a
+                href={wrapImage(pdfLink.href) || pdfLink.href}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="flex-1 min-w-[140px] text-center py-2.5 rounded-lg text-sm font-display font-semibold tap text-cream"
+                style={{ background: "var(--ink-2)", border: "1px solid var(--cream-line)" }}
+              >
+                下载 PDF
+              </a>
+            )}
+            <button
+              type="button"
+              onClick={() => {
+                if (isOnShelf) void store.removeFromShelf(sourceId, bookId);
+                else void store.addToShelf(item);
               }}
+              className="w-12 h-11 flex items-center justify-center rounded-lg tap"
+              style={{
+                background: isOnShelf ? "var(--ember-soft)" : "var(--ink-2)",
+                border: `1px solid ${
+                  isOnShelf ? "var(--ember)" : "var(--cream-line)"
+                }`,
+                color: isOnShelf ? "var(--ember)" : "var(--cream)",
+              }}
+              aria-label={isOnShelf ? "移出书架" : "加入书架"}
             >
-              已读 {Math.round(progress.percent * 100)}%
-            </p>
-          )}
-        </div>
-      </div>
-
-      {item.summary && (
-        <p className="text-xs text-cream-dim leading-relaxed mb-5 whitespace-pre-line">
-          {item.summary}
-        </p>
-      )}
-
-      <div className="flex gap-2 mb-3">
-        {epubLink && (
-          <Link
-            to={`/books/read/${encodeURIComponent(sourceId)}/${encodeURIComponent(bookId)}`}
-            state={item}
-            className="flex-1 text-center py-2.5 rounded-lg text-sm font-display font-semibold tap"
-            style={{ background: "var(--ember)", color: "var(--ink)" }}
-          >
-            {progress ? "继续阅读" : "开始阅读"}
-          </Link>
-        )}
-        {!epubLink && pdfLink && (
-          <a
-            href={wrapImage(pdfLink.href) || pdfLink.href}
-            target="_blank"
-            rel="noopener noreferrer"
-            className="flex-1 text-center py-2.5 rounded-lg text-sm font-display font-semibold tap text-cream"
-            style={{ background: "var(--ink-2)", border: "1px solid var(--cream-line)" }}
-          >
-            下载 PDF
-          </a>
-        )}
-        <button
-          type="button"
-          onClick={() => {
-            if (isOnShelf) void store.removeFromShelf(sourceId, bookId);
-            else void store.addToShelf(item);
-          }}
-          className="w-12 h-11 flex items-center justify-center rounded-lg tap"
-          style={{
-            background: isOnShelf ? "var(--ember-soft)" : "var(--ink-2)",
-            border: `1px solid ${
-              isOnShelf ? "var(--ember)" : "var(--cream-line)"
-            }`,
-            color: isOnShelf ? "var(--ember)" : "var(--cream)",
-          }}
-          aria-label={isOnShelf ? "移出书架" : "加入书架"}
-        >
-          {isOnShelf ? <IconHeartFill size={16} /> : <IconHeart size={16} />}
-        </button>
-      </div>
+              {isOnShelf ? <IconHeartFill size={16} /> : <IconHeart size={16} />}
+            </button>
+          </>
+        }
+      />
 
       {!epubLink && !pdfLink && (
         <p className="text-[11px] text-cream-faint text-center mt-4">

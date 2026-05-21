@@ -288,43 +288,57 @@ const QUALITY_LABELS: Record<string, string> = {
 
 const LINE_PRIORITY = ["hs", "ks", "ali", "fws", "wy"];
 
+interface CcLiveQualityEntry {
+  vbr?: number;
+  CDN_FMT?: Record<string, string>;
+}
+interface CcVodQualityEntry {
+  vbr?: number;
+  cdn?: Record<string, string>;
+}
+type CcAnyQualityEntry = CcLiveQualityEntry | CcVodQualityEntry;
+
+/**
+ * pure_live `getPlayQualites` 逻辑：
+ *   - detail.data = roomInfo['quickplay'] ?? roomInfo['stream_list']
+ *   - isLiveStream = (detail.data['resolution'] == null)
+ *   - 直播：quickplay 顶层 key 是清晰度（blueray/original/high/...），每个 value.CDN_FMT = line→tail
+ *           最终 URL = roomInfo['m3u8'] + '&' + tail
+ *   - 录播：stream_list.resolution 是清晰度 map，每个 value.cdn = line→fullUrl
+ */
 function pickCcStream(
   detail: NonNullable<CcChannelInfoResp["data"]>[number]
 ): { primary: string; alts: Array<{ qn: string; label: string; url: string }> } {
-  // stream_list 包裹 .resolution 一层，quickplay 直接是 quality map
-  const quickplay = detail.quickplay;
-  const streamList = detail.stream_list;
+  const dataSource = detail.quickplay ?? detail.stream_list;
+  if (!dataSource) return { primary: "", alts: [] };
   const link = detail.m3u8;
 
-  const isLiveStream = !!quickplay; // pure_live: 当 detail.data 不含 resolution 时走 CDN_FMT
-  let qualityMap: CcStreamMap = {};
-  if (isLiveStream && quickplay) {
-    qualityMap = quickplay;
-  } else if (streamList) {
-    qualityMap = streamList;
-  }
+  // pure_live: isLiveStream = data['resolution'] == null
+  const dataObj = dataSource as Record<string, unknown>;
+  const isLiveStream = dataObj.resolution === undefined || dataObj.resolution === null;
+  const qualityMap: Record<string, CcAnyQualityEntry> = isLiveStream
+    ? (dataObj as Record<string, CcAnyQualityEntry>)
+    : ((dataObj.resolution as Record<string, CcAnyQualityEntry>) ?? {});
 
   const alts: Array<{ qn: string; label: string; url: string }> = [];
   for (const [key, q] of Object.entries(qualityMap)) {
+    if (!q || typeof q !== "object") continue;
     const label = QUALITY_LABELS[key] ?? key;
     const vbr = q.vbr ?? 0;
+    const lineMap = isLiveStream
+      ? (q as CcLiveQualityEntry).CDN_FMT ?? {}
+      : (q as CcVodQualityEntry).cdn ?? {};
     let chosen: string | undefined;
-    if (isLiveStream && "CDN_FMT" in q && q.CDN_FMT) {
-      for (const line of LINE_PRIORITY) {
-        const lineVal = q.CDN_FMT[line];
-        if (lineVal && link) {
-          chosen = `${link}&${lineVal}`;
-          break;
-        }
+    for (const line of LINE_PRIORITY) {
+      const lineVal = lineMap[line];
+      if (!lineVal) continue;
+      if (isLiveStream) {
+        if (!link) continue;
+        chosen = `${link}&${lineVal}`;
+      } else {
+        chosen = lineVal;
       }
-    } else if (!isLiveStream && "cdn" in q && q.cdn) {
-      for (const line of LINE_PRIORITY) {
-        const lineVal = q.cdn[line];
-        if (lineVal) {
-          chosen = lineVal;
-          break;
-        }
-      }
+      break;
     }
     if (chosen) {
       alts.push({ qn: String(vbr), label, url: chosen });

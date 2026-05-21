@@ -179,7 +179,14 @@ export default function BooksRead() {
       style={{ background: THEMES[theme].bg }}
     >
       {/* 顶部控件 */}
-      <div className="absolute top-4 left-4 right-4 z-20 flex items-center gap-2">
+      <div
+        className="absolute z-20 flex items-center gap-2"
+        style={{
+          top: "calc(env(safe-area-inset-top) + 16px)",
+          left: "calc(env(safe-area-inset-left) + 16px)",
+          right: "calc(env(safe-area-inset-right) + 16px)",
+        }}
+      >
         <button
           type="button"
           onClick={() => navigate(-1)}

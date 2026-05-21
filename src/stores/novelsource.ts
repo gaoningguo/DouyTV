@@ -16,8 +16,8 @@ import type {
   NovelReadProgress,
   NovelShelfItem,
 } from "@/lib/booksources/types";
-import { scriptFetch } from "@/source-script/fetch";
 import { validateSource } from "@/lib/booksources/runtime";
+import { loadSourceObjects, stripBom, parseLegadoLike } from "@/lib/sourceImport";
 
 const SOURCES_KEY = "douytv:novel-sources";
 const SHELF_KEY = "douytv:novel-shelf";
@@ -47,44 +47,87 @@ function save<T>(key: string, value: T) {
   }
 }
 
-/** 解析 legado 书源 JSON —— 支持单对象 / 数组 / 嵌套 `{rule:..., book:...}` 等常见 wrap */
+/**
+ * 把单个 legado 风格 JSON 对象转成 BookSourceV2 —— 自动剥离 wrap、兼容字段。
+ * 调用方：传入已剥离 sourceUrls wrap 后的对象数组（来自 `loadSourceObjects`）。
+ */
+function mapToBookSource(it: Record<string, unknown>): BookSourceV2 | null {
+  const name = it.bookSourceName as string | undefined;
+  const url = it.bookSourceUrl as string | undefined;
+  if (!name || !url) return null;
+  return {
+    id: genId("nv"),
+    addedAt: Date.now(),
+    enabled: it.enabled !== false,
+    bookSourceName: name,
+    bookSourceUrl: url,
+    bookSourceType: it.bookSourceType as number | undefined,
+    bookSourceGroup: it.bookSourceGroup as string | undefined,
+    bookSourceComment: it.bookSourceComment as string | undefined,
+    header: it.header as string | undefined,
+    searchUrl: it.searchUrl as string | undefined,
+    exploreUrl: it.exploreUrl as string | undefined,
+    lastUpdateTime: it.lastUpdateTime as number | undefined,
+    ruleSearch: (it.ruleSearch as BookSourceV2["ruleSearch"]) ?? undefined,
+    ruleBookInfo: (it.ruleBookInfo as BookSourceV2["ruleBookInfo"]) ?? undefined,
+    ruleToc: (it.ruleToc as BookSourceV2["ruleToc"]) ?? undefined,
+    ruleContent: (it.ruleContent as BookSourceV2["ruleContent"]) ?? undefined,
+    ruleExplore: (it.ruleExplore as BookSourceV2["ruleExplore"]) ?? undefined,
+  };
+}
+
+/** 兼容旧导出（直接解析 JSON 文本，不处理 sourceUrls wrap）—— 主要给单元测试用 */
 export function parseLegadoJson(text: string): BookSourceV2[] {
-  let raw: unknown;
-  try {
-    raw = JSON.parse(text);
-  } catch (e) {
-    throw new Error(`JSON 解析失败: ${(e as Error).message}`);
+  const parsed = parseLegadoLike(stripBom(text));
+  if (parsed.sourceUrls.length > 0) {
+    throw new Error(
+      `输入是 legado 订阅 wrap（含 sourceUrls）—— 请用「一键导入」按钮拉取`
+    );
   }
-  const arr = Array.isArray(raw) ? raw : [raw];
   const out: BookSourceV2[] = [];
-  const now = Date.now();
-  for (const item of arr) {
-    if (!item || typeof item !== "object") continue;
-    const it = item as Record<string, unknown>;
-    const name = it.bookSourceName as string | undefined;
-    const url = it.bookSourceUrl as string | undefined;
-    if (!name || !url) continue;
-    out.push({
-      id: genId("nv"),
-      addedAt: now,
-      enabled: it.enabled !== false,
-      bookSourceName: name,
-      bookSourceUrl: url,
-      bookSourceType: it.bookSourceType as number | undefined,
-      bookSourceGroup: it.bookSourceGroup as string | undefined,
-      bookSourceComment: it.bookSourceComment as string | undefined,
-      header: it.header as string | undefined,
-      searchUrl: it.searchUrl as string | undefined,
-      exploreUrl: it.exploreUrl as string | undefined,
-      lastUpdateTime: it.lastUpdateTime as number | undefined,
-      ruleSearch: (it.ruleSearch as BookSourceV2["ruleSearch"]) ?? undefined,
-      ruleBookInfo: (it.ruleBookInfo as BookSourceV2["ruleBookInfo"]) ?? undefined,
-      ruleToc: (it.ruleToc as BookSourceV2["ruleToc"]) ?? undefined,
-      ruleContent: (it.ruleContent as BookSourceV2["ruleContent"]) ?? undefined,
-      ruleExplore: (it.ruleExplore as BookSourceV2["ruleExplore"]) ?? undefined,
-    });
+  for (const it of parsed.sources) {
+    const s = mapToBookSource(it);
+    if (s) out.push(s);
   }
   return out;
+}
+
+/** 合并新源到 store —— 按 bookSourceUrl 去重，重复则覆盖（保留旧 id / addedAt） */
+function mergeFromRawObjects(
+  rawList: Array<Record<string, unknown>>,
+  get: () => NovelSourceStore,
+  set: (patch: Partial<NovelSourceStore>) => void
+): { ok: boolean; added: number; message?: string } {
+  const parsed: BookSourceV2[] = [];
+  for (const it of rawList) {
+    const s = mapToBookSource(it);
+    if (s) parsed.push(s);
+  }
+  if (parsed.length === 0) {
+    return {
+      ok: false,
+      added: 0,
+      message: "没有有效书源（每条都缺 bookSourceName / bookSourceUrl）",
+    };
+  }
+  const existingByUrl = new Map(get().sources.map((s) => [s.bookSourceUrl, s.id]));
+  const merged = [...get().sources];
+  let added = 0;
+  for (const item of parsed) {
+    const dupId = existingByUrl.get(item.bookSourceUrl);
+    if (dupId) {
+      const idx = merged.findIndex((s) => s.id === dupId);
+      if (idx >= 0) {
+        merged[idx] = { ...item, id: dupId, addedAt: merged[idx].addedAt };
+        continue;
+      }
+    }
+    merged.push(item);
+    added++;
+  }
+  save(SOURCES_KEY, merged);
+  set({ sources: merged });
+  return { ok: true, added };
 }
 
 interface NovelSourceStore {
@@ -98,7 +141,7 @@ interface NovelSourceStore {
   hydrate: () => void;
 
   importByUrl: (url: string) => Promise<{ ok: boolean; added: number; message?: string }>;
-  importByText: (text: string) => { ok: boolean; added: number; message?: string };
+  importByText: (text: string) => Promise<{ ok: boolean; added: number; message?: string }>;
   addManual: (source: Omit<BookSourceV2, "id" | "addedAt">) => BookSourceV2;
   updateSource: (id: string, patch: Partial<BookSourceV2>) => void;
   removeSource: (id: string) => void;
@@ -168,40 +211,17 @@ export const useNovelSourceStore = create<NovelSourceStore>((set, get) => ({
 
   importByUrl: async (url) => {
     try {
-      const res = await scriptFetch(url, { method: "GET", timeout: 30_000 });
-      if (!res.ok) throw new Error(`HTTP ${res.status}`);
-      const text = await res.text();
-      return get().importByText(text);
+      const raw = await loadSourceObjects(url);
+      return mergeFromRawObjects(raw, get, set);
     } catch (e) {
       return { ok: false, added: 0, message: (e as Error).message ?? String(e) };
     }
   },
 
-  importByText: (text) => {
+  importByText: async (text) => {
     try {
-      const parsed = parseLegadoJson(text);
-      if (parsed.length === 0) {
-        return { ok: false, added: 0, message: "JSON 中没有有效书源（缺 bookSourceName/Url）" };
-      }
-      // 按 bookSourceUrl 去重 —— 同名再导入则覆盖
-      const existingByUrl = new Map(get().sources.map((s) => [s.bookSourceUrl, s.id]));
-      const merged = [...get().sources];
-      let added = 0;
-      for (const item of parsed) {
-        const dupId = existingByUrl.get(item.bookSourceUrl);
-        if (dupId) {
-          const idx = merged.findIndex((s) => s.id === dupId);
-          if (idx >= 0) {
-            merged[idx] = { ...item, id: dupId, addedAt: merged[idx].addedAt };
-            continue;
-          }
-        }
-        merged.push(item);
-        added++;
-      }
-      save(SOURCES_KEY, merged);
-      set({ sources: merged });
-      return { ok: true, added };
+      const raw = await loadSourceObjects(text);
+      return mergeFromRawObjects(raw, get, set);
     } catch (e) {
       return { ok: false, added: 0, message: (e as Error).message ?? String(e) };
     }

@@ -341,41 +341,61 @@ function unescapeHtmlEntities(s: string): string {
 }
 
 async function resolve(roomId: string): Promise<NetLiveStream> {
-  // 1. 拉签名
+  // dart_simple_live 2 步：
+  //  Step 1: signRoom → 拿到 args（ub98484234 输出）
+  //  Step 2a: POST getH5Play 用 `&cdn=&rate=-1` → 拿 multirates + cdnsWithName
+  //  Step 2b: 用首个 (cdn, rate) 再次 POST → 拿真 rtmp_url/rtmp_live
   const args = await signRoom(roomId);
-  // 2. 默认 rate=0 拿默认清晰度，同时枚举 multirates 作为 alternatives
-  const first = await postH5Play(roomId, args, 0, "");
-  if (first.error !== 0 && first.error !== undefined) {
-    throw new Error(first.msg || `斗鱼 error ${first.error}`);
+
+  // Step 2a：拿 qualities & cdns（rate=-1 表示拿默认 + 列举）
+  const meta = await postH5Play(roomId, args, -1, "");
+  if (meta.error !== 0 && meta.error !== undefined) {
+    throw new Error(meta.msg || `斗鱼 error ${meta.error}`);
   }
-  const rtmpUrl = first.data?.rtmp_url;
-  const rtmpLive = first.data?.rtmp_live;
+  const cdnList = (meta.data?.cdnsWithName ?? [])
+    .map((c) => c.cdn)
+    .filter(Boolean);
+  // scdn 排后面
+  cdnList.sort((a, b) => {
+    const as = a.startsWith("scdn") ? 1 : 0;
+    const bs = b.startsWith("scdn") ? 1 : 0;
+    return as - bs;
+  });
+  const multirates = meta.data?.multirates ?? [];
+  if (multirates.length === 0) {
+    throw new Error("斗鱼 multirates 为空（房间未开播 / 已下播）");
+  }
+
+  // Step 2b：用首个 cdn + 默认 rate 取真 URL
+  const defaultRate = meta.data?.rate ?? multirates[0].rate;
+  const firstCdn = cdnList[0] ?? "";
+  const play = await postH5Play(roomId, args, defaultRate, firstCdn);
+  if (play.error !== 0 && play.error !== undefined) {
+    throw new Error(play.msg || `斗鱼 error ${play.error}`);
+  }
+  const rtmpUrl = play.data?.rtmp_url;
+  const rtmpLive = play.data?.rtmp_live;
   if (!rtmpUrl || !rtmpLive) {
-    throw new Error("斗鱼未返回 rtmp_url / rtmp_live（房间可能已下播）");
+    throw new Error("斗鱼未返回 rtmp_url / rtmp_live");
   }
   const finalUrl = `${rtmpUrl}/${unescapeHtmlEntities(rtmpLive)}`;
   const streamType: NetLiveStream["streamType"] = finalUrl.includes(".m3u8")
     ? "hls"
     : "flv";
 
-  // 收集 alternatives：rate × 默认 cdn —— 第一条用 default cdn 就够，避免每条都发请求
-  const alternatives: NonNullable<NetLiveStream["alternatives"]> = [];
-  const multirates = first.data?.multirates ?? [];
-  const currentRate = first.data?.rate ?? 0;
-  for (const r of multirates) {
-    alternatives.push({
+  const alternatives = multirates
+    .filter((r) => r.name && r.rate !== undefined)
+    .map((r) => ({
       qn: String(r.rate),
       label: r.name,
-      // 默认填同一个 URL，UI 选了不同 qn 时按需重拉
-      url: r.rate === currentRate ? finalUrl : "",
-    });
-  }
+      url: r.rate === defaultRate ? finalUrl : "",
+    }));
 
   return {
     url: finalUrl,
     streamType,
-    qn: String(currentRate),
-    qnLabel: multirates.find((r) => r.rate === currentRate)?.name,
+    qn: String(defaultRate),
+    qnLabel: multirates.find((r) => r.rate === defaultRate)?.name,
     alternatives: alternatives.length > 0 ? alternatives : undefined,
     referer: `https://www.douyu.com/${roomId}`,
     ua: UA,

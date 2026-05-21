@@ -21,9 +21,14 @@ import {
 } from "@/lib/music/types";
 import {
   MUSIC_BACKEND_LABELS,
+  BUILTIN_DEFAULT_URL_SERVERS,
+  BUILTIN_URL_SERVER_PRESETS,
+  type BuiltinBackend,
   type MusicApiBackend,
   type LxMusicBackend,
   type PluginBackend,
+  type NcmBackend,
+  type Listen1Backend,
   type MusicBackend,
   type MusicBackendKind,
 } from "@/lib/music/backends/types";
@@ -169,6 +174,15 @@ export default function SettingsMusic() {
           onClose={() => setEditingVarsId(null)}
         />
       )}
+
+      {/* 内置 URL 服务器配置 */}
+      <BuiltinUrlServersSection
+        builtin={backends.find((b) => b.kind === "builtin") as BuiltinBackend | undefined}
+        onUpdate={(patch) => {
+          const b = backends.find((x) => x.kind === "builtin");
+          if (b) updateBackend(b.id, patch);
+        }}
+      />
 
       {/* Default platform */}
       <section
@@ -347,6 +361,133 @@ export default function SettingsMusic() {
   );
 }
 
+/* ───────────────────────── BuiltinUrlServersSection ───────────────────────── */
+
+function BuiltinUrlServersSection({
+  builtin,
+  onUpdate,
+}: {
+  builtin: BuiltinBackend | undefined;
+  onUpdate: (patch: Partial<BuiltinBackend>) => void;
+}) {
+  const [open, setOpen] = useState(false);
+  const servers = {
+    ...BUILTIN_DEFAULT_URL_SERVERS,
+    ...(builtin?.urlServers ?? {}),
+  };
+
+  // 当前 servers 命中哪个预设？精确匹配 5 个 source 才算
+  const currentPresetId =
+    BUILTIN_URL_SERVER_PRESETS.find((p) =>
+      (["wy", "kw", "tx", "kg", "mg"] as const).every(
+        (k) => p.servers[k] === servers[k]
+      )
+    )?.id ?? "custom";
+
+  const applyPreset = (presetId: string) => {
+    const p = BUILTIN_URL_SERVER_PRESETS.find((x) => x.id === presetId);
+    if (!p) return;
+    if (presetId === "custom") {
+      // 自定义：清空，留给用户手填
+      onUpdate({ urlServers: { wy: "", kw: "", tx: "", kg: "", mg: "" } });
+    } else {
+      onUpdate({ urlServers: { ...p.servers } });
+    }
+  };
+
+  const setOne = (k: "wy" | "kw" | "tx" | "kg" | "mg", v: string) => {
+    onUpdate({
+      urlServers: { ...servers, [k]: v },
+    });
+  };
+
+  if (!builtin) return null;
+
+  return (
+    <section
+      className="rounded-xl mb-4 overflow-hidden"
+      style={{ background: "var(--ink-2)", border: "1px solid var(--cream-line)" }}
+    >
+      <button
+        type="button"
+        onClick={() => setOpen(!open)}
+        className="w-full flex items-center justify-between p-4 tap text-left"
+      >
+        <div>
+          <p className="font-mono text-[10px] tracking-[0.2em] text-cream-faint mb-0.5">
+            BUILTIN URL SERVERS
+          </p>
+          <p className="text-[12px] text-cream-dim">
+            内置音乐源播放 URL 服务器 ·{" "}
+            <span className="text-ember">{currentPresetId === "custom" ? "自定义" : "预设"}</span>
+          </p>
+        </div>
+        <span className="text-cream-faint text-[10px] font-mono">
+          {open ? "收起 ↑" : "展开 ↓"}
+        </span>
+      </button>
+
+      {open && (
+        <div className="px-4 pb-4 space-y-3">
+          {/* 预设下拉 */}
+          <div>
+            <p className="text-[10px] font-mono text-cream-faint mb-1.5">预设</p>
+            <div className="flex flex-wrap gap-1.5">
+              {BUILTIN_URL_SERVER_PRESETS.map((p) => (
+                <button
+                  key={p.id}
+                  type="button"
+                  onClick={() => applyPreset(p.id)}
+                  className="px-3 py-1 rounded-full text-[10px] font-mono tap"
+                  style={{
+                    background: currentPresetId === p.id ? "var(--ember)" : "var(--ink-3)",
+                    color: currentPresetId === p.id ? "var(--ink)" : "var(--cream-dim)",
+                    border: "1px solid var(--cream-line)",
+                  }}
+                >
+                  {p.label}
+                </button>
+              ))}
+            </div>
+          </div>
+
+          {/* 每平台输入框 */}
+          <div className="space-y-2">
+            {(["wy", "kw", "tx", "kg", "mg"] as const).map((k) => {
+              const platLabel = MUSIC_SOURCES.find((s) => s.id === k)?.label ?? k;
+              return (
+                <div key={k} className="flex items-center gap-2">
+                  <span className="w-12 text-[11px] font-mono text-cream-dim shrink-0">
+                    {platLabel}
+                  </span>
+                  <input
+                    value={servers[k]}
+                    onChange={(e) => setOne(k, e.target.value)}
+                    placeholder={`默认 ${BUILTIN_DEFAULT_URL_SERVERS[k]}`}
+                    className="flex-1 px-2 py-1.5 rounded text-[11px] font-mono bg-ink-3 text-cream outline-none"
+                    style={{ border: "1px solid var(--cream-line)" }}
+                  />
+                </div>
+              );
+            })}
+          </div>
+
+          <p className="text-[10px] text-cream-faint leading-relaxed pt-1">
+            格式：<code className="text-cream-dim">https://example.com</code>（不带 /url 路径）。
+            服务器须实现 lx-music api-test 协议：
+            <code className="text-cream-dim">GET {"{base}"}/url/{"{source}"}/{"{songId}"}/{"{quality}"}</code>
+            返回 <code className="text-cream-dim">{`{ code: 0, data: <url> }`}</code>。
+            <br />
+            <span className="text-cream-dim">自部署</span>：可用{" "}
+            <code className="text-cream-dim">lx-music-api-server</code>（POST 模式），
+            改走「LX-Music Server」backend 而非内置。
+          </p>
+        </div>
+      )}
+    </section>
+  );
+}
+
 /* ───────────────────────── BackendCard ───────────────────────── */
 
 function BackendCard({
@@ -501,6 +642,40 @@ function BackendCard({
           <p className="font-mono text-[10px] text-cream-faint">
             插件 · {backend.platform ?? "?"}
             {backend.version ? ` · v${backend.version}` : ""}
+          </p>
+          {backend.sourceUrl && (
+            <p className="font-mono text-[10px] text-cream-faint truncate">
+              来源 · {backend.sourceUrl}
+            </p>
+          )}
+        </div>
+      )}
+      {backend.kind === "ncm" && (
+        <div className="space-y-2">
+          <input
+            value={backend.baseUrl}
+            onChange={(e) =>
+              onUpdate({ baseUrl: e.target.value } as Partial<NcmBackend>)
+            }
+            placeholder="http://localhost:3000（NeteaseCloudMusicApi）"
+            className="w-full px-2 py-1.5 rounded text-[11px] font-mono outline-none text-cream placeholder:text-cream-faint"
+            style={{ background: "var(--ink-3)", border: "1px solid var(--cream-line)" }}
+          />
+          <input
+            value={backend.cookie ?? ""}
+            onChange={(e) =>
+              onUpdate({ cookie: e.target.value } as Partial<NcmBackend>)
+            }
+            placeholder="cookie（MUSIC_U=... 可选，登录态接口需要）"
+            className="w-full px-2 py-1.5 rounded text-[11px] font-mono outline-none text-cream placeholder:text-cream-faint"
+            style={{ background: "var(--ink-3)", border: "1px solid var(--cream-line)" }}
+          />
+        </div>
+      )}
+      {backend.kind === "listen1" && (
+        <div className="space-y-1">
+          <p className="font-mono text-[10px] text-cream-faint">
+            listen1 源 · {backend.code.length} 字节
           </p>
           {backend.sourceUrl && (
             <p className="font-mono text-[10px] text-cream-faint truncate">
@@ -719,6 +894,8 @@ function AddBackendDialog({
   const placeholders = useMemo(() => {
     if (kind === "musicapi") return { url: "http://localhost:3300", auth: "X-API-Key" };
     if (kind === "lxmusic") return { url: "http://localhost:1233", auth: "X-LX-AUTH（可选）" };
+    if (kind === "ncm") return { url: "http://localhost:3000（NeteaseCloudMusicApi）", auth: "cookie（MUSIC_U=... 可选）" };
+    if (kind === "listen1") return { url: "https://.../listen1-source.js", auth: "" };
     return {
       url: "https://.../plugin.js 或 .../plugins.json（列表）",
       auth: "",
@@ -823,6 +1000,32 @@ function AddBackendDialog({
         // builtin 不通过 add 流程，但兼容意外触发
         return;
       }
+      if (kind === "ncm") {
+        if (!baseUrl.trim()) throw new Error("NCM 服务器 URL 必填");
+        const input: Omit<NcmBackend, "id" | "addedAt"> = {
+          kind: "ncm",
+          name: name.trim() || "NCM",
+          baseUrl: baseUrl.trim(),
+          cookie: token.trim() || authKey.trim() || undefined,
+          enabled: true,
+        };
+        onAdd(input);
+        onClose();
+        return;
+      }
+      if (kind === "listen1") {
+        if (!pluginCode.trim()) throw new Error("请粘贴 listen1 源代码或从 URL 拉取");
+        const input: Omit<Listen1Backend, "id" | "addedAt"> = {
+          kind: "listen1",
+          name: name.trim() || "listen1",
+          code: pluginCode,
+          sourceUrl: pluginUrl || undefined,
+          enabled: true,
+        };
+        onAdd(input);
+        onClose();
+        return;
+      }
       // plugin (单个)
       if (!pluginCode.trim()) throw new Error("请粘贴插件代码或从 URL 拉取");
       const meta = describePlugin(pluginCode);
@@ -873,7 +1076,7 @@ function AddBackendDialog({
           style={{ background: "var(--ink-3)", border: "1px solid var(--cream-line)" }}
         />
 
-        {kind !== "plugin" && kind !== "builtin" && (
+        {kind !== "plugin" && kind !== "builtin" && kind !== "listen1" && (
           <>
             <label className="block font-mono text-[10px] tracking-[0.2em] text-cream-faint mb-1">
               URL
@@ -889,9 +1092,11 @@ function AddBackendDialog({
               {placeholders.auth}
             </label>
             <input
-              value={kind === "musicapi" ? token : authKey}
+              value={kind === "musicapi" ? token : kind === "ncm" ? token : authKey}
               onChange={(e) =>
-                kind === "musicapi" ? setToken(e.target.value) : setAuthKey(e.target.value)
+                kind === "musicapi" || kind === "ncm"
+                  ? setToken(e.target.value)
+                  : setAuthKey(e.target.value)
               }
               className="w-full px-3 py-2 rounded-lg text-xs font-mono outline-none text-cream mb-3"
               style={{ background: "var(--ink-3)", border: "1px solid var(--cream-line)" }}
@@ -899,7 +1104,7 @@ function AddBackendDialog({
           </>
         )}
 
-        {kind === "plugin" && (
+        {(kind === "plugin" || kind === "listen1") && (
           <>
             <label className="block font-mono text-[10px] tracking-[0.2em] text-cream-faint mb-1">
               插件 URL（.js 单插件 · 或 .json 订阅列表）

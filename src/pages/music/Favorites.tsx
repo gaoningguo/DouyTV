@@ -1,46 +1,64 @@
 /**
- * 我喜欢的音乐 —— 完整收藏列表。
+ * 我喜欢的音乐 —— 完整收藏列表，统一头部 + PlayAllBar + 列表行。
  */
-import { useEffect } from "react";
+import { useEffect, useMemo } from "react";
 import { useNavigate } from "react-router-dom";
 import { useMusicStore } from "@/stores/music";
-import { wrapImage } from "@/lib/proxy";
-import { IconArrowLeft, IconHeart, IconMusic, IconPlay } from "@/components/Icon";
+import { IconHeart } from "@/components/Icon";
+import { MusicDetailHeader } from "@/components/MusicDetailHeader";
+import { MusicPlayAllBar } from "@/components/MusicPlayAllBar";
+import { MusicListItem } from "@/components/MusicListItem";
 import { showMusicMenu } from "@/components/MusicContextMenu";
+
+function formatDuration(sec?: number) {
+  if (!sec || !Number.isFinite(sec)) return undefined;
+  const m = Math.floor(sec / 60);
+  const s = Math.floor(sec % 60);
+  return `${m}:${s.toString().padStart(2, "0")}`;
+}
 
 export default function MusicFavorites() {
   const navigate = useNavigate();
   const hydrate = useMusicStore((s) => s.hydrate);
   const favorites = useMusicStore((s) => s.favorites);
   const playQueue = useMusicStore((s) => s.playQueue);
+  const setRepeatMode = useMusicStore((s) => s.setRepeatMode);
 
   useEffect(() => {
     void hydrate();
   }, [hydrate]);
 
+  const sortedFavs = useMemo(
+    () => [...favorites].sort((a, b) => (b.favoritedAt ?? 0) - (a.favoritedAt ?? 0)),
+    [favorites]
+  );
+
+  const handleShuffle = () => {
+    if (sortedFavs.length === 0) return;
+    setRepeatMode("shuffle");
+    void playQueue(sortedFavs, 0);
+  };
+
   return (
     <div className="min-h-screen bg-ink text-cream p-4 pb-24">
-      <div className="flex items-center gap-3 mb-5">
+      <div className="flex items-center mb-2">
         <button
           type="button"
           onClick={() => navigate(-1)}
-          className="w-9 h-9 flex items-center justify-center rounded-full tap text-cream"
-          style={{ background: "var(--ink-2)", border: "1px solid var(--cream-line)" }}
+          className="font-mono text-[10px] tracking-[0.2em] text-cream-faint tap"
           aria-label="返回"
         >
-          <IconArrowLeft size={16} />
+          ← 返回
         </button>
-        <div className="flex-1 min-w-0">
-          <p className="font-mono text-[10px] tracking-[0.25em] text-cream-faint">
-            MUSIC · FAVORITES
-          </p>
-          <h1 className="font-display text-xl font-extrabold tracking-tight">
-            我喜欢的音乐
-          </h1>
-        </div>
       </div>
 
-      {favorites.length === 0 ? (
+      <MusicDetailHeader
+        eyebrow="MUSIC · FAVORITES"
+        title="我喜欢的音乐"
+        meta={[`${sortedFavs.length} 首`]}
+      />
+
+      {sortedFavs.length === 0 ? (
         <div
           className="rounded-xl p-6 text-center"
           style={{ background: "var(--ink-2)", border: "1px dashed var(--cream-line)" }}
@@ -53,55 +71,21 @@ export default function MusicFavorites() {
         </div>
       ) : (
         <>
-          <button
-            type="button"
-            onClick={() => void playQueue(favorites, 0)}
-            className="w-full mb-4 flex items-center justify-center gap-2 py-2.5 rounded-lg text-sm font-display font-semibold tap"
-            style={{ background: "var(--ember)", color: "var(--ink)" }}
-          >
-            <IconPlay size={14} />
-            播放全部 ({favorites.length})
-          </button>
+          <MusicPlayAllBar
+            count={sortedFavs.length}
+            onPlayAll={() => void playQueue(sortedFavs, 0)}
+            onShuffle={handleShuffle}
+          />
           <ul className="space-y-1.5">
-            {favorites.map((s, i) => (
+            {sortedFavs.map((s, i) => (
               <li key={`${s.source}-${s.songId}`}>
-                <button
-                  type="button"
-                  onClick={() => void playQueue(favorites, i)}
-                  onContextMenu={(e) => {
-                    e.preventDefault();
-                    showMusicMenu(s);
-                  }}
-                  className="w-full flex items-center gap-3 p-2 rounded-lg tap text-left"
-                  style={{
-                    background: "var(--ink-2)",
-                    border: "1px solid var(--cream-line)",
-                  }}
-                >
-                  <span className="w-6 text-center font-mono text-[10px] text-cream-faint shrink-0">
-                    {String(i + 1).padStart(2, "0")}
-                  </span>
-                  {s.cover ? (
-                    <img
-                      src={wrapImage(s.cover)}
-                      alt=""
-                      loading="lazy"
-                      className="w-10 h-10 rounded shrink-0 object-cover"
-                    />
-                  ) : (
-                    <div className="w-10 h-10 rounded shrink-0 flex items-center justify-center bg-ink-3">
-                      <IconMusic size={16} className="text-cream-faint" />
-                    </div>
-                  )}
-                  <div className="flex-1 min-w-0">
-                    <p className="text-xs font-display font-semibold line-clamp-1">
-                      {s.name}
-                    </p>
-                    <p className="text-[10px] font-mono text-cream-faint line-clamp-1">
-                      {s.artist || "—"}
-                    </p>
-                  </div>
-                </button>
+                <MusicListItem
+                  song={s}
+                  index={i + 1}
+                  duration={formatDuration(s.durationSec)}
+                  onClick={() => void playQueue(sortedFavs, i)}
+                  onMenu={() => showMusicMenu(s)}
+                />
               </li>
             ))}
           </ul>

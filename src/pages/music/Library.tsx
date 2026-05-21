@@ -1,22 +1,35 @@
 /**
- * 我的音乐 — 收藏 / 歌单 / 历史 / 推荐 的入口聚合页。
+ * 我的音乐 —— 参考 MusicFree home/sheets 的双 tab + 右侧操作图标 + FlashList。
  *
- * 仿 MusicFree home/operations.tsx，但走 CRT 美学（chip + 网格 + signal-bars 占位）。
+ * 上方 SegmentedTab：我的歌单 / 收藏 / 历史 切换三种"我的"内容。
+ * 右上 + 按钮新建歌单（仅在"我的歌单"tab）。
+ * 移动 / 桌面统一单列瀑布流（移动友好）；桌面端附加"下载管理"入口。
  */
-import { useEffect } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { Link } from "react-router-dom";
 import { useMusicStore } from "@/stores/music";
 import { wrapImage } from "@/lib/proxy";
 import {
   IconAlbum,
   IconDownload,
-  IconFire,
   IconHeart,
   IconHistoryClock,
   IconMusic,
   IconPlus,
 } from "@/components/Icon";
+import { MusicSegmentedTab } from "@/components/MusicSegmentedTab";
+import { MusicListItem } from "@/components/MusicListItem";
+import { MusicEmptyState } from "@/components/MusicEmptyState";
 import { isDesktop } from "@/lib/platform";
+
+type LibTab = "playlists" | "favorites" | "history";
+
+function formatDuration(sec?: number) {
+  if (!sec || !Number.isFinite(sec)) return undefined;
+  const m = Math.floor(sec / 60);
+  const s = Math.floor(sec % 60);
+  return `${m}:${s.toString().padStart(2, "0")}`;
+}
 
 export default function MusicLibrary() {
   const hydrate = useMusicStore((s) => s.hydrate);
@@ -25,6 +38,7 @@ export default function MusicLibrary() {
   const playlists = useMusicStore((s) => s.playlists);
   const createPlaylist = useMusicStore((s) => s.createPlaylist);
   const playNow = useMusicStore((s) => s.playNow);
+  const [tab, setTab] = useState<LibTab>("playlists");
 
   useEffect(() => {
     void hydrate();
@@ -36,8 +50,19 @@ export default function MusicLibrary() {
     await createPlaylist(name.trim());
   };
 
+  const tabs = useMemo(
+    () =>
+      [
+        { id: "playlists" as const, label: "歌单", count: playlists.length },
+        { id: "favorites" as const, label: "收藏", count: favorites.length },
+        { id: "history" as const, label: "历史", count: history.length },
+      ] as const,
+    [playlists.length, favorites.length, history.length]
+  );
+
   return (
     <div className="min-h-screen bg-ink text-cream p-4 pb-24">
+      {/* 顶部 eyebrow + title */}
       <div className="mb-5">
         <p className="font-mono text-[10px] tracking-[0.25em] text-cream-faint">
           MUSIC · LIBRARY
@@ -45,232 +70,216 @@ export default function MusicLibrary() {
         <h1 className="font-display text-2xl font-extrabold tracking-tight">我的音乐</h1>
       </div>
 
-      {/* 4 action tiles */}
-      <div className="grid grid-cols-4 gap-2 mb-6">
-        <ActionTile to="/music/favorites" icon={<IconHeart size={18} />} label="收藏" />
-        <ActionTile
-          to="/music/history"
-          icon={<IconHistoryClock size={18} />}
-          label="历史"
-        />
-        <ActionTile
-          to="/music/recommend"
-          icon={<IconFire size={18} />}
-          label="推荐"
-        />
-        <ActionTile to="/music" icon={<IconAlbum size={18} />} label="榜单" />
-      </div>
-
       {/* 桌面专属：下载管理入口 */}
       {isDesktop() && (
         <Link
           to="/music/downloads"
-          className="flex items-center gap-3 p-3 mb-6 rounded-lg tap"
+          className="flex items-center gap-3 p-3 mb-5 rounded-lg tap"
           style={{
             background: "var(--ink-2)",
             border: "1px solid var(--cream-line)",
           }}
         >
           <span
-            className="w-9 h-9 rounded flex items-center justify-center"
+            className="w-9 h-9 rounded-full flex items-center justify-center"
             style={{ background: "var(--ink-3)", color: "var(--ember)" }}
           >
             <IconDownload size={16} />
           </span>
           <div className="flex-1 min-w-0">
             <p className="text-xs font-display font-semibold">下载管理</p>
-            <p className="text-[10px] text-cream-faint">已下载 / 进行中 / 失败</p>
+            <p className="text-[10px] font-mono text-cream-faint">已下载 / 进行中 / 失败</p>
           </div>
           <span className="text-cream-faint">→</span>
         </Link>
       )}
 
-      {/* 我喜欢的音乐预览 */}
-      {favorites.length > 0 && (
-        <section className="mb-6">
-          <div className="flex items-center justify-between mb-2">
-            <p className="font-mono text-[10px] tracking-[0.2em] text-cream-faint">
-              FAVORITES · {favorites.length}
-            </p>
-            <Link to="/music/favorites" className="text-[10px] text-ember font-mono">
-              查看全部 →
-            </Link>
-          </div>
-          <ul className="space-y-1.5">
-            {favorites.slice(0, 5).map((f) => (
-              <li key={`${f.source}-${f.songId}`}>
-                <button
-                  type="button"
-                  onClick={() => void playNow(f)}
-                  className="w-full flex items-center gap-3 p-2 rounded-lg tap text-left"
-                  style={{
-                    background: "var(--ink-2)",
-                    border: "1px solid var(--cream-line)",
-                  }}
-                >
-                  {f.cover ? (
-                    <img
-                      src={wrapImage(f.cover)}
-                      alt=""
-                      loading="lazy"
-                      className="w-10 h-10 rounded shrink-0 object-cover"
-                    />
-                  ) : (
-                    <div className="w-10 h-10 rounded shrink-0 flex items-center justify-center bg-ink-3">
-                      <IconMusic size={14} className="text-cream-faint" />
-                    </div>
-                  )}
-                  <div className="flex-1 min-w-0">
-                    <p className="text-xs font-display font-semibold line-clamp-1">
-                      {f.name}
-                    </p>
-                    <p className="text-[10px] font-mono text-cream-faint line-clamp-1">
-                      {f.artist || "—"}
-                    </p>
-                  </div>
-                </button>
-              </li>
-            ))}
-          </ul>
-        </section>
-      )}
-
-      {/* 最近播放 */}
-      {history.length > 0 && (
-        <section className="mb-6">
-          <div className="flex items-center justify-between mb-2">
-            <p className="font-mono text-[10px] tracking-[0.2em] text-cream-faint">
-              RECENT · {history.length}
-            </p>
-            <Link to="/music/history" className="text-[10px] text-ember font-mono">
-              查看全部 →
-            </Link>
-          </div>
-          <ul className="space-y-1.5">
-            {history.slice(0, 5).map((h) => (
-              <li key={`${h.source}-${h.songId}`}>
-                <button
-                  type="button"
-                  onClick={() => void playNow(h)}
-                  className="w-full flex items-center gap-3 p-2 rounded-lg tap text-left"
-                  style={{
-                    background: "var(--ink-2)",
-                    border: "1px solid var(--cream-line)",
-                  }}
-                >
-                  {h.cover ? (
-                    <img
-                      src={wrapImage(h.cover)}
-                      alt=""
-                      loading="lazy"
-                      className="w-10 h-10 rounded shrink-0 object-cover"
-                    />
-                  ) : (
-                    <div className="w-10 h-10 rounded shrink-0 flex items-center justify-center bg-ink-3">
-                      <IconMusic size={14} className="text-cream-faint" />
-                    </div>
-                  )}
-                  <div className="flex-1 min-w-0">
-                    <p className="text-xs font-display font-semibold line-clamp-1">
-                      {h.name}
-                    </p>
-                    <p className="text-[10px] font-mono text-cream-faint line-clamp-1">
-                      {h.artist || "—"}
-                    </p>
-                  </div>
-                  <span className="font-mono text-[9px] text-cream-faint">
-                    ×{h.playCount}
-                  </span>
-                </button>
-              </li>
-            ))}
-          </ul>
-        </section>
-      )}
-
-      {/* 自建歌单 */}
-      <section>
-        <div className="flex items-center justify-between mb-2">
-          <p className="font-mono text-[10px] tracking-[0.2em] text-cream-faint">
-            MY PLAYLISTS · {playlists.length}
-          </p>
+      {/* 双 tab + 右侧操作图标 (MusicFree sheets.tsx 模式) */}
+      <div className="flex items-end justify-between mb-1">
+        <MusicSegmentedTab
+          tabs={tabs}
+          active={tab}
+          onChange={setTab}
+          className="!mb-0 flex-1"
+        />
+        {tab === "playlists" && (
           <button
             type="button"
             onClick={() => void handleNewList()}
-            className="text-[10px] text-ember font-mono tap"
-          >
-            + 新建
-          </button>
-        </div>
-        <div className="grid grid-cols-2 gap-2">
-          <button
-            type="button"
-            onClick={() => void handleNewList()}
-            className="rounded-lg p-4 flex flex-col items-center justify-center tap aspect-square"
+            className="ml-2 mb-1 w-8 h-8 flex items-center justify-center rounded-full tap text-cream-dim hover:text-cream"
             style={{
               background: "var(--ink-2)",
-              border: "1px dashed var(--cream-line)",
+              border: "1px solid var(--cream-line)",
             }}
+            aria-label="新建歌单"
+            title="新建歌单"
           >
-            <IconPlus size={20} className="text-cream-faint mb-1" />
-            <span className="text-[10px] font-mono text-cream-faint">新建歌单</span>
+            <IconPlus size={14} />
           </button>
-          {playlists.map((p) => (
-            <Link
-              key={p.id}
-              to={`/music/my-playlist/${encodeURIComponent(p.id)}`}
-              className="rounded-lg overflow-hidden tap"
-              style={{
-                background: "var(--ink-2)",
-                border: "1px solid var(--cream-line)",
-              }}
-            >
-              <div className="aspect-square flex items-center justify-center bg-ink-3">
-                {p.cover ? (
-                  <img
-                    src={wrapImage(p.cover)}
-                    alt=""
-                    loading="lazy"
-                    className="w-full h-full object-cover"
-                  />
-                ) : (
-                  <IconMusic size={32} className="text-cream-faint" />
-                )}
-              </div>
-              <div className="p-2">
-                <p className="text-xs font-display font-semibold line-clamp-1">{p.name}</p>
-                <p className="text-[10px] font-mono text-cream-faint">
-                  {p.songCount} 首
-                </p>
-              </div>
-            </Link>
-          ))}
-        </div>
-      </section>
+        )}
+      </div>
+
+      <div className="mt-3">
+        {tab === "playlists" && (
+          <PlaylistsView playlists={playlists} onNewList={handleNewList} />
+        )}
+        {tab === "favorites" && (
+          <FavoritesView favorites={favorites} playNow={playNow} />
+        )}
+        {tab === "history" && <HistoryView history={history} playNow={playNow} />}
+      </div>
     </div>
   );
 }
 
-function ActionTile({
-  to,
-  icon,
-  label,
+// ─── tab 内容 ─────────────────────────────────────────
+
+function PlaylistsView({
+  playlists,
+  onNewList,
 }: {
-  to: string;
-  icon: React.ReactNode;
-  label: string;
+  playlists: Array<{ id: string; name: string; cover?: string; songCount: number }>;
+  onNewList: () => Promise<void>;
 }) {
+  if (playlists.length === 0) {
+    return (
+      <MusicEmptyState
+        icon={<IconMusic size={32} />}
+        title="还没有自建歌单"
+        subtitle='点击右上 "+" 新建第一个歌单'
+        cta={{ label: "新建歌单", onClick: () => void onNewList() }}
+      />
+    );
+  }
   return (
-    <Link
-      to={to}
-      className="rounded-lg p-3 flex flex-col items-center justify-center tap aspect-square"
-      style={{
-        background: "var(--ink-2)",
-        border: "1px solid var(--cream-line)",
-      }}
-    >
-      <span className="text-ember mb-1.5">{icon}</span>
-      <span className="text-[11px] font-display font-semibold">{label}</span>
-    </Link>
+    <ul className="space-y-1.5">
+      {playlists.map((p) => (
+        <li key={p.id}>
+          <Link
+            to={`/music/my-playlist/${encodeURIComponent(p.id)}`}
+            className="w-full flex items-center gap-3 p-2 rounded-lg tap"
+            style={{
+              background: "var(--ink-2)",
+              border: "1px solid var(--cream-line)",
+            }}
+          >
+            {p.cover ? (
+              <img
+                src={wrapImage(p.cover)}
+                alt=""
+                loading="lazy"
+                className="w-12 h-12 rounded shrink-0 object-cover"
+              />
+            ) : (
+              <div className="w-12 h-12 rounded shrink-0 flex items-center justify-center bg-ink-3">
+                <IconAlbum size={20} className="text-cream-faint" />
+              </div>
+            )}
+            <div className="flex-1 min-w-0">
+              <p className="text-sm font-display font-semibold line-clamp-1">{p.name}</p>
+              <p className="text-[10px] font-mono text-cream-faint mt-0.5">
+                {p.songCount} 首
+              </p>
+            </div>
+            <span className="text-cream-faint">→</span>
+          </Link>
+        </li>
+      ))}
+    </ul>
+  );
+}
+
+function FavoritesView({
+  favorites,
+  playNow,
+}: {
+  favorites: ReturnType<typeof useMusicStore.getState>["favorites"];
+  playNow: (s: import("@/lib/music/types").MusicSong) => Promise<void>;
+}) {
+  if (favorites.length === 0) {
+    return (
+      <MusicEmptyState
+        icon={<IconHeart size={32} />}
+        title="还没有收藏的歌曲"
+        subtitle="在搜索 / 榜单 / 歌单中点心形即可收藏"
+        cta={{ label: "去搜索", to: "/music/search" }}
+      />
+    );
+  }
+  // 收藏列表头部：查看全部按钮 + 倒序展示前 12 首
+  const sorted = [...favorites]
+    .sort((a, b) => (b.favoritedAt ?? 0) - (a.favoritedAt ?? 0))
+    .slice(0, 12);
+  return (
+    <>
+      <ul className="space-y-1.5 mb-3">
+        {sorted.map((f) => (
+          <li key={`${f.source}-${f.songId}`}>
+            <MusicListItem
+              song={f}
+              duration={formatDuration(f.durationSec)}
+              onClick={() => void playNow(f)}
+            />
+          </li>
+        ))}
+      </ul>
+      {favorites.length > 12 && (
+        <Link
+          to="/music/favorites"
+          className="block text-center py-2 rounded-lg text-[11px] font-mono tap text-ember"
+          style={{ background: "var(--ink-2)", border: "1px solid var(--cream-line)" }}
+        >
+          查看全部 {favorites.length} 首 →
+        </Link>
+      )}
+    </>
+  );
+}
+
+function HistoryView({
+  history,
+  playNow,
+}: {
+  history: ReturnType<typeof useMusicStore.getState>["history"];
+  playNow: (s: import("@/lib/music/types").MusicSong) => Promise<void>;
+}) {
+  if (history.length === 0) {
+    return (
+      <MusicEmptyState
+        icon={<IconHistoryClock size={32} />}
+        title="还没有播放记录"
+        subtitle="开始听一首歌就有了"
+      />
+    );
+  }
+  const top = history.slice(0, 12);
+  return (
+    <>
+      <ul className="space-y-1.5 mb-3">
+        {top.map((h) => (
+          <li key={`${h.source}-${h.songId}`}>
+            <MusicListItem
+              song={h}
+              duration={formatDuration(h.durationSec)}
+              onClick={() => void playNow(h)}
+              trailing={
+                <span className="font-mono text-[9px] text-cream-faint shrink-0 mr-1">
+                  ×{h.playCount}
+                </span>
+              }
+            />
+          </li>
+        ))}
+      </ul>
+      {history.length > 12 && (
+        <Link
+          to="/music/history"
+          className="block text-center py-2 rounded-lg text-[11px] font-mono tap text-ember"
+          style={{ background: "var(--ink-2)", border: "1px solid var(--cream-line)" }}
+        >
+          查看全部 {history.length} 首 →
+        </Link>
+      )}
+    </>
   );
 }

@@ -83,6 +83,7 @@ async function fetchJson<T>(url: string): Promise<T> {
     method: "GET",
     headers: defaultHeaders(),
     timeout: 20_000,
+    http2: true,
   });
   if (!res.ok) throw new Error(`HTTP ${res.status} ${url}`);
   return res.json<T>();
@@ -93,6 +94,7 @@ async function fetchText(url: string): Promise<string> {
     method: "GET",
     headers: defaultHeaders(),
     timeout: 20_000,
+    http2: true,
   });
   if (!res.ok) throw new Error(`HTTP ${res.status} ${url}`);
   return res.text();
@@ -132,12 +134,23 @@ function mapPartitionItem(item: DouyinPartitionItem): NetLiveRoom | undefined {
   };
 }
 
-function parseDisplayCount(v: string | undefined): number | undefined {
-  if (!v) return undefined;
-  const num = parseFloat(v);
+function parseDisplayCount(v: unknown): number | undefined {
+  if (v === undefined || v === null) return undefined;
+  if (typeof v === "number") return v;
+  if (typeof v !== "string") {
+    // 防御：v 偶尔是 number / bigint / object，强转成 string 再解析
+    try {
+      v = String(v);
+    } catch {
+      return undefined;
+    }
+  }
+  const s = v as string;
+  if (!s) return undefined;
+  const num = parseFloat(s);
   if (isNaN(num)) return undefined;
-  if (v.includes("万")) return Math.round(num * 10_000);
-  if (v.includes("亿")) return Math.round(num * 100_000_000);
+  if (s.includes("万")) return Math.round(num * 10_000);
+  if (s.includes("亿")) return Math.round(num * 100_000_000);
   return Math.round(num);
 }
 
@@ -361,6 +374,7 @@ async function search(
       Referer: `https://www.douyin.com/search/${encodeURIComponent(keyword)}?type=live`,
     },
     timeout: 20_000,
+    http2: true,
   });
   if (!res.ok) throw new Error(`HTTP ${res.status}`);
   let resp: DouyinSearchResp;
@@ -433,31 +447,40 @@ interface DouyinEnterResp {
 }
 
 async function fetchEnter(webRid: string): Promise<DouyinEnterResp["data"]> {
+  // dart_simple_live `_getRoomDataByApi`：精简参数 + 动态 Referer
   const params: Record<string, string> = {
     aid: "6383",
     app_name: "douyin_web",
     live_id: "1",
     device_platform: "web",
-    enter_from: "web_live",
-    web_rid: webRid,
-    room_id_str: "",
-    enter_source: "",
-    "Room-Enter-User-Login-Ab": "0",
-    is_need_double_stream: "false",
-    cookie_enabled: "true",
-    screen_width: "1980",
-    screen_height: "1080",
+    language: "zh-CN",
     browser_language: "zh-CN",
     browser_platform: "Win32",
-    browser_name: "Edge",
+    browser_name: "Chrome",
     browser_version: "125.0.0.0",
+    web_rid: webRid,
+    msToken: "",
   };
   const url = buildUrl(
     "https://live.douyin.com/webcast/room/web/enter/",
     params
   );
   const signed = signUrl(url);
-  const json = await fetchJson<DouyinEnterResp>(signed);
+  const headers: Record<string, string> = {
+    "User-Agent": UA,
+    Authority: AUTHORITY,
+    // 动态 Referer（包含房间号，dart_simple_live + DouyinLiveRecorder 同款）
+    Referer: `https://live.douyin.com/${webRid}`,
+    Cookie: DEFAULT_COOKIE,
+  };
+  const res = await scriptFetch(signed, {
+    method: "GET",
+    headers,
+    timeout: 20_000,
+    http2: true,
+  });
+  if (!res.ok) throw new Error(`HTTP ${res.status}`);
+  const json = await res.json<DouyinEnterResp>();
   return json.data;
 }
 

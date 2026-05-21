@@ -24,7 +24,7 @@ npx --yes png-to-ico src-tauri/icons/icon.png > src-tauri/icons/icon.ico
 npx --yes png2icons src-tauri/icons/icon.png src-tauri/icons/icon -allp
 ```
 
-iOS 子目录 `ios/` 的图标也用相同 SVG 渲染对应 iOS 标准尺寸（一般 Tauri CLI 会自动生成；如果不自动可以参考 build.mjs 加入 iOS sizes）。
+iOS 子目录 `ios/` 的全套 AppIcon（18 个尺寸 + `Contents.json`）已由 `build.mjs` 一并生成。CI 跑 `tauri ios init` 时会把这些拷到 `src-tauri/gen/apple/Assets.xcassets/AppIcon.appiconset/`。如果换了 `icon.svg`，重跑 `node src-tauri/icons/source/build.mjs` 即可全量刷新（含 iOS）。
 
 ## 设计 token
 

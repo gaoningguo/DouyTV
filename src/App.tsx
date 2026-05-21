@@ -7,6 +7,7 @@ import Search from "@/pages/Search";
 import Detail from "@/pages/Detail";
 import Play from "@/pages/Play";
 import Live from "@/pages/Live";
+import NetworkRoom from "@/pages/live/NetworkRoom";
 import Local from "@/pages/Local";
 import Settings from "@/pages/Settings";
 import SettingsLiveSubs from "@/pages/settings/LiveSubs";
@@ -62,6 +63,7 @@ import MusicMiniPlayer from "@/components/MusicMiniPlayer";
 import MusicContextMenuRoot from "@/components/MusicContextMenu";
 import MusicQueuePanel from "@/components/MusicQueuePanel";
 import MusicCommentsPanel from "@/components/MusicCommentsPanel";
+import MusicErrorToast from "@/components/MusicErrorToast";
 import WelcomeModal from "@/components/WelcomeModal";
 import { useMusicStateBroadcast } from "@/hooks/useMusicStateBroadcast";
 import { useConfigSubStore } from "@/stores/configSubscription";
@@ -84,6 +86,7 @@ const HIDE_NAV_PREFIXES = [
   "/books/novel/read",
   "/manga/read",
   "/manga/src/read",
+  "/live/room",
 ];
 const ONBOARDED_KEY = "douytv:onboarded";
 
@@ -154,10 +157,22 @@ export default function App() {
 
   const showSideNav = isDesktop && !hideNav;
   const showBottomBar = !isDesktop && !hideNav;
-  const mainPadLeft = showSideNav ? (sideExpanded ? 192 : 56) : 0;
+  const sideNavWidth = showSideNav ? (sideExpanded ? 192 : 56) : 0;
   // Home 自己是 h-screen 全屏 Feed，让 BottomTabBar 浮在上面（视频信息层已自己避让）；
   // 其它列表/设置类页面在移动端要避开底栏 + iOS Home Indicator。
   const isFeedPage = location.pathname === "/";
+  // iOS safe-area：
+  //   - top：除 Home/Play 等自带绝对定位 + 自管 safe-area 的沉浸页面外，所有页面都
+  //     避开状态栏/刘海。hideNav 路由（/play /detail /music/player /books/read 等）
+  //     全屏沉浸自己处理，不在这里加 padding。
+  //   - left/right：横屏刘海避让。左侧叠加 SideNav 宽度，桌面端不会和 safe-area-inset-left
+  //     冲突（桌面 env() 都是 0）。
+  const skipTopSafeArea = isFeedPage || hideNav;
+  const mainPadTop = skipTopSafeArea ? 0 : "env(safe-area-inset-top)";
+  const mainPadLeft = showSideNav
+    ? `calc(${sideNavWidth}px + env(safe-area-inset-left))`
+    : "env(safe-area-inset-left)";
+  const mainPadRight = "env(safe-area-inset-right)";
   const mainPadBottom =
     showBottomBar && !isFeedPage
       ? "calc(56px + env(safe-area-inset-bottom))"
@@ -167,7 +182,9 @@ export default function App() {
     <>
       <div
         style={{
+          paddingTop: mainPadTop,
           paddingLeft: mainPadLeft,
+          paddingRight: mainPadRight,
           paddingBottom: mainPadBottom,
           transition: "padding-left 200ms ease",
           minHeight: "100vh",
@@ -196,6 +213,10 @@ export default function App() {
           <Route path="/scripts" element={<Scripts />} />
           <Route path="/search" element={<Search />} />
           <Route path="/live" element={<Live />} />
+          <Route
+            path="/live/room/:platform/:roomId"
+            element={<NetworkRoom />}
+          />
           <Route path="/local" element={<Local />} />
           <Route path="/music" element={<MusicHome />} />
           <Route path="/music/search" element={<MusicSearch />} />
@@ -280,6 +301,7 @@ export default function App() {
       <MusicContextMenuRoot />
       <MusicQueuePanel />
       <MusicCommentsPanel />
+      <MusicErrorToast />
       {showWelcome && <WelcomeModal onDismiss={dismissWelcome} />}
     </>
   );

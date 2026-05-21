@@ -1,10 +1,14 @@
 // @ts-nocheck
 /**
- * WY 榜单 — 公开端点 `music.163.com/api/toplist`。
- * 详情：`music.163.com/api/playlist/detail?id={id}`（部分歌单需 cookie，简化版仅前 100 首可见）。
+ * WY 榜单 —— 列表用公开 `/api/toplist`（这条 path 还活着，没被风控），
+ * 详情走 `./songList.getSongListDetail`（`/api/linux/forward` + linuxapi）。
+ *
+ * 历史背景：以前详情直接 GET `/api/playlist/detail?id=` 也能用，2022 年起被网易做了
+ * 网关层静默丢包（TCP `os error 10060`），必须改 linuxapi 协议。
  */
 import { httpFetch } from "../request";
-import { decodeName, formatPlayTime } from "../common";
+import { decodeName } from "../common";
+import { getSongListDetail } from "./songList";
 
 const HEADERS = {
   Referer: "https://music.163.com",
@@ -28,6 +32,7 @@ export default {
     }));
   },
 
+  /** 榜单详情 —— 走 linuxapi 协议（同 songList）。 */
   async getDetail(boardId: string): Promise<{
     name: string;
     cover?: string;
@@ -48,33 +53,12 @@ export default {
       otherSource: null;
     }>;
   }> {
-    const id = boardId.replace(/^wy__/, "");
-    const { body } = await httpFetch(
-      `https://music.163.com/api/playlist/detail?id=${encodeURIComponent(id)}`,
-      { method: "GET", headers: HEADERS }
-    ).promise;
-    const playlist = (body as { result?: { name?: string; coverImgUrl?: string; description?: string; tracks?: Array<{ id: number; name: string; artists?: Array<{ name?: string }>; album?: { id?: number; name?: string; picUrl?: string }; duration?: number }> } })?.result;
-    if (!playlist) return { name: "榜单", list: [] };
-    const list = (playlist.tracks ?? []).map((t) => ({
-      name: decodeName(t.name),
-      singer: (t.artists ?? []).map((a) => a.name).filter(Boolean).join("、"),
-      source: "wy" as const,
-      songmid: String(t.id),
-      albumId: t.album?.id ? String(t.album.id) : "",
-      interval: t.duration ? formatPlayTime(Math.floor(t.duration / 1000)) : "0:00",
-      albumName: t.album?.name ? decodeName(t.album.name) : "",
-      img: t.album?.picUrl ?? null,
-      types: [] as never[],
-      _types: {},
-      typeUrl: {},
-      lrc: null,
-      otherSource: null,
-    }));
+    const d = await getSongListDetail(boardId);
     return {
-      name: decodeName(playlist.name ?? "榜单"),
-      cover: playlist.coverImgUrl,
-      description: playlist.description ?? "",
-      list,
+      name: d.name,
+      cover: d.cover,
+      description: d.description,
+      list: d.list,
     };
   },
 };

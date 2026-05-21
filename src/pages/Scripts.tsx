@@ -403,10 +403,12 @@ export default function Scripts() {
 
       {selectMode && (
         <div
-          className="fixed left-0 right-0 bottom-0 z-40 backdrop-blur-xl px-4 py-3"
+          className="fixed left-0 right-0 bottom-0 z-40 backdrop-blur-xl px-4"
           style={{
             background: "rgba(22, 24, 29, 0.92)",
             borderTop: "1px solid var(--ink-edge)",
+            paddingTop: 12,
+            paddingBottom: "calc(env(safe-area-inset-bottom) + 12px)",
           }}
         >
           <div className="flex gap-2 max-w-md mx-auto">
@@ -645,7 +647,7 @@ export default function Scripts() {
           >
             <h2 className="text-base font-semibold mb-1">配置文件 / 订阅</h2>
             <p className="text-xs text-white/40 mb-3">
-              批量导入 MoonTV 配置文件（含 <code>api_site</code> + <code>lives</code>）。订阅模式会定期重新拉取（24h）。
+              批量导入 MoonTV 配置文件（<code>api_site</code> + <code>lives</code>）或 TVBox JSON（<code>sites</code> + <code>lives</code>）。订阅模式会定期重新拉取（24h）。TVBox 中需 Java 抓取器（drpy / csp_*）的源会被跳过。
             </p>
 
             <div className="mb-4">
@@ -728,6 +730,10 @@ export default function Scripts() {
                     const result = await subImportJson(subJsonInput);
                     alert(
                       `导入成功：${result.sourcesAdded} 个源 + ${result.livesAdded} 个直播${
+                        result.ignoredJarSites
+                          ? ` · 跳过 ${result.ignoredJarSites} 个需 Java 抓取器的 TVBox 源`
+                          : ""
+                      }${
                         result.liveErrors.length
                           ? `（${result.liveErrors.length} 个直播源失败）`
                           : ""

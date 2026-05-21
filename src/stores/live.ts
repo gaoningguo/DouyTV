@@ -103,6 +103,62 @@ function parseM3U(text: string): LiveChannel[] {
   return out;
 }
 
+/**
+ * 解析 TXT 直播列表（DIYP/超级直播 / fanmingming / 各类中文聚合站常见格式）。
+ *
+ *   - 分组型 (DIYP)：
+ *       `央视频道,#genre#`
+ *       `CCTV-1,http://...`
+ *       `CCTV-2,http://...`
+ *       `卫视频道,#genre#`
+ *       `湖南卫视,http://...`
+ *
+ *   - 简单型：
+ *       `CCTV-1,http://...`
+ *       `CCTV-2,http://...`
+ *
+ * URL 后可带 `$参数`（某些 TXT 列表用 `name,url$转码` 标记线路类型），这里保留全段。
+ * 以 `#` 开头的行视作注释跳过；空行跳过。
+ */
+function parseTXT(text: string): LiveChannel[] {
+  const lines = text.split(/\r?\n/);
+  const out: LiveChannel[] = [];
+  let currentGroup: string | undefined;
+  for (const raw of lines) {
+    const line = raw.trim();
+    if (!line) continue;
+    if (line.startsWith("#")) continue;
+    const commaIdx = line.indexOf(",");
+    if (commaIdx < 0) continue;
+    const left = line.slice(0, commaIdx).trim();
+    const right = line.slice(commaIdx + 1).trim();
+    if (!left || !right) continue;
+    // `xxx,#genre#` → 切分类
+    if (/^#genre#$/i.test(right)) {
+      currentGroup = left;
+      continue;
+    }
+    // 至少有一个 http(s)/rtmp 协议头才视作有效行
+    if (!/^[a-z][a-z0-9+\-.]*:\/\//i.test(right)) continue;
+    out.push({
+      id: `txt-${Date.now()}-${out.length}`,
+      name: left,
+      url: right,
+      category: currentGroup,
+    });
+  }
+  return out;
+}
+
+/** 根据内容自动派发 M3U / TXT 解析。 */
+function detectAndParse(text: string): LiveChannel[] {
+  const head = text.slice(0, 4096);
+  if (/^\s*#EXTM3U/m.test(head)) return parseM3U(text);
+  // 含 #EXTINF 也走 M3U（有的源没写 #EXTM3U header）
+  if (/^#EXTINF/m.test(head)) return parseM3U(text);
+  return parseTXT(text);
+}
+
 export const useLiveStore = create<LiveStore>((set, get) => ({
   channels: [],
   hydrated: false,
@@ -147,7 +203,7 @@ export const useLiveStore = create<LiveStore>((set, get) => ({
     try {
       localStorage.setItem(FIRSTRUN_KEY, "1");
     } catch {}
-    const parsed = parseM3U(text);
+    const parsed = detectAndParse(text);
     const adjusted = parsed.map((ch) => ({
       ...ch,
       ua: ch.ua || options?.defaultUa,

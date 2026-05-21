@@ -404,20 +404,27 @@ function PasteJsonPanel({
   importByText,
 }: {
   onClose: () => void;
-  importByText: (text: string) => { ok: boolean; added: number; message?: string };
+  importByText: (text: string) => Promise<{ ok: boolean; added: number; message?: string }>;
 }) {
   const [text, setText] = useState("");
+  const [loading, setLoading] = useState(false);
   const [result, setResult] = useState<{ ok: boolean; msg: string } | null>(null);
   const fileRef = useRef<HTMLInputElement>(null);
 
-  const run = () => {
+  const run = async () => {
     if (!text.trim()) return;
-    const r = importByText(text);
-    setResult({
-      ok: r.ok,
-      msg: r.ok ? `成功导入 ${r.added} 个书源` : r.message ?? "导入失败",
-    });
-    if (r.ok) setText("");
+    setLoading(true);
+    setResult(null);
+    try {
+      const r = await importByText(text);
+      setResult({
+        ok: r.ok,
+        msg: r.ok ? `成功导入 ${r.added} 个书源` : r.message ?? "导入失败",
+      });
+      if (r.ok) setText("");
+    } finally {
+      setLoading(false);
+    }
   };
 
   const onFile = async (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -474,12 +481,12 @@ function PasteJsonPanel({
       />
       <button
         type="button"
-        onClick={run}
-        disabled={!text.trim()}
+        onClick={() => void run()}
+        disabled={loading || !text.trim()}
         className="w-full py-2 rounded-lg text-xs font-display font-semibold tap disabled:opacity-50"
         style={{ background: "var(--ember)", color: "var(--ink)" }}
       >
-        导入
+        {loading ? "导入中…" : "导入"}
       </button>
       {result && (
         <p

@@ -19,12 +19,12 @@ import type {
 } from "@/lib/mangasources/types";
 import { wrapImage } from "@/lib/proxy";
 import {
-  IconArrowLeft,
   IconDownload,
   IconHeart,
   IconHeartFill,
   IconRefresh,
 } from "@/components/Icon";
+import { DetailHero, MetaChip } from "@/components/DetailHero";
 
 interface NavState {
   manga?: MangaItem;
@@ -187,89 +187,67 @@ export default function MangaSrcDetail() {
 
   return (
     <div className="min-h-screen bg-ink text-cream p-4 pb-24">
-      <button
-        type="button"
-        onClick={() => navigate(-1)}
-        className="flex items-center gap-1 text-[11px] text-cream-faint hover:text-cream tap mb-3"
-      >
-        <IconArrowLeft size={14} />
-        返回
-      </button>
-
-      <header className="flex gap-3 mb-4">
-        <div
-          className="w-24 h-36 rounded shrink-0 overflow-hidden flex items-center justify-center"
-          style={{ background: "var(--ink-3)" }}
-        >
-          {cover ? (
-            <img
-              src={wrapImage(cover)}
-              alt=""
-              loading="lazy"
-              className="w-full h-full object-cover"
-            />
-          ) : null}
-        </div>
-        <div className="flex-1 min-w-0">
-          <p className="font-mono text-[10px] tracking-[0.2em] text-cream-faint mb-0.5">
-            {source.name}
-          </p>
-          <h1 className="font-display text-lg font-extrabold tracking-tight line-clamp-2">
-            {name}
-          </h1>
-          <p className="text-[12px] text-cream-dim mt-1">
-            {detail?.author ?? "—"}
-          </p>
-          {detail?.status && (
-            <p className="text-[10px] font-mono text-ember mt-1">
-              {detail.status}
-            </p>
-          )}
-          <div className="flex gap-2 mt-2 flex-wrap">
+      <DetailHero
+        cover={cover}
+        proxyCover
+        title={name}
+        subtitle={detail?.author ?? "—"}
+        onBack={() => navigate(-1)}
+        metaChips={
+          <>
+            <MetaChip>{source.name}</MetaChip>
+            {detail?.status && <MetaChip color="ember">{detail.status}</MetaChip>}
+            {onShelf && <MetaChip color="ember">已收藏</MetaChip>}
+            {progress && (
+              <MetaChip color="phosphor">
+                已读 {progress.chapterIndex + 1} 章
+              </MetaChip>
+            )}
+          </>
+        }
+        description={detail?.intro}
+        actions={
+          <>
             <button
               type="button"
               onClick={toggleShelf}
               disabled={!detail}
-              className="px-3 py-1.5 rounded text-[11px] font-display font-semibold tap disabled:opacity-30"
+              className="px-3 py-2 rounded-lg text-[12px] font-display font-semibold tap disabled:opacity-30 inline-flex items-center gap-1.5"
               style={{
-                background: onShelf ? "var(--ember-soft)" : "var(--ink-3)",
-                color: onShelf ? "var(--ember)" : "var(--cream)",
+                background: onShelf ? "var(--ember-soft)" : "var(--ember)",
+                color: onShelf ? "var(--ember)" : "var(--ink)",
                 border: `1px solid ${
-                  onShelf ? "rgba(255,107,53,0.4)" : "var(--cream-line)"
+                  onShelf ? "rgba(255,107,53,0.4)" : "var(--ember)"
                 }`,
               }}
             >
-              {onShelf ? (
-                <IconHeartFill size={11} className="inline mr-1" />
-              ) : (
-                <IconHeart size={11} className="inline mr-1" />
-              )}
+              {onShelf ? <IconHeartFill size={12} /> : <IconHeart size={12} />}
               {onShelf ? "已收藏" : "收藏"}
             </button>
             <button
               type="button"
               onClick={() => void load()}
-              className="px-3 py-1.5 rounded text-[11px] tap text-cream"
+              className="px-3 py-2 rounded-lg text-[12px] tap text-cream inline-flex items-center gap-1.5"
               style={{
-                background: "var(--ink-3)",
+                background: "var(--ink-2)",
                 border: "1px solid var(--cream-line)",
               }}
             >
-              <IconRefresh size={11} className="inline mr-1" />
+              <IconRefresh size={12} />
               刷新
             </button>
             <button
               type="button"
               onClick={() => void runPrecache()}
               disabled={precaching || chapters.length === 0}
-              className="px-3 py-1.5 rounded text-[11px] tap text-cream disabled:opacity-40"
+              className="px-3 py-2 rounded-lg text-[12px] tap text-cream disabled:opacity-40 inline-flex items-center gap-1.5"
               style={{
-                background: "var(--ink-3)",
+                background: "var(--ink-2)",
                 border: "1px solid var(--cream-line)",
               }}
               title="预下载前 5 章"
             >
-              <IconDownload size={11} className="inline mr-1" />
+              <IconDownload size={12} />
               {precaching
                 ? `预下载 ${precachedCount}/5…`
                 : "预下载 5 章"}
@@ -279,9 +257,9 @@ export default function MangaSrcDetail() {
                 type="button"
                 onClick={() => setShowAltMenu((v) => !v)}
                 disabled={!detail || altSources.length === 0}
-                className="px-3 py-1.5 rounded text-[11px] tap text-cream disabled:opacity-40"
+                className="px-3 py-2 rounded-lg text-[12px] tap text-cream disabled:opacity-40"
                 style={{
-                  background: "var(--ink-3)",
+                  background: "var(--ink-2)",
                   border: "1px solid var(--cream-line)",
                 }}
                 title="同名换源"
@@ -321,21 +299,9 @@ export default function MangaSrcDetail() {
                 </ul>
               )}
             </div>
-          </div>
-        </div>
-      </header>
-
-      {detail?.intro && (
-        <section
-          className="rounded-xl p-3 mb-4 text-[11px] text-cream-dim leading-relaxed max-h-32 overflow-y-auto"
-          style={{
-            background: "var(--ink-2)",
-            border: "1px solid var(--cream-line)",
-          }}
-        >
-          {detail.intro}
-        </section>
-      )}
+          </>
+        }
+      />
 
       {error && (
         <p

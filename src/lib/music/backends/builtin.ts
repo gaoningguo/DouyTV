@@ -59,10 +59,10 @@ export function createBuiltinRuntime(
     kind: "builtin",
     capabilities: {
       search: true,
-      parse: false,
+      parse: true,
       lyrics: true,
       toplists: true,
-      playlists: false,
+      playlists: true,
       albums: false,
       artists: false,
       recommendSheets: false,
@@ -88,8 +88,15 @@ export function createBuiltinRuntime(
         pageSize: args.pageSize,
       };
     },
-    parse: async (_song: MusicSong, _quality: MusicQuality) => {
-      throw new Error("内置音乐源不支持 URL 解析 — 请添加 MusicApi-V2/LX-Music Server/MusicFree 插件作 fallback");
+    parse: async (song: MusicSong, quality: MusicQuality) => {
+      const sdk = getPlatformSdk(song.source);
+      if (sdk?.musicUrl?.getMusicUrl) {
+        const r = await sdk.musicUrl.getMusicUrl(song.songId, quality);
+        return { url: r.url, cached: false };
+      }
+      throw new Error(
+        `内置音乐源对「${song.source}」平台无 URL 解析能力 — 请在「设置 · 音乐」添加 MusicApi-V2 / LX-Music Server / MusicFree 插件`
+      );
     },
     fetchLyrics: async (song: MusicSong) => {
       const sdk = getPlatformSdk(song.source);
@@ -137,6 +144,26 @@ export function createBuiltinRuntime(
         name: detail.name,
         cover: detail.cover,
         description: detail.description,
+        songs,
+        isEnd: true,
+      };
+    },
+    getPlaylistDetail: async (id: string) => {
+      const sdk = getPlatformSdk(defaultPlatform);
+      if (!sdk?.songList?.getSongListDetail) {
+        throw new Error(`内置音乐源 ${defaultPlatform} 暂未实现歌单详情，可改用其他平台或配置 backend`);
+      }
+      const detail = await sdk.songList.getSongListDetail(id);
+      const songs = detail.list.map((raw: Record<string, unknown>) =>
+        sdkToMusicSong(raw as unknown as SdkSong, defaultPlatform)
+      );
+      return {
+        id,
+        name: detail.name,
+        cover: detail.cover,
+        description: detail.description,
+        creator: detail.author,
+        playCount: detail.playCount,
         songs,
         isEnd: true,
       };

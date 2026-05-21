@@ -1,5 +1,5 @@
 /**
- * 歌手主页 — 顶部信息 + tab 切换（歌曲 / 专辑）+ 分页加载。
+ * 歌手主页 —— 统一 DetailHeader (圆形头像) + SegmentedTab + 列表 / 专辑 grid。
  */
 import { useCallback, useEffect, useState } from "react";
 import { Link, useNavigate, useParams } from "react-router-dom";
@@ -13,13 +13,22 @@ import type {
 import { wrapImage } from "@/lib/proxy";
 import { useMusicStore } from "@/stores/music";
 import { showMusicMenu } from "@/components/MusicContextMenu";
+import { MusicSegmentedTab } from "@/components/MusicSegmentedTab";
+import { MusicListItem } from "@/components/MusicListItem";
+import { MusicEmptyState } from "@/components/MusicEmptyState";
 import {
-  IconArrowLeft,
   IconArtist as IconArtistI,
   IconMusic,
 } from "@/components/Icon";
 
 type Tab = "music" | "album";
+
+function formatDuration(sec?: number) {
+  if (!sec || !Number.isFinite(sec)) return undefined;
+  const m = Math.floor(sec / 60);
+  const s = Math.floor(sec % 60);
+  return `${m}:${s.toString().padStart(2, "0")}`;
+}
 
 export default function MusicArtist() {
   const navigate = useNavigate();
@@ -35,7 +44,6 @@ export default function MusicArtist() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
-  // 顶部信息只拉一次
   useEffect(() => {
     let cancelled = false;
     (async () => {
@@ -87,74 +95,95 @@ export default function MusicArtist() {
 
   return (
     <div className="min-h-screen bg-ink text-cream p-4 pb-24">
-      <div className="flex items-center gap-3 mb-5">
+      <div className="flex items-center mb-2">
         <button
           type="button"
           onClick={() => navigate(-1)}
-          className="w-9 h-9 flex items-center justify-center rounded-full tap text-cream"
-          style={{ background: "var(--ink-2)", border: "1px solid var(--cream-line)" }}
+          className="font-mono text-[10px] tracking-[0.2em] text-cream-faint tap"
           aria-label="返回"
         >
-          <IconArrowLeft size={16} />
+          ← 返回
         </button>
-        <div className="flex-1 min-w-0">
-          <p className="font-mono text-[10px] tracking-[0.25em] text-cream-faint">
+      </div>
+
+      {/* 歌手 hero —— 圆形头像 + 信息（不用 MusicDetailHeader 因为头像是圆形不是方形封面） */}
+      <header
+        className="flex items-center gap-4 p-4 mb-3 rounded-xl relative overflow-hidden"
+        style={{
+          background: "var(--ink-2)",
+          border: "1px solid var(--cream-line)",
+        }}
+      >
+        {artist?.avatar && (
+          <>
+            <div
+              aria-hidden
+              className="absolute inset-0 pointer-events-none"
+              style={{
+                backgroundImage: `url(${wrapImage(artist.avatar)})`,
+                backgroundSize: "cover",
+                backgroundPosition: "center",
+                filter: "blur(40px) saturate(1.2)",
+                opacity: 0.18,
+              }}
+            />
+            <div
+              aria-hidden
+              className="absolute inset-0 pointer-events-none"
+              style={{
+                background:
+                  "linear-gradient(to right, var(--ink-2) 30%, transparent 70%)",
+              }}
+            />
+          </>
+        )}
+        {artist?.avatar ? (
+          <img
+            src={wrapImage(artist.avatar)}
+            alt=""
+            loading="lazy"
+            className="w-20 h-20 sm:w-24 sm:h-24 rounded-full object-cover shrink-0 relative z-10"
+            style={{ border: "2px solid var(--cream-line)" }}
+          />
+        ) : (
+          <div
+            className="w-20 h-20 sm:w-24 sm:h-24 rounded-full flex items-center justify-center bg-ink-3 shrink-0 relative z-10"
+            style={{ border: "2px solid var(--cream-line)" }}
+          >
+            <IconArtistI size={36} className="text-cream-faint" />
+          </div>
+        )}
+        <div className="flex-1 min-w-0 relative z-10">
+          <p className="font-mono text-[10px] tracking-[0.25em] text-cream-faint mb-1">
             MUSIC · ARTIST
           </p>
-          <h1 className="font-display text-xl font-extrabold tracking-tight line-clamp-1">
+          <h1 className="font-display text-lg sm:text-xl font-extrabold tracking-tight line-clamp-1">
             {artist?.name || "歌手"}
           </h1>
-        </div>
-      </div>
-
-      {artist && (
-        <div className="flex gap-4 mb-5">
-          {artist.avatar ? (
-            <img
-              src={wrapImage(artist.avatar)}
-              alt=""
-              loading="lazy"
-              className="w-20 h-20 rounded-full object-cover shrink-0"
-            />
-          ) : (
-            <div className="w-20 h-20 rounded-full flex items-center justify-center bg-ink-2 shrink-0">
-              <IconArtistI size={32} className="text-cream-faint" />
-            </div>
+          {(artist?.worksNum != null || artist?.albumNum != null) && (
+            <p className="font-mono text-[10px] text-cream-dim mt-1">
+              {artist?.worksNum != null && `${artist.worksNum} 首作品`}
+              {artist?.worksNum != null && artist?.albumNum != null ? "  ·  " : ""}
+              {artist?.albumNum != null && `${artist.albumNum} 张专辑`}
+            </p>
           )}
-          <div className="flex-1 min-w-0 flex flex-col justify-center">
-            <p className="text-base font-display font-extrabold line-clamp-1">
-              {artist.name}
+          {artist?.description && (
+            <p className="text-[11px] text-cream-faint mt-1.5 line-clamp-2 leading-snug">
+              {artist.description}
             </p>
-            <p className="text-[10px] font-mono text-cream-faint mt-0.5">
-              {artist.worksNum != null && `${artist.worksNum} 首作品 · `}
-              {artist.albumNum != null && `${artist.albumNum} 张专辑`}
-            </p>
-            {artist.description && (
-              <p className="text-[11px] text-cream-faint mt-1 line-clamp-2">
-                {artist.description}
-              </p>
-            )}
-          </div>
+          )}
         </div>
-      )}
+      </header>
 
-      <div className="grid grid-cols-2 gap-1 mb-4">
-        {(["music", "album"] as const).map((t) => (
-          <button
-            key={t}
-            type="button"
-            onClick={() => setTab(t)}
-            className="py-2 rounded-md text-[11px] font-display font-semibold tap"
-            style={{
-              background: tab === t ? "var(--ember)" : "var(--ink-3)",
-              color: tab === t ? "var(--ink)" : "var(--cream-dim)",
-              border: "1px solid var(--cream-line)",
-            }}
-          >
-            {t === "music" ? "歌曲" : "专辑"}
-          </button>
-        ))}
-      </div>
+      <MusicSegmentedTab
+        tabs={[
+          { id: "music" as const, label: "歌曲", count: songs.length },
+          { id: "album" as const, label: "专辑", count: albums.length },
+        ]}
+        active={tab}
+        onChange={setTab}
+        columns={2}
+      />
 
       {error && (
         <p
@@ -176,56 +205,36 @@ export default function MusicArtist() {
           <span></span>
         </div>
       ) : tab === "music" ? (
-        <ul className="space-y-1.5">
-          {songs.map((s, i) => (
-            <li key={`${s.source}-${s.songId}`}>
-              <button
-                type="button"
-                onClick={() => void playQueue(songs, i)}
-                onContextMenu={(e) => {
-                  e.preventDefault();
-                  showMusicMenu(s, { hideViewArtist: true });
-                }}
-                className="w-full flex items-center gap-3 p-2 rounded-lg tap text-left"
-                style={{
-                  background: "var(--ink-2)",
-                  border: "1px solid var(--cream-line)",
-                }}
-              >
-                <span className="w-6 text-center font-mono text-[10px] text-cream-faint shrink-0">
-                  {String(i + 1).padStart(2, "0")}
-                </span>
-                {s.cover ? (
-                  <img
-                    src={wrapImage(s.cover)}
-                    alt=""
-                    loading="lazy"
-                    className="w-10 h-10 rounded shrink-0 object-cover"
-                  />
-                ) : (
-                  <div className="w-10 h-10 rounded shrink-0 flex items-center justify-center bg-ink-3">
-                    <IconMusic size={14} className="text-cream-faint" />
-                  </div>
-                )}
-                <div className="flex-1 min-w-0">
-                  <p className="text-xs font-display font-semibold line-clamp-1">
-                    {s.name}
-                  </p>
-                  <p className="text-[10px] font-mono text-cream-faint line-clamp-1">
-                    {s.album || "—"}
-                  </p>
-                </div>
-              </button>
-            </li>
-          ))}
-        </ul>
+        songs.length === 0 ? (
+          <MusicEmptyState
+            icon={<IconMusic size={32} />}
+            title="暂无歌曲"
+            compact
+          />
+        ) : (
+          <ul className="space-y-1.5">
+            {songs.map((s, i) => (
+              <li key={`${s.source}-${s.songId}`}>
+                <MusicListItem
+                  song={s}
+                  index={i + 1}
+                  duration={formatDuration(s.durationSec)}
+                  onClick={() => void playQueue(songs, i)}
+                  onMenu={() => showMusicMenu(s, { hideViewArtist: true })}
+                />
+              </li>
+            ))}
+          </ul>
+        )
+      ) : albums.length === 0 ? (
+        <MusicEmptyState icon={<IconMusic size={32} />} title="暂无专辑" compact />
       ) : (
         <div className="grid grid-cols-2 md:grid-cols-3 gap-3">
           {albums.map((a) => (
             <Link
               key={a.id}
               to={`/music/album/${encodeURIComponent(a.source)}/${encodeURIComponent(a.id)}`}
-              className="rounded-lg overflow-hidden tap"
+              className="rounded-lg overflow-hidden tap transition-transform hover:-translate-y-0.5"
               style={{ background: "var(--ink-2)", border: "1px solid var(--cream-line)" }}
             >
               {a.cover ? (

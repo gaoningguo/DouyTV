@@ -5,8 +5,10 @@
  * - musicapi: 用户自部署的 MusicApi-V2 / 兼容 fork（HTTP + X-API-Key）
  * - lxmusic:  lx-music-api-server（HTTP，LX-Music 生态）
  * - plugin:   MusicFreePlugin 形态的纯 JS 插件，运行在 `new Function` 沙盒
+ * - ncm:      用户自部署的 NeteaseCloudMusicApi (Binaryify/NeteaseCloudMusicApi)
+ * - listen1:  listen1 源 JS 模块（社区 fork，contract 异于 MusicFree）
  * - builtin:  内置 lx-music musicSdk，无需外部服务即可搜索/榜单/歌词；
- *             URL 解析回落到 musicapi/lxmusic/plugin 中第一个 enabled 的 backend
+ *             URL 解析回落到 musicapi/lxmusic/plugin/ncm 中第一个 enabled 的 backend
  *
  * 同一时间只有一个 backend 处于 active，由 `activeBackendId` 选定。每个 backend 都
  * 可以 enabled/disabled，方便保留多套配置但临时切换。
@@ -23,12 +25,20 @@ import type {
   IRecommendSheetTagsResult,
 } from "../types";
 
-export type MusicBackendKind = "musicapi" | "lxmusic" | "plugin" | "builtin";
+export type MusicBackendKind =
+  | "musicapi"
+  | "lxmusic"
+  | "plugin"
+  | "ncm"
+  | "listen1"
+  | "builtin";
 
 export const MUSIC_BACKEND_LABELS: Record<MusicBackendKind, string> = {
   musicapi: "MusicApi-V2",
   lxmusic: "LX-Music Server",
   plugin: "MusicFree 插件",
+  ncm: "NCM 自托管",
+  listen1: "listen1 源",
   builtin: "内置音乐源",
 };
 
@@ -66,14 +76,86 @@ export interface PluginBackend extends MusicBackendBase {
   platform?: string;
 }
 
+export interface NcmBackend extends MusicBackendBase {
+  kind: "ncm";
+  /** 自托管 NeteaseCloudMusicApi 的 base URL，如 https://ncm.example.com */
+  baseUrl: string;
+  /** 可选 cookie（登录态：MUSIC_U=... 等）；空 = 匿名访问，部分接口受限 */
+  cookie?: string;
+}
+
+export interface Listen1Backend extends MusicBackendBase {
+  kind: "listen1";
+  /** listen1 源 JS 源码（沙盒里 eval） */
+  code: string;
+  /** 远端拉取地址（更新用） */
+  sourceUrl?: string;
+}
+
 export interface BuiltinBackend extends MusicBackendBase {
   kind: "builtin";
+  /**
+   * 各平台 URL 解析服务器 base（不含路径）。空 / 未设值时回落到默认。
+   *   - wy/tx/kg/mg: 默认 `https://ts.tempmusics.tk` (lx-music api-test 同款)
+   *   - kw:          默认 `https://tm.tempmusics.tk` (lx-music api-temp 同款)
+   * 请求路径形如 `{base}/url/{platform}/{songId}/{quality}` (GET)，
+   * 返回 `{ code: 0, data: <url>, msg }`。
+   *
+   * 自部署：可用 lx-music-api-server (POST 模式) —— 改用 "LX-Music Server" backend，不走这里。
+   */
+  urlServers?: {
+    wy?: string;
+    kw?: string;
+    tx?: string;
+    kg?: string;
+    mg?: string;
+  };
 }
+
+/** 默认 URL 服务器（lx-music api-test 同款，所有用户开箱即用） */
+export const BUILTIN_DEFAULT_URL_SERVERS: Required<NonNullable<BuiltinBackend["urlServers"]>> = {
+  wy: "https://ts.tempmusics.tk",
+  kw: "https://tm.tempmusics.tk",
+  tx: "https://ts.tempmusics.tk",
+  kg: "https://ts.tempmusics.tk",
+  mg: "https://ts.tempmusics.tk",
+};
+
+/** 预设：除"默认"外列出几个公开镜像，方便用户在某个服务器挂掉时切换。 */
+export const BUILTIN_URL_SERVER_PRESETS: Array<{
+  id: string;
+  label: string;
+  servers: Required<NonNullable<BuiltinBackend["urlServers"]>>;
+}> = [
+  {
+    id: "tempmusics",
+    label: "默认 (tempmusics.tk · lx-music api-test 同款)",
+    servers: BUILTIN_DEFAULT_URL_SERVERS,
+  },
+  {
+    id: "lxmusicapi-mojie",
+    label: "镜像 · lxmusicapi.onrender.com",
+    servers: {
+      wy: "https://lxmusicapi.onrender.com",
+      kw: "https://lxmusicapi.onrender.com",
+      tx: "https://lxmusicapi.onrender.com",
+      kg: "https://lxmusicapi.onrender.com",
+      mg: "https://lxmusicapi.onrender.com",
+    },
+  },
+  {
+    id: "custom",
+    label: "自定义 (手动填)",
+    servers: { wy: "", kw: "", tx: "", kg: "", mg: "" },
+  },
+];
 
 export type MusicBackend =
   | MusicApiBackend
   | LxMusicBackend
   | PluginBackend
+  | NcmBackend
+  | Listen1Backend
   | BuiltinBackend;
 
 export interface BackendSearchArgs {
@@ -140,6 +222,7 @@ export interface MusicBackendRuntime {
     cover?: string;
     description?: string;
     creator?: string;
+    playCount?: number;
     songs: MusicSong[];
     isEnd?: boolean;
   }>;

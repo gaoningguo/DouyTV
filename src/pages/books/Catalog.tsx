@@ -3,8 +3,9 @@ import { Link, useNavigate, useParams, useSearchParams } from "react-router-dom"
 import { useBooksStore } from "@/stores/books";
 import { fetchCatalog } from "@/lib/books/client";
 import type { BookCatalogResult } from "@/lib/books/types";
-import { wrapImage } from "@/lib/proxy";
-import { IconArrowLeft, IconBook } from "@/components/Icon";
+import { IconArrowLeft } from "@/components/Icon";
+import { CoverCard } from "@/components/CoverCard";
+import { MediaGrid } from "@/components/MediaGrid";
 
 export default function BooksCatalog() {
   const navigate = useNavigate();
@@ -124,47 +125,23 @@ export default function BooksCatalog() {
               <p className="font-mono text-[10px] tracking-[0.2em] text-cream-faint mb-3">
                 BOOKS · {catalog.entries.length}
               </p>
-              <ul className="grid grid-cols-2 md:grid-cols-3 gap-3 mb-5">
-                {catalog.entries.map((b) => {
-                  const cover = wrapImage(b.cover);
-                  return (
-                    <li key={b.id}>
-                      <Link
-                        to={`/books/detail/${encodeURIComponent(sourceId)}/${encodeURIComponent(b.id)}`}
-                        state={b}
-                        className="block rounded-lg overflow-hidden tap"
-                        style={{
-                          background: "var(--ink-2)",
-                          border: "1px solid var(--cream-line)",
-                        }}
-                      >
-                        {cover ? (
-                          <img
-                            src={cover}
-                            alt={b.title}
-                            loading="lazy"
-                            className="w-full aspect-[2/3] object-cover"
-                          />
-                        ) : (
-                          <div className="w-full aspect-[2/3] flex items-center justify-center bg-ink-3">
-                            <IconBook size={32} className="text-cream-faint" />
-                          </div>
-                        )}
-                        <div className="p-2">
-                          <p className="text-xs font-display font-semibold line-clamp-2">
-                            {b.title}
-                          </p>
-                          {b.author && (
-                            <p className="text-[10px] text-cream-faint mt-1 line-clamp-1">
-                              {b.author}
-                            </p>
-                          )}
-                        </div>
-                      </Link>
-                    </li>
-                  );
-                })}
-              </ul>
+              <MediaGrid className="mb-5">
+                {catalog.entries.map((b) => (
+                  <CoverCard
+                    key={b.id}
+                    cover={b.cover}
+                    title={b.title}
+                    subtitle={b.author}
+                    proxyCover
+                    onClick={() =>
+                      navigate(
+                        `/books/detail/${encodeURIComponent(sourceId)}/${encodeURIComponent(b.id)}`,
+                        { state: b }
+                      )
+                    }
+                  />
+                ))}
+              </MediaGrid>
             </>
           )}
 

@@ -1,16 +1,15 @@
 /**
- * 完整播放历史 —— 按时段分组（今天 / 昨天 / 7 天内 / 更早）。
+ * 完整播放历史 —— 按时段分组（今天 / 昨天 / 7 天内 / 更早），统一头部 + 统一行。
  */
 import { useEffect, useMemo } from "react";
 import { useNavigate } from "react-router-dom";
 import { useMusicStore } from "@/stores/music";
-import { wrapImage } from "@/lib/proxy";
 import {
-  IconArrowLeft,
   IconHistoryClock,
-  IconMusic,
   IconTrash,
 } from "@/components/Icon";
+import { MusicDetailHeader } from "@/components/MusicDetailHeader";
+import { MusicListItem } from "@/components/MusicListItem";
 import { showMusicMenu } from "@/components/MusicContextMenu";
 import type { MusicHistoryRecord } from "@/lib/music/types";
 
@@ -36,6 +35,13 @@ function groupHistory(items: MusicHistoryRecord[]) {
   return Object.entries(groups).filter(([, list]) => list.length > 0);
 }
 
+function formatDuration(sec?: number) {
+  if (!sec || !Number.isFinite(sec)) return undefined;
+  const m = Math.floor(sec / 60);
+  const s = Math.floor(sec % 60);
+  return `${m}:${s.toString().padStart(2, "0")}`;
+}
+
 export default function MusicHistory() {
   const navigate = useNavigate();
   const hydrate = useMusicStore((s) => s.hydrate);
@@ -57,33 +63,39 @@ export default function MusicHistory() {
 
   return (
     <div className="min-h-screen bg-ink text-cream p-4 pb-24">
-      <div className="flex items-center gap-3 mb-5">
+      <div className="flex items-center mb-2">
         <button
           type="button"
           onClick={() => navigate(-1)}
-          className="w-9 h-9 flex items-center justify-center rounded-full tap text-cream"
-          style={{ background: "var(--ink-2)", border: "1px solid var(--cream-line)" }}
+          className="font-mono text-[10px] tracking-[0.2em] text-cream-faint tap"
           aria-label="返回"
         >
-          <IconArrowLeft size={16} />
+          ← 返回
         </button>
-        <div className="flex-1 min-w-0">
-          <p className="font-mono text-[10px] tracking-[0.25em] text-cream-faint">
-            MUSIC · HISTORY
-          </p>
-          <h1 className="font-display text-xl font-extrabold tracking-tight">播放历史</h1>
-        </div>
-        {history.length > 0 && (
-          <button
-            type="button"
-            onClick={() => void handleClear()}
-            className="w-9 h-9 flex items-center justify-center tap text-cream-faint"
-            aria-label="清空"
-          >
-            <IconTrash size={14} />
-          </button>
-        )}
       </div>
+
+      <MusicDetailHeader
+        eyebrow="MUSIC · HISTORY"
+        title="播放历史"
+        meta={[`${history.length} 首`]}
+        rightSlot={
+          history.length > 0 ? (
+            <button
+              type="button"
+              onClick={() => void handleClear()}
+              className="w-9 h-9 flex items-center justify-center rounded tap text-cream-faint hover:text-cream"
+              style={{
+                background: "var(--ink-2)",
+                border: "1px solid var(--cream-line)",
+              }}
+              aria-label="清空播放历史"
+              title="清空播放历史"
+            >
+              <IconTrash size={14} />
+            </button>
+          ) : undefined
+        }
+      />
 
       {history.length === 0 ? (
         <div
@@ -103,43 +115,17 @@ export default function MusicHistory() {
               <ul className="space-y-1.5">
                 {list.map((h, i) => (
                   <li key={`${h.source}-${h.songId}-${h.lastPlayedAt}`}>
-                    <button
-                      type="button"
+                    <MusicListItem
+                      song={h}
+                      duration={formatDuration(h.durationSec)}
                       onClick={() => void playQueue(list, i)}
-                      onContextMenu={(e) => {
-                        e.preventDefault();
-                        showMusicMenu(h);
-                      }}
-                      className="w-full flex items-center gap-3 p-2 rounded-lg tap text-left"
-                      style={{
-                        background: "var(--ink-2)",
-                        border: "1px solid var(--cream-line)",
-                      }}
-                    >
-                      {h.cover ? (
-                        <img
-                          src={wrapImage(h.cover)}
-                          alt=""
-                          loading="lazy"
-                          className="w-10 h-10 rounded shrink-0 object-cover"
-                        />
-                      ) : (
-                        <div className="w-10 h-10 rounded shrink-0 flex items-center justify-center bg-ink-3">
-                          <IconMusic size={16} className="text-cream-faint" />
-                        </div>
-                      )}
-                      <div className="flex-1 min-w-0">
-                        <p className="text-xs font-display font-semibold line-clamp-1">
-                          {h.name}
-                        </p>
-                        <p className="text-[10px] font-mono text-cream-faint line-clamp-1">
-                          {h.artist || "—"}
-                        </p>
-                      </div>
-                      <span className="font-mono text-[9px] text-cream-faint shrink-0">
-                        ×{h.playCount}
-                      </span>
-                    </button>
+                      onMenu={() => showMusicMenu(h)}
+                      trailing={
+                        <span className="font-mono text-[9px] text-cream-faint shrink-0 mr-1">
+                          ×{h.playCount}
+                        </span>
+                      }
+                    />
                   </li>
                 ))}
               </ul>

@@ -41,20 +41,36 @@ export type BuiltinSdkPlatform = {
       list: Array<Record<string, unknown>>;
     }>;
   };
+  songList?: {
+    getSongListDetail: (id: string) => Promise<{
+      name: string;
+      cover?: string;
+      description?: string;
+      author?: string;
+      playCount?: number;
+      list: Array<Record<string, unknown>>;
+    }>;
+  };
+  musicUrl?: {
+    getMusicUrl: (
+      songmid: string,
+      quality?: string
+    ) => Promise<{ url: string; quality: string; via?: string }>;
+  };
 };
 
 export function getPlatformSdk(id: string): BuiltinSdkPlatform | undefined {
   switch (id) {
     case "wy":
-      return wy as BuiltinSdkPlatform;
+      return wy as unknown as BuiltinSdkPlatform;
     case "kw":
-      return kw as BuiltinSdkPlatform;
+      return kw as unknown as BuiltinSdkPlatform;
     case "kg":
-      return kg as BuiltinSdkPlatform;
+      return kg as unknown as BuiltinSdkPlatform;
     case "tx":
-      return tx as BuiltinSdkPlatform;
+      return tx as unknown as BuiltinSdkPlatform;
     case "mg":
-      return mg as BuiltinSdkPlatform;
+      return mg as unknown as BuiltinSdkPlatform;
     default:
       return undefined;
   }

@@ -1,12 +1,14 @@
 /**
- * 推荐歌单 — capabilities.recommendSheets=false 时给出空态。
+ * 推荐歌单 —— pinned chip + 按分组 chip 网格。capability gate 显示空态。
  */
 import { useEffect, useState } from "react";
-import { Link, useNavigate } from "react-router-dom";
+import { useNavigate } from "react-router-dom";
 import { getActiveBackendInfo, getRecommendSheetTags } from "@/lib/music/api";
 import type { IRecommendSheetTagsResult } from "@/lib/music/types";
 import { IconArrowLeft, IconFire } from "@/components/Icon";
 import { useMusicStore } from "@/stores/music";
+import { MusicChip } from "@/components/MusicChip";
+import { MusicEmptyState } from "@/components/MusicEmptyState";
 
 export default function MusicRecommend() {
   const navigate = useNavigate();
@@ -64,16 +66,12 @@ export default function MusicRecommend() {
       </div>
 
       {!supported && !loading && (
-        <div
-          className="rounded-xl p-6 text-center"
-          style={{ background: "var(--ink-2)", border: "1px dashed var(--cream-line)" }}
-        >
-          <IconFire size={32} className="text-cream-faint mx-auto mb-2" />
-          <p className="text-sm text-cream-dim mb-1">当前后端不支持推荐歌单</p>
-          <p className="text-[11px] text-cream-faint">
-            切换到提供 getRecommendSheetTags 的 MusicFree 插件以查看
-          </p>
-        </div>
+        <MusicEmptyState
+          icon={<IconFire size={32} />}
+          title="当前后端不支持推荐歌单"
+          subtitle="切换到提供 getRecommendSheetTags 的 MusicFree 插件以查看"
+          cta={{ label: "前往设置", to: "/settings/music" }}
+        />
       )}
 
       {loading && (
@@ -100,24 +98,19 @@ export default function MusicRecommend() {
       {data && supported && (
         <>
           {data.pinned.length > 0 && (
-            <section className="mb-5">
+            <section className="mb-6">
               <p className="font-mono text-[10px] tracking-[0.2em] text-cream-faint mb-2">
+                <IconFire size={10} className="inline mr-1 text-ember" />
                 PINNED
               </p>
-              <div className="flex gap-2 overflow-x-auto no-scrollbar pb-1">
+              <div className="flex gap-1.5 overflow-x-auto no-scrollbar pb-1">
                 {data.pinned.map((t) => (
-                  <Link
+                  <MusicChip
                     key={t.id}
-                    to={`/music/recommend/${encodeURIComponent(t.id)}`}
-                    className="shrink-0 px-3 py-1.5 rounded-full text-[11px] font-display font-semibold tap"
-                    style={{
-                      background: "var(--ember)",
-                      color: "var(--ink)",
-                      border: "1px solid rgba(255,107,53,0.3)",
-                    }}
-                  >
-                    {t.name}
-                  </Link>
+                    label={t.name}
+                    active
+                    onClick={() => navigate(`/music/recommend/${encodeURIComponent(t.id)}`)}
+                  />
                 ))}
               </div>
             </section>
@@ -129,18 +122,11 @@ export default function MusicRecommend() {
               </p>
               <div className="flex flex-wrap gap-1.5">
                 {g.tags.map((t) => (
-                  <Link
+                  <MusicChip
                     key={t.id}
-                    to={`/music/recommend/${encodeURIComponent(t.id)}`}
-                    className="px-2.5 py-1.5 rounded text-[11px] font-display font-semibold tap"
-                    style={{
-                      background: "var(--ink-3)",
-                      color: "var(--cream)",
-                      border: "1px solid var(--cream-line)",
-                    }}
-                  >
-                    {t.name}
-                  </Link>
+                    label={t.name}
+                    onClick={() => navigate(`/music/recommend/${encodeURIComponent(t.id)}`)}
+                  />
                 ))}
               </div>
             </section>

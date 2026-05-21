@@ -20,15 +20,34 @@ import type {
 } from "../types";
 
 const UA =
-  "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/107.0.0.0 Safari/537.36";
+  "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/125.0.0.0 Safari/537.36";
+
+/** 生成 36 位随机 did（pure_live 同款模式） */
+function randomDid(): string {
+  let s = "";
+  for (let i = 0; i < 36; i++) {
+    s += Math.floor(Math.random() * 16).toString(16);
+  }
+  return `web_${s}`;
+}
+
+// 持久化一个 did —— 同一 process 内复用，避免每次切房间换 did 被风控盯上
+const SESSION_DID = randomDid();
+const SESSION_CLIENTID = "3";
 
 const HEADERS_BASE: Record<string, string> = {
   "User-Agent": UA,
   Accept:
-    "text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,image/apng,*/*;q=0.8",
+    "text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,image/apng,*/*;q=0.8,application/signed-exchange;v=b3;q=0.9",
+  "Accept-Language": "zh-CN,zh;q=0.9,en;q=0.8",
   Connection: "keep-alive",
   Referer: "https://live.kuaishou.com/",
   Origin: "https://live.kuaishou.com",
+  Cookie: `did=${SESSION_DID};clientid=${SESSION_CLIENTID};kpf=PC_WEB;kpn=GAME_ZONE`,
+  "Sec-Ch-Ua":
+    '"Google Chrome";v="125", "Chromium";v="125", "Not.A/Brand";v="24"',
+  "Sec-Ch-Ua-Mobile": "?0",
+  "Sec-Ch-Ua-Platform": '"Windows"',
 };
 
 const IMAGE_EXTS = new Set([
@@ -264,11 +283,18 @@ interface KsPlayUrlAdaptation {
   representation?: KsPlayUrlRep[];
 }
 
-interface KsPlayUrl {
+interface KsPlayUrlCodec {
   h264?: { adaptationSet?: KsPlayUrlAdaptation };
+  h265?: { adaptationSet?: KsPlayUrlAdaptation };
 }
 
-type KsPlayUrls = KsPlayUrl[];
+/**
+ * 快手 playUrls 实际有两种形态：
+ *  - Object map: `{ h264: {...} }` —— pure_live `detail.data["h264"]` 走这个
+ *  - Array of map: `[{ h264: {...} }]` —— 部分新版接口
+ * pickKsStream 同时容错。
+ */
+type KsPlayUrls = KsPlayUrlCodec | KsPlayUrlCodec[];
 
 interface KsInitialState {
   liveroom?: {
@@ -290,16 +316,17 @@ async function fetchInitialState(roomId: string): Promise<KsInitialState> {
   const html = await fetchText(url, {
     headers: {
       Accept:
-        "text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,*/*;q=0.8",
+        "text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,*/*;q=0.8,application/signed-exchange;v=b3;q=0.9",
       "Sec-Fetch-Dest": "document",
       "Sec-Fetch-Mode": "navigate",
       "Sec-Fetch-Site": "same-origin",
       "Sec-Fetch-User": "?1",
     },
   });
-  const m = html.match(/window\.__INITIAL_STATE__=([\s\S]*?);\s*\(function/);
+  // 与 pure_live 同款正则：window.__INITIAL_STATE__=...;  (非贪婪到第一个 `;`)
+  const m = html.match(/window\.__INITIAL_STATE__=([\s\S]*?);/);
   const raw = m ? m[1] : null;
-  if (!raw) throw new Error("快手未找到 __INITIAL_STATE__");
+  if (!raw) throw new Error("快手未找到 __INITIAL_STATE__（可能页面结构变更或被风控）");
   const cleaned = raw.replace(/undefined/g, "null");
   try {
     return JSON.parse(cleaned) as KsInitialState;
@@ -334,8 +361,17 @@ async function getRoomDetail(roomId: string): Promise<NetLiveRoom> {
 function pickKsStream(
   playUrls: KsPlayUrls | undefined
 ): { primary: string; alts: Array<{ qn: string; label: string; url: string }> } {
-  if (!playUrls?.length) return { primary: "", alts: [] };
-  const reps = playUrls[0]?.h264?.adaptationSet?.representation ?? [];
+  if (!playUrls) return { primary: "", alts: [] };
+  // 容错两种形态：array → 取首元素；object → 直接用
+  const codec: KsPlayUrlCodec | undefined = Array.isArray(playUrls)
+    ? playUrls[0]
+    : playUrls;
+  if (!codec) return { primary: "", alts: [] };
+  // 优先 h264（pure_live 同款）；h265 作为 fallback
+  const reps =
+    codec.h264?.adaptationSet?.representation ??
+    codec.h265?.adaptationSet?.representation ??
+    [];
   if (reps.length === 0) return { primary: "", alts: [] };
   const sorted = [...reps].sort((a, b) => (b.level ?? 0) - (a.level ?? 0));
   const alts = sorted

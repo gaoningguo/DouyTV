@@ -293,6 +293,7 @@ textarea:focus-visible {
    不再遮挡进度条与按钮。`env()` 在非 iOS 平台为 0，所以桌面也安全。 */
 .art-video-player .art-bottom {
   background: transparent !important;
+  z-index: 20;
   padding: 12px calc(14px + env(safe-area-inset-right))
     calc(8px + env(safe-area-inset-bottom))
     calc(14px + env(safe-area-inset-left));
@@ -421,5 +422,37 @@ textarea:focus-visible {
 /* 弹幕发射器（虽然我们默认关掉了 emitter，留着以防开启） */
 .art-video-player .artplayer-plugin-danmuku {
   font-family: "JetBrains Mono", monospace;
+}
+
+/* 横向滚动列表的滚动条隐藏 —— BottomTabBar 等需要 swipe 但不要看到滚动条的场景 */
+.scrollbar-hide {
+  scrollbar-width: none; /* Firefox */
+  -ms-overflow-style: none; /* IE/Edge */
+}
+.scrollbar-hide::-webkit-scrollbar {
+  display: none; /* Chromium / WebKit */
+}
+
+/* ============================================================
+   Skeleton shimmer —— RoomCard / CoverCard 加载占位的高光扫动
+   背景用 ink-2/3 的中间色，光带 cream-faint 半透明，对暗底友好。
+   ============================================================ */
+.skeleton-shimmer {
+  background: linear-gradient(
+    90deg,
+    rgba(242, 232, 213, 0.05) 0%,
+    rgba(242, 232, 213, 0.12) 50%,
+    rgba(242, 232, 213, 0.05) 100%
+  );
+  background-size: 200% 100%;
+  animation: skeleton-shimmer 1.4s linear infinite;
+}
+@keyframes skeleton-shimmer {
+  0% {
+    background-position: 200% 0;
+  }
+  100% {
+    background-position: -200% 0;
+  }
 }
 

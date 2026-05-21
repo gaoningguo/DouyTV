@@ -10,11 +10,11 @@ import { useNovelSourceStore } from "@/stores/novelsource";
 import { getBookInfo, getToc, searchBooks } from "@/lib/booksources/runtime";
 import type { NovelBook, NovelChapter, NovelShelfItem } from "@/lib/booksources/types";
 import {
-  IconArrowLeft,
   IconHeart,
   IconHeartFill,
   IconRefresh,
 } from "@/components/Icon";
+import { DetailHero, MetaChip } from "@/components/DetailHero";
 
 interface NavState {
   book?: NovelBook;
@@ -159,69 +159,51 @@ export default function NovelDetail() {
 
   return (
     <div className="min-h-screen bg-ink text-cream p-4 pb-24">
-      <button
-        type="button"
-        onClick={() => navigate(-1)}
-        className="flex items-center gap-1 text-[11px] text-cream-faint hover:text-cream tap mb-3"
-      >
-        <IconArrowLeft size={14} />
-        返回
-      </button>
-
       {loadingBook && !book && (
         <p className="text-cream-faint text-sm">读取详情中…</p>
       )}
 
       {book && (
-        <header className="flex gap-3 mb-4">
-          <div
-            className="w-20 h-28 rounded shrink-0 overflow-hidden flex items-center justify-center"
-            style={{ background: "var(--ink-3)" }}
-          >
-            {book.cover ? (
-              <img
-                src={book.cover}
-                alt=""
-                loading="lazy"
-                referrerPolicy="no-referrer"
-                className="w-full h-full object-cover"
-              />
-            ) : null}
-          </div>
-          <div className="flex-1 min-w-0">
-            <p className="font-mono text-[10px] tracking-[0.2em] text-cream-faint mb-0.5">
-              {source.bookSourceName}
-            </p>
-            <h1 className="font-display text-lg font-extrabold tracking-tight line-clamp-2">
-              {book.name}
-            </h1>
-            <p className="text-[12px] text-cream-dim mt-1">{book.author ?? "—"}</p>
-            {book.kind && (
-              <p className="text-[10px] text-cream-faint font-mono mt-1">
-                {book.kind}
-              </p>
-            )}
-            <div className="flex gap-2 mt-2">
+        <DetailHero
+          cover={book.cover}
+          title={book.name}
+          subtitle={book.author ?? "—"}
+          onBack={() => navigate(-1)}
+          metaChips={
+            <>
+              <MetaChip>{source.bookSourceName}</MetaChip>
+              {book.kind && <MetaChip>{book.kind}</MetaChip>}
+              {onShelf && <MetaChip color="ember">已在书架</MetaChip>}
+              {progress && (
+                <MetaChip color="phosphor">
+                  已读 {progress.chapterIndex + 1} 章
+                </MetaChip>
+              )}
+            </>
+          }
+          description={book.intro}
+          actions={
+            <>
               <button
                 type="button"
                 onClick={toggleShelf}
-                className="px-3 py-1.5 rounded text-[11px] font-display font-semibold tap"
+                className="px-3 py-2 rounded-lg text-[12px] font-display font-semibold tap inline-flex items-center gap-1.5"
                 style={{
-                  background: onShelf ? "var(--ember-soft)" : "var(--ink-3)",
-                  color: onShelf ? "var(--ember)" : "var(--cream)",
+                  background: onShelf ? "var(--ember-soft)" : "var(--ember)",
+                  color: onShelf ? "var(--ember)" : "var(--ink)",
                   border: `1px solid ${
-                    onShelf ? "rgba(255,107,53,0.4)" : "var(--cream-line)"
+                    onShelf ? "rgba(255,107,53,0.4)" : "var(--ember)"
                   }`,
                 }}
               >
                 {onShelf ? (
                   <>
-                    <IconHeartFill size={11} className="inline mr-1" />
+                    <IconHeartFill size={12} />
                     已加入书架
                   </>
                 ) : (
                   <>
-                    <IconHeart size={11} className="inline mr-1" />
+                    <IconHeart size={12} />
                     加入书架
                   </>
                 )}
@@ -229,13 +211,13 @@ export default function NovelDetail() {
               <button
                 type="button"
                 onClick={() => void loadBookAndToc()}
-                className="px-3 py-1.5 rounded text-[11px] tap text-cream"
+                className="px-3 py-2 rounded-lg text-[12px] tap text-cream inline-flex items-center gap-1.5"
                 style={{
-                  background: "var(--ink-3)",
+                  background: "var(--ink-2)",
                   border: "1px solid var(--cream-line)",
                 }}
               >
-                <IconRefresh size={11} className="inline mr-1" />
+                <IconRefresh size={12} />
                 刷新
               </button>
               <div className="relative">
@@ -243,9 +225,9 @@ export default function NovelDetail() {
                   type="button"
                   onClick={() => setShowAltMenu((v) => !v)}
                   disabled={!book || altSources.length === 0}
-                  className="px-3 py-1.5 rounded text-[11px] tap text-cream disabled:opacity-40"
+                  className="px-3 py-2 rounded-lg text-[12px] tap text-cream disabled:opacity-40"
                   style={{
-                    background: "var(--ink-3)",
+                    background: "var(--ink-2)",
                     border: "1px solid var(--cream-line)",
                   }}
                   title="同名换源"
@@ -285,21 +267,9 @@ export default function NovelDetail() {
                   </ul>
                 )}
               </div>
-            </div>
-          </div>
-        </header>
-      )}
-
-      {book?.intro && (
-        <section
-          className="rounded-xl p-3 mb-4 text-[11px] text-cream-dim leading-relaxed max-h-32 overflow-y-auto"
-          style={{
-            background: "var(--ink-2)",
-            border: "1px solid var(--cream-line)",
-          }}
-        >
-          {book.intro}
-        </section>
+            </>
+          }
+        />
       )}
 
       {error && (
