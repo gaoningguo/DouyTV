@@ -175,8 +175,12 @@ export default function MusicPlayer() {
 
       {/* ── NavBar ── 顶部三段式 (返回 / 居中标题 / 右操作) */}
       <header
-        className="relative z-20 flex items-center px-4 pb-2 gap-3"
-        style={{ paddingTop: "calc(env(safe-area-inset-top) + 16px)" }}
+        className="relative z-20 flex items-center pb-2 gap-3"
+        style={{
+          paddingTop: "calc(env(safe-area-inset-top) + 16px)",
+          paddingLeft: "calc(env(safe-area-inset-left) + 16px)",
+          paddingRight: "calc(env(safe-area-inset-right) + 16px)",
+        }}
       >
         <button
           type="button"
@@ -293,11 +297,13 @@ export default function MusicPlayer() {
 
       {/* ── Bottom ── 固定底栏 SeekBar + Controls */}
       <div
-        className="relative z-20 px-4 pt-3 backdrop-blur-md"
+        className="relative z-20 pt-3 backdrop-blur-md"
         style={{
           background: "rgba(10,11,13,0.7)",
           borderTop: "1px solid var(--cream-line)",
           paddingBottom: "calc(env(safe-area-inset-bottom) + 20px)",
+          paddingLeft: "calc(env(safe-area-inset-left) + 16px)",
+          paddingRight: "calc(env(safe-area-inset-right) + 16px)",
         }}
       >
         <div className="max-w-2xl mx-auto">
@@ -664,6 +670,7 @@ function ActionSheet({
           background: "var(--ink)",
           border: "1px solid var(--cream-line)",
           animation: "sheet-up 220ms ease both",
+          paddingBottom: "max(env(safe-area-inset-bottom), 12px)",
         }}
         onClick={(e) => e.stopPropagation()}
       >

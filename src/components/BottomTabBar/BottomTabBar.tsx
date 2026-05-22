@@ -3,19 +3,25 @@ import { NavLink } from "react-router-dom";
 import {
   IconHome,
   IconSearch,
+  IconLive,
   IconMusic,
   IconBook,
   IconManga,
   IconLibrary,
+  IconSettings,
 } from "@/components/Icon";
 
+// 顺序与 PC SideNav 一致，保证手机用户能直接看到全部入口（包括「直播」「设置」）。
+// 8 个 tab 在窄屏会溢出 —— 容器允许横向滚 + 右侧渐变 fade 提示可滑。
 const TABS = [
   { to: "/", Icon: IconHome, label: "首页", end: true },
   { to: "/search", Icon: IconSearch, label: "点播", end: false },
+  { to: "/live", Icon: IconLive, label: "直播", end: false },
   { to: "/music", Icon: IconMusic, label: "音乐", end: false },
   { to: "/books", Icon: IconBook, label: "电子书", end: false },
   { to: "/manga", Icon: IconManga, label: "漫画", end: false },
   { to: "/library", Icon: IconLibrary, label: "我的", end: false },
+  { to: "/settings", Icon: IconSettings, label: "设置", end: false },
 ];
 
 export default function BottomTabBar() {
@@ -45,9 +51,9 @@ export default function BottomTabBar() {
         borderTop: "1px solid var(--cream-line)",
       }}
     >
-      {/* 横向可滚 —— 窄屏 / tab 增多时右侧 tab 仍可滑到 + 点击 */}
+      {/* 横向可滚 —— 8 个 tab 在窄屏一定溢出，必须能滑 */}
       <div
-        className="h-full flex items-stretch overflow-x-auto scrollbar-hide"
+        className="h-full flex items-stretch overflow-x-auto scrollbar-hide relative"
         style={{ scrollSnapType: "x proximity" }}
       >
         {TABS.map(({ to, Icon, label, end }) => (
@@ -56,7 +62,7 @@ export default function BottomTabBar() {
             to={to}
             end={end}
             className="relative flex-shrink-0 flex flex-col items-center justify-center gap-0.5 tap text-cream-faint hover:text-cream-dim transition-colors px-2"
-            style={{ minWidth: 72, scrollSnapAlign: "start" }}
+            style={{ minWidth: 64, scrollSnapAlign: "start" }}
           >
             {({ isActive }) => (
               <>
@@ -94,6 +100,17 @@ export default function BottomTabBar() {
           </NavLink>
         ))}
       </div>
+      {/* 右侧渐变 fade —— 视觉提示"右边还有更多" */}
+      <span
+        aria-hidden
+        className="pointer-events-none absolute top-0 right-0 h-full w-8"
+        style={{
+          background:
+            "linear-gradient(to left, rgba(14,15,17,0.95), transparent)",
+          // 让 fade 不盖住 safe-area-inset-right（横屏刘海）
+          marginRight: "env(safe-area-inset-right)",
+        }}
+      />
     </nav>
   );
 }

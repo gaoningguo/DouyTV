@@ -86,7 +86,12 @@ export function MusicQueuePanel() {
             <IconClose size={14} />
           </button>
         </div>
-        <ul className="flex-1 overflow-y-auto p-2 space-y-1">
+        <ul
+          className="flex-1 overflow-y-auto p-2 space-y-1"
+          style={{
+            paddingBottom: "calc(env(safe-area-inset-bottom) + 8px)",
+          }}
+        >
           {queue.length === 0 && (
             <li className="text-center text-cream-faint text-xs font-mono py-6">
               队列为空

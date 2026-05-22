@@ -24,6 +24,7 @@ import type {
   NetLiveRoom,
   NetLiveStream,
 } from "../types";
+import { NetLiveListUnsupportedError } from "../types";
 
 const UA =
   "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/130.0.0.0 Safari/537.36";
@@ -80,12 +81,22 @@ async function fetchList(
   for (const [k, v] of Object.entries(params)) {
     url.searchParams.set(k, String(v));
   }
-  const res = await scriptFetch(url.toString(), {
-    method: "GET",
-    headers: COMMON_HEADERS,
-    timeout: 25_000,
-    http2: true,
-  });
+  let res;
+  try {
+    res = await scriptFetch(url.toString(), {
+      method: "GET",
+      headers: COMMON_HEADERS,
+      timeout: 25_000,
+      http2: true,
+    });
+  } catch (e) {
+    // CamSoda 强制 TLS 1.3 + 特定 cipher suite，rustls 默认协商失败。
+    // 转 sentinel 让 UI 友好提示，避免显示 "error sending request" raw 错误。
+    throw new NetLiveListUnsupportedError(
+      "CamSoda",
+      `网络层不可达（${(e as Error).message ?? String(e)}）—— 站点 TLS 配置与原生 HTTP 客户端不兼容，请配置代理后重试`
+    );
+  }
   if (!res.ok) throw new Error(`CamSoda HTTP ${res.status}`);
   return res.json<CsBrowseResp>();
 }

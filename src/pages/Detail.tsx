@@ -86,7 +86,16 @@ export default function Detail() {
   const playback = detail.playbacks[safePbIdx];
 
   return (
-    <div className="min-h-screen bg-ink text-cream p-4 pb-24">
+    /* /detail 在 hideNav 里 → App.tsx 跳过 safe-area，此页面自己处理 */
+    <div
+      className="min-h-screen bg-ink text-cream"
+      style={{
+        paddingTop: "calc(env(safe-area-inset-top) + 16px)",
+        paddingLeft: "calc(env(safe-area-inset-left) + 16px)",
+        paddingRight: "calc(env(safe-area-inset-right) + 16px)",
+        paddingBottom: "calc(env(safe-area-inset-bottom) + 24px)",
+      }}
+    >
       <div className="flex items-center gap-3 mb-5">
         <button
           type="button"

@@ -125,7 +125,7 @@ export default function MusicHome() {
   }
 
   return (
-    <div className="min-h-screen bg-ink text-cream p-4 pb-24">
+    <div className="min-h-screen bg-ink text-cream p-4">
       {/* 顶部 hero */}
       <div className="flex items-end justify-between mb-5">
         <div>

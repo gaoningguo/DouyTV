@@ -165,7 +165,7 @@ export default function NovelHome() {
   /* ─────────── 渲染 ─────────── */
 
   return (
-    <div className="min-h-screen bg-ink text-cream p-4 pb-24">
+    <div className="min-h-screen bg-ink text-cream p-4">
       <div className="mb-3 flex items-center gap-2">
         <div className="flex-1">
           <p className="font-mono text-[10px] tracking-[0.25em] text-cream-faint">

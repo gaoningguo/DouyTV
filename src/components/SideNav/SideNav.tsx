@@ -56,6 +56,10 @@ export default function SideNav() {
         width,
         background: "linear-gradient(180deg, rgba(14,15,17,0.95) 0%, rgba(14,15,17,0.92) 100%)",
         borderRight: "1px solid var(--cream-line)",
+        // iPad 横屏 + Home Indicator 让位（桌面端 env() 都是 0，加上无害）
+        paddingTop: "env(safe-area-inset-top)",
+        paddingLeft: "env(safe-area-inset-left)",
+        paddingBottom: "env(safe-area-inset-bottom)",
       }}
     >
       {/* Logo */}

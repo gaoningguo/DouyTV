@@ -186,7 +186,7 @@ export default function MangaSrcDetail() {
   };
 
   return (
-    <div className="min-h-screen bg-ink text-cream p-4 pb-24">
+    <div className="min-h-screen bg-ink text-cream p-4">
       <DetailHero
         cover={cover}
         proxyCover

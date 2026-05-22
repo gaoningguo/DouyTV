@@ -18,6 +18,7 @@ import type {
   NetLiveRoom,
   NetLiveStream,
 } from "../types";
+import { NetLiveListUnsupportedError } from "../types";
 
 const UA =
   "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/130.0.0.0 Safari/537.36";
@@ -110,44 +111,85 @@ async function fetchLives(params: {
   page: number;
   pageSize: number;
 }): Promise<{ list: NetLiveRoom[]; hasMore: boolean }> {
-  // 主路径：getStreamList POST 接口（多年稳定）
-  const body = {
-    categoryID: params.category && params.category !== "hot" ? params.category : "",
-    sourceTypes: [0, 4],
-    page: params.page,
-    pageSize: params.pageSize,
-    hashtag: "",
-  };
-  try {
-    const data = await postJson<SvListResp>(
-      "https://wap-api.17app.co/api/v1/lives/getStreamList",
-      body
-    );
-    const arr = data.lives ?? [];
-    if (arr.length > 0) {
-      const list = arr.map(mapLive).filter((r): r is NetLiveRoom => !!r);
-      return {
-        list,
-        hasMore: data.hasNext ?? arr.length >= params.pageSize,
-      };
+  const reasons: string[] = [];
+
+  // 17Live 多套 host 共存：wap-api.17app.co / api.17app.co / api-dsa.17app.co
+  // 体感 .17app.co 域名稳定，但具体 endpoint 命名按版本变。挨个试。
+  const postCandidates: Array<{ url: string; body: unknown }> = [
+    {
+      url: "https://wap-api.17app.co/api/v1/lives/getStreamList",
+      body: {
+        categoryID: params.category && params.category !== "hot" ? params.category : "",
+        sourceTypes: [0, 4],
+        page: params.page,
+        pageSize: params.pageSize,
+        hashtag: "",
+      },
+    },
+    {
+      url: "https://api.17app.co/api/v1/lives/getStreamList",
+      body: {
+        categoryID: params.category && params.category !== "hot" ? params.category : "",
+        sourceTypes: [0, 4],
+        page: params.page,
+        pageSize: params.pageSize,
+        hashtag: "",
+      },
+    },
+    {
+      url: "https://wap-api.17app.co/api/v1/lives/recommend",
+      body: {
+        language: "zh",
+        pageSize: params.pageSize,
+        startIndex: (params.page - 1) * params.pageSize,
+        tabName: params.category ?? "Hot",
+      },
+    },
+  ];
+
+  for (const c of postCandidates) {
+    try {
+      const data = await postJson<SvListResp>(c.url, c.body);
+      const arr = data.lives ?? [];
+      if (arr.length > 0) {
+        const list = arr.map(mapLive).filter((r): r is NetLiveRoom => !!r);
+        return {
+          list,
+          hasMore: data.hasNext ?? arr.length >= params.pageSize,
+        };
+      }
+      reasons.push(`POST ${c.url}: 返回 0 条`);
+    } catch (e) {
+      reasons.push(`POST ${c.url}: ${(e as Error).message ?? String(e)}`);
     }
-  } catch {
-    /* fall through */
   }
-  // 回退：老 getRecommend(GET)
-  try {
-    const data = await getJson<SvListResp>(
-      `https://wap-api.17app.co/api/v1/lives?page=${params.page}&pageSize=${params.pageSize}`
-    );
-    const arr = data.lives ?? [];
-    const list = arr.map(mapLive).filter((r): r is NetLiveRoom => !!r);
-    return {
-      list,
-      hasMore: data.hasNext ?? arr.length >= params.pageSize,
-    };
-  } catch {
-    return { list: [], hasMore: false };
+
+  // GET 兜底
+  const getCandidates = [
+    `https://wap-api.17app.co/api/v1/lives?page=${params.page}&pageSize=${params.pageSize}`,
+    `https://api.17app.co/api/v1/lives?page=${params.page}&pageSize=${params.pageSize}`,
+  ];
+  for (const url of getCandidates) {
+    try {
+      const data = await getJson<SvListResp>(url);
+      const arr = data.lives ?? [];
+      if (arr.length > 0) {
+        const list = arr.map(mapLive).filter((r): r is NetLiveRoom => !!r);
+        return {
+          list,
+          hasMore: data.hasNext ?? arr.length >= params.pageSize,
+        };
+      }
+      reasons.push(`GET ${url}: 返回 0 条`);
+    } catch (e) {
+      reasons.push(`GET ${url}: ${(e as Error).message ?? String(e)}`);
+    }
   }
+
+  throw new NetLiveListUnsupportedError(
+    "17 Live",
+    `已尝试 ${reasons.length} 个端点全部失败（API 路径运行时拼接，无法逆向定位）`
+  );
 }
 
 async function getRecommend(
@@ -267,15 +309,50 @@ async function getLiveStatus(roomId: string): Promise<boolean> {
 }
 
 async function resolve(roomId: string): Promise<NetLiveStream> {
-  const info = await fetchLiveDetail(roomId);
-  if (!info) throw new Error(`17Live 房间 ${roomId} 未找到`);
-  const url = info.streamerInfo?.liveStreamingURL;
-  if (!url) throw new Error("17Live 未返回 liveStreamingURL（房间未开播）");
+  // streamlink app17.py 验证：POST /api/v1/lives/{channel}/viewers/alive，
+  // form-urlencoded body `liveStreamID={channel}`，返回 rtmpUrls[0].url (FLV)
+  const res = await scriptFetch(
+    `https://wap-api.17app.co/api/v1/lives/${encodeURIComponent(roomId)}/viewers/alive`,
+    {
+      method: "POST",
+      headers: {
+        ...COMMON_HEADERS,
+        "Content-Type": "application/x-www-form-urlencoded",
+        Referer: `https://17.live/live/${roomId}`,
+      },
+      body: `liveStreamID=${encodeURIComponent(roomId)}`,
+      timeout: 25_000,
+      http2: true,
+    }
+  );
+  if (!res.ok) throw new Error(`17Live HTTP ${res.status}`);
+  const data = await res.json<{
+    rtmpUrls?: Array<{ provider?: number; url?: string }>;
+    errorCode?: number;
+    errorMessage?: string;
+  }>();
+  if (data.errorCode) {
+    const msg = (data.errorMessage ?? "").replace("Something wrong: ", "");
+    throw new Error(`17Live ${data.errorCode} ${msg}`);
+  }
+  const flvUrl = data.rtmpUrls?.[0]?.url;
+  if (!flvUrl) throw new Error("17Live 未返回 rtmpUrls（房间未开播）");
+  // FLV → HLS：streamlink 实测的两种 CDN host 转换
+  let hlsUrl: string;
+  if (flvUrl.includes("wansu-")) {
+    hlsUrl = flvUrl.replace(".flv", "/playlist.m3u8");
+  } else {
+    hlsUrl = flvUrl.replace("live-hdl", "live-hls").replace(".flv", ".m3u8");
+  }
   return {
-    url,
+    url: hlsUrl,
     streamType: "hls",
     qn: "auto",
     qnLabel: "原画",
+    alternatives: [
+      { qn: "hls", label: "HLS", url: hlsUrl },
+      { qn: "flv", label: "FLV", url: flvUrl },
+    ],
     referer: REFERER,
     ua: UA,
   };

@@ -19,6 +19,8 @@ import {
   type NetLivePlatformId,
   type NetLiveRoom,
   type NetLiveStream,
+  isListUnsupportedMessage,
+  stripListUnsupportedPrefix,
 } from "@/lib/netlive/types";
 import { createDouyuDanmaku } from "@/lib/netlive/danmaku/douyu";
 import type { DanmakuClient, DanmakuMessage } from "@/lib/netlive/danmaku/types";
@@ -109,6 +111,10 @@ export default function NetworkLivePanel() {
   /** 推荐 feed 的优先品类「加塞」列表 —— 与 list 拼合显示，dedup by roomId */
   const [boostedRooms, setBoostedRooms] = useState<NetLiveRoom[]>([]);
 
+  /** 搜索：searchQuery 非空时 loadList 走 adapter.search 而不是 getRecommend/getCategoryRooms */
+  const [searchQuery, setSearchQuery] = useState("");
+  const [searchInput, setSearchInput] = useState("");
+
   const supported = useMemo(() => listSupportedPlatforms(), []);
 
   /**
@@ -128,15 +134,17 @@ export default function NetworkLivePanel() {
       platform: NetLivePlatformId,
       p: number,
       append: boolean,
-      categoryId: string | null
+      categoryId: string | null,
+      query: string
     ) => {
       const gen = ++loadGenRef.current;
       setLoading(true);
       setError(null);
       try {
         const adapter = getAdapter(platform);
-        const res =
-          categoryId && adapter.getCategoryRooms
+        const res = query.trim() && adapter.search
+          ? await adapter.search(query.trim(), p)
+          : categoryId && adapter.getCategoryRooms
             ? await adapter.getCategoryRooms(categoryId, p)
             : await adapter.getRecommend(p, 30);
         if (gen !== loadGenRef.current) return; // 陈旧请求，丢弃
@@ -160,8 +168,10 @@ export default function NetworkLivePanel() {
     setPage(1);
     setCategories([]);
     setSection("recommend");
+    setSearchQuery("");
+    setSearchInput("");
     setList([]); // 立刻清，避免显示老平台旧数据；后续 loading 期间走 skeleton
-    void loadList(activePlatform, 1, false, null);
+    void loadList(activePlatform, 1, false, null, "");
     const adapter = (() => {
       try {
         return getAdapter(activePlatform);
@@ -182,14 +192,24 @@ export default function NetworkLivePanel() {
     };
   }, [activePlatform, loadList]);
 
-  // 切分类 → 重拉第一页
+  // 切分类 → 重拉第一页（搜索模式不受分类影响）
   useEffect(() => {
     if (section !== "recommend") return;
     setPage(1);
     setList([]); // 同上：清旧数据 → 显 skeleton
-    void loadList(activePlatform, 1, false, activeCategory);
+    void loadList(activePlatform, 1, false, activeCategory, searchQuery);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [activeCategory]);
+
+  // 搜索：执行搜索 / 清空搜索时重拉
+  useEffect(() => {
+    if (section !== "recommend") return;
+    setPage(1);
+    setList([]);
+    // 搜索模式下不应用 activeCategory（搜索全平台）
+    void loadList(activePlatform, 1, false, searchQuery ? null : activeCategory, searchQuery);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [searchQuery]);
 
   /* ───────────── 播放 ───────────── */
   const playRoom = useCallback(
@@ -372,10 +392,12 @@ export default function NetworkLivePanel() {
     <div className="h-full flex flex-col lg:flex-row gap-3 lg:gap-4 p-3 overflow-y-auto lg:overflow-hidden">
       {/* ───────────── 主区：tabs + 分类 + grid（卡片区独立滚动） ───────────── */}
       <div className="flex-1 min-w-0 lg:overflow-y-auto lg:min-h-0 order-2 lg:order-1 no-scrollbar">
-        {/* sticky header —— 平台 tab + section chips + 分类 strip 钉在卡片区顶部，
-            滚动卡片时永远可见。bg-ink 实色避免下层卡片透出。 */}
+        {/* sticky header —— 平台 tab + section chips + 分类 strip。
+            **只在桌面 sticky**：移动端整页一起滚（root 已 overflow-y-auto），
+            否则会和 aside 的 sticky top-0 在 root 内争同一 top:0 位置，
+            导致 header z-20 把 player aside (z-10) 顶部盖住。 */}
         <div
-          className="sticky top-0 z-20 -mx-3 px-3 pt-1 pb-2"
+          className="-mx-3 px-3 pt-1 pb-2 lg:sticky lg:top-0 lg:z-20"
           style={{
             background: "var(--ink)",
             borderBottom: "1px solid var(--cream-line)",
@@ -400,7 +422,7 @@ export default function NetworkLivePanel() {
                 <ToolbarButton
                   onClick={() => {
                     setPage(1);
-                    void loadList(activePlatform, 1, false, activeCategory);
+                    void loadList(activePlatform, 1, false, activeCategory, searchQuery);
                   }}
                   disabled={loading}
                   title="刷新"
@@ -443,8 +465,69 @@ export default function NetworkLivePanel() {
             )}
           </div>
 
-          {/* 分类 strip（仅推荐 section 显示），舞蹈/颜值/陪伴 等优先品类排到最前 */}
-          {section === "recommend" && sortedCategories.length > 0 && (
+          {/* 搜索栏（仅推荐 section 显示）—— 搜索模式下走 adapter.search 替代推荐 / 分类列表 */}
+          {section === "recommend" && (
+            <form
+              className="mt-2 flex items-center gap-2"
+              onSubmit={(e) => {
+                e.preventDefault();
+                setSearchQuery(searchInput.trim());
+              }}
+            >
+              <div
+                className="flex items-center gap-1.5 flex-1 px-2 py-1 rounded"
+                style={{
+                  background: "var(--ink-2, rgba(255,255,255,0.04))",
+                  border: "1px solid var(--cream-line)",
+                }}
+              >
+                <span style={{ color: "var(--cream-faint)" }}>
+                  <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                    <circle cx="11" cy="11" r="8" />
+                    <path d="m21 21-4.3-4.3" />
+                  </svg>
+                </span>
+                <input
+                  type="text"
+                  value={searchInput}
+                  onChange={(e) => setSearchInput(e.target.value)}
+                  placeholder={`在 ${NETLIVE_PLATFORMS.find((p) => p.id === activePlatform)?.label ?? activePlatform} 搜主播 / 房间`}
+                  className="flex-1 bg-transparent outline-none text-[12px] font-mono"
+                  style={{ color: "var(--cream)" }}
+                />
+                {searchInput && (
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setSearchInput("");
+                      setSearchQuery("");
+                    }}
+                    className="text-[10px] font-mono text-cream-faint hover:text-ember tap"
+                    title="清空搜索"
+                  >
+                    ✕
+                  </button>
+                )}
+              </div>
+              <button
+                type="submit"
+                disabled={!searchInput.trim()}
+                className="text-[11px] font-mono px-2.5 py-1 rounded tap disabled:opacity-40"
+                style={{
+                  background: searchQuery
+                    ? "var(--ember)"
+                    : "transparent",
+                  color: searchQuery ? "var(--ink)" : "var(--cream)",
+                  border: "1px solid var(--cream-line)",
+                }}
+              >
+                {searchQuery ? "搜索中" : "搜索"}
+              </button>
+            </form>
+          )}
+
+          {/* 分类 strip（仅推荐 section 且非搜索模式时显示），舞蹈/颜值/陪伴 等优先品类排到最前 */}
+          {section === "recommend" && !searchQuery && sortedCategories.length > 0 && (
             <div className="flex items-center gap-1.5 mt-1 overflow-x-auto pb-1 ">
               <CategoryChip
                 label="推荐"
@@ -469,18 +552,27 @@ export default function NetworkLivePanel() {
           )}
         </div>
 
-        {/* 错误条 */}
+        {/* 错误条 —— 列表 unsupported 走 EmptyState 友好提示，否则红色错误条 */}
         {error && (
-          <div
-            className="p-2 rounded-lg text-[11px] font-mono mt-3 mb-3"
-            style={{
-              background: "rgba(255,80,80,0.08)",
-              color: "#FF6B6B",
-              border: "1px solid rgba(255,80,80,0.25)",
-            }}
-          >
-            ✗ {error}
-          </div>
+          isListUnsupportedMessage(error) ? (
+            <EmptyState
+              icon={<IconStats size={48} />}
+              title={stripListUnsupportedPrefix(error)}
+              subtitle="该平台未提供公开的列表 / 推荐接口。请使用上方搜索框查找主播，或直接输入房间 ID 访问。"
+              className="mt-3 mb-3"
+            />
+          ) : (
+            <div
+              className="p-2 rounded-lg text-[11px] font-mono mt-3 mb-3"
+              style={{
+                background: "rgba(255,80,80,0.08)",
+                color: "#FF6B6B",
+                border: "1px solid rgba(255,80,80,0.25)",
+              }}
+            >
+              ✗ {error}
+            </div>
+          )
         )}
 
         {/* Grid（顶部留 padding，避免被 sticky header 卡住开头一行） */}
@@ -537,7 +629,7 @@ export default function NetworkLivePanel() {
               onClick={() => {
                 const np = page + 1;
                 setPage(np);
-                void loadList(activePlatform, np, true, activeCategory);
+                void loadList(activePlatform, np, true, activeCategory, searchQuery);
               }}
               disabled={loading}
               className="px-4 py-2 rounded-lg text-[11px] font-display font-semibold tap text-cream disabled:opacity-50"
@@ -686,7 +778,7 @@ function PlatformTabs({
   );
   return (
     <div
-      className="flex items-end gap-1 border-b overflow-x-auto"
+      className="flex items-center gap-1 border-b overflow-x-auto"
       style={{ borderColor: "var(--cream-line)" }}
     >
       {visiblePlatforms.map((p) => {

@@ -287,10 +287,13 @@ export default function BooksRead() {
 
       {/* 底部进度条 */}
       <div
-        className="absolute bottom-0 left-0 right-0 z-20 px-4 py-2 font-mono text-[10px] text-center backdrop-blur-md"
+        className="absolute bottom-0 left-0 right-0 z-20 py-2 font-mono text-[10px] text-center backdrop-blur-md"
         style={{
           background: "rgba(14,15,17,0.6)",
           color: theme === "cream" ? "#0E0F11" : "var(--cream-dim)",
+          paddingLeft: "calc(env(safe-area-inset-left) + 16px)",
+          paddingRight: "calc(env(safe-area-inset-right) + 16px)",
+          paddingBottom: "calc(env(safe-area-inset-bottom) + 8px)",
         }}
       >
         {loading ? "加载中…" : error ? error : `${Math.round(percent * 100)}%`}

@@ -119,7 +119,8 @@ export default function Local() {
         <div
           className="absolute left-4 right-4 text-cream pointer-events-none"
           style={{
-            bottom: "calc(env(safe-area-inset-bottom) + 24px)",
+            // 让位 iOS Home Indicator + 移动端 BottomTabBar（/local 不在 hideNav 范围）
+            bottom: "calc(env(safe-area-inset-bottom) + var(--bottom-tab-h, 0px) + 24px)",
             paddingLeft: "env(safe-area-inset-left)",
             paddingRight: "env(safe-area-inset-right)",
           }}
@@ -137,7 +138,7 @@ export default function Local() {
   }
 
   return (
-    <div className="min-h-screen bg-ink text-cream p-4 pb-20">
+    <div className="min-h-screen bg-ink text-cream p-4">
       <div className="mb-5 flex items-start justify-between gap-3">
         <div className="min-w-0">
           <p className="font-mono text-[9px] tracking-[0.25em] text-cream-faint">

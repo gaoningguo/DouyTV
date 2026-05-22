@@ -200,7 +200,7 @@ export default function Settings() {
   const enabledCount = scripts.filter((s) => s.enabled).length;
 
   return (
-    <div className="min-h-screen bg-ink text-cream p-4 pb-20">
+    <div className="min-h-screen bg-ink text-cream p-4">
       <div className="mb-5">
         <p className="font-mono text-[10px] tracking-[0.25em] text-cream-faint">
           SETTINGS · CONTROL

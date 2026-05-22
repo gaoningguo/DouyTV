@@ -292,7 +292,7 @@ textarea:focus-visible {
    padding 加上 safe-area-inset-bottom/left/right —— iOS Home Indicator / 横屏刘海
    不再遮挡进度条与按钮。`env()` 在非 iOS 平台为 0，所以桌面也安全。 */
 .art-video-player .art-bottom {
-  background: transparent !important;
+  background: transparent !important; 
   z-index: 20;
   padding: 12px calc(14px + env(safe-area-inset-right))
     calc(8px + env(safe-area-inset-bottom))

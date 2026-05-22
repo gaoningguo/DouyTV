@@ -18,6 +18,7 @@ import type {
   NetLiveRoom,
   NetLiveStream,
 } from "../types";
+import { NetLiveListUnsupportedError } from "../types";
 
 const UA =
   "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/130.0.0.0 Safari/537.36";
@@ -158,6 +159,7 @@ async function getRecommend(
   page: number,
   pageSize: number
 ): Promise<{ list: NetLiveRoom[]; hasMore: boolean }> {
+  const reasons: string[] = [];
   // 主页 HTML 抓 INIT_STATE 是最稳的路径（页面始终需要这份数据来 SSR 渲染）
   if (page === 1) {
     try {
@@ -166,15 +168,20 @@ async function getRecommend(
       const rooms = state?.pageStore?.homeStore?.liveList ?? [];
       const list = rooms.map(mapRoom).filter((r): r is NetLiveRoom => !!r);
       if (list.length > 0) return { list, hasMore: false };
-    } catch {
-      /* fall through 到 JSON 接口 */
+      reasons.push(
+        `HTML INIT_STATE：${state ? "存在但 liveList 空" : "未找到 INIT_STATE 嵌入"}`
+      );
+    } catch (e) {
+      reasons.push(`HTML：${(e as Error).message ?? String(e)}`);
     }
   }
   // 多套 JSON endpoint 兜底（多年来 Bigo 改过多次，按"新→旧"顺序试）
   const limit = Math.max(pageSize, 24);
   const candidates = [
     `https://www.bigo.tv/oapi/v3/getNewListV2?page=${page}&size=${limit}`,
+    `https://www.bigo.tv/oapi/v3/getList?page=${page}&size=${limit}&label=`,
     `https://ta.bigo.tv/official_website/studio/getNewListV3?page=${page}&pageSize=${limit}&tabId=0`,
+    `https://api.bigo.tv/web/AjaxCommon/getRecommendBigoLiveList?page=${page}&size=${limit}`,
   ];
   for (const url of candidates) {
     try {
@@ -184,9 +191,18 @@ async function getRecommend(
         const list = arr.map(mapRoom).filter((r): r is NetLiveRoom => !!r);
         return { list, hasMore: arr.length >= limit };
       }
-    } catch {
-      /* try next */
+      reasons.push(`${url}: 返回 0 条`);
+    } catch (e) {
+      reasons.push(`${url}: ${(e as Error).message ?? String(e)}`);
     }
+  }
+  if (reasons.length > 0) {
+    // 已知现实：Bigo web 列表端点全部 404 / SSL 拒；HTML 内嵌 __BIGOLIVE__ IIFE 不含 liveList。
+    // 改抛 sentinel error，UI 显示"该平台仅支持搜索 / 输房间号"友好提示。
+    throw new NetLiveListUnsupportedError(
+      "Bigo Live",
+      `已尝试 ${reasons.length} 个端点全部失败`
+    );
   }
   return { list: [], hasMore: false };
 }
@@ -261,6 +277,13 @@ async function search(
 
 interface BgPlayResp {
   data?: {
+    // streamlink 验证的真实字段（POST /studio/getInternalStudioInfo 返回）
+    hls_src?: string;
+    roomId?: string;
+    clientBigoId?: string;
+    gameTitle?: string;
+    roomTopic?: string;
+    // 兼容旧/HTML fallback 路径
     hls_url?: string;
     rtmp_url?: string;
     flv_url?: string;
@@ -276,10 +299,17 @@ interface BgPlayResp {
 }
 
 async function fetchPlayInfo(roomId: string): Promise<BgPlayResp> {
-  // 优先用 ta.bigo.tv 的 API（多年稳定）；失败退到主页 HTML 抓
-  const url = `https://ta.bigo.tv/official_website/studio/getInternalStudioInfo?siteId=${encodeURIComponent(roomId)}`;
+  // streamlink 验证：POST 方法 + query 形式参数（含 verify=）；返回 data.hls_src
+  const url = `https://ta.bigo.tv/official_website/studio/getInternalStudioInfo?siteId=${encodeURIComponent(roomId)}&verify=`;
   try {
-    return await getJson<BgPlayResp>(url);
+    const res = await scriptFetch(url, {
+      method: "POST",
+      headers: { ...COMMON_HEADERS, "Content-Length": "0" },
+      timeout: 25_000,
+      http2: true,
+    });
+    if (!res.ok) throw new Error(`Bigo HTTP ${res.status}`);
+    return res.json<BgPlayResp>();
   } catch {
     // HTML fallback：从 /{slug} 主页解析 INIT_STATE.userInfo
     const html = await fetchHtml(`https://www.bigo.tv/${roomId}`);
@@ -288,8 +318,7 @@ async function fetchPlayInfo(roomId: string): Promise<BgPlayResp> {
     if (!ui) throw new Error("Bigo 房间数据缺失");
     return {
       data: {
-        hls_url: ui.live?.hls,
-        live: ui.live?.hls ? 1 : 0,
+        hls_src: ui.live?.hls,
         big_url: ui.big_url ?? ui.cover_url,
         room_topic: ui.room_topic,
         nick_name: ui.nick_name,
@@ -307,12 +336,14 @@ async function getRoomDetail(roomId: string): Promise<NetLiveRoom> {
   return {
     platform: "bigo",
     roomId,
-    title: d.room_topic ?? d.nick_name ?? roomId,
+    title: d.roomTopic ?? d.room_topic ?? d.nick_name ?? roomId,
     uname: d.nick_name,
     avatar: d.avatar,
     cover: d.big_url,
     online: d.user_count ?? 0,
-    live: d.live === 1,
+    category: d.gameTitle,
+    // streamlink 验证：hls_src 非空即在播（不再用 live 字段，新 API 不返回）
+    live: !!(d.hls_src ?? d.hls_url),
     link: `https://www.bigo.tv/${roomId}`,
   };
 }
@@ -320,7 +351,7 @@ async function getRoomDetail(roomId: string): Promise<NetLiveRoom> {
 async function getLiveStatus(roomId: string): Promise<boolean> {
   try {
     const info = await fetchPlayInfo(roomId);
-    return info.data?.live === 1;
+    return !!(info.data?.hls_src ?? info.data?.hls_url);
   } catch {
     return false;
   }
@@ -330,9 +361,9 @@ async function resolve(roomId: string): Promise<NetLiveStream> {
   const info = await fetchPlayInfo(roomId);
   const d = info.data;
   if (!d) throw new Error(`Bigo 房间 ${roomId} 未找到`);
-  if (d.live !== 1) throw new Error("Bigo 未开播");
-  const url = d.hls_url ?? d.flv_url ?? d.rtmp_url;
-  if (!url) throw new Error("Bigo 未返回拉流地址");
+  // streamlink 验证：hls_src 是 m3u8 直链；空表示未开播
+  const url = d.hls_src ?? d.hls_url ?? d.flv_url ?? d.rtmp_url;
+  if (!url) throw new Error("Bigo 未开播 / 未返回拉流地址");
   return {
     url,
     streamType: url.includes(".m3u8") ? "hls" : url.includes(".flv") ? "flv" : "mp4",

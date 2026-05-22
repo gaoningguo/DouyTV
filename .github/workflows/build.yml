@@ -2,11 +2,10 @@ name: Build
 
 on:
   push:
-    branches: [main, master]
-    tags: ["v*"]
+    tags: ["v*"]       # 只有推送 v1.0.2 这种标签时才触发
   pull_request:
-    branches: [main, master]
-  workflow_dispatch: 
+    branches: [main, master] # 别人提 PR 时触发检查（不需要可删）
+  workflow_dispatch:
 
 # 同一分支/tag 重复 push 时取消上一次未完成的 run，节约 Actions 配额
 concurrency:

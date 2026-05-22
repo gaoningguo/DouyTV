@@ -158,7 +158,7 @@ export default function NovelDetail() {
   };
 
   return (
-    <div className="min-h-screen bg-ink text-cream p-4 pb-24">
+    <div className="min-h-screen bg-ink text-cream p-4">
       {loadingBook && !book && (
         <p className="text-cream-faint text-sm">读取详情中…</p>
       )}

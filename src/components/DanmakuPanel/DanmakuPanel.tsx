@@ -169,6 +169,9 @@ export default function DanmakuPanel({
         style={{
           background: "var(--ink)",
           borderLeft: "1px solid var(--cream-line)",
+          // right drawer —— 横屏刘海 + 底部 Home Indicator 让位
+          paddingRight: "env(safe-area-inset-right)",
+          paddingBottom: "env(safe-area-inset-bottom)",
         }}
         onClick={(e) => e.stopPropagation()}
       >
@@ -178,6 +181,7 @@ export default function DanmakuPanel({
           style={{
             background: "var(--ink)",
             borderBottom: "1px solid var(--cream-line)",
+            paddingTop: "calc(env(safe-area-inset-top) + 16px)",
           }}
         >
           <div className="flex-1 min-w-0">

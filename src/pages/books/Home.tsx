@@ -118,7 +118,7 @@ function OpdsPanel() {
   }
 
   return (
-    <div className="p-4 pb-24">
+    <div className="p-4">
       <div className="flex items-center justify-between mb-3">
         <p className="font-mono text-[10px] tracking-[0.2em] text-cream-faint">
           SOURCES · {store.sources.length}

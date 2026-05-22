@@ -163,7 +163,7 @@ export default function Scripts() {
   };
 
   return (
-    <div className="min-h-screen bg-ink text-cream p-4 pb-32">
+    <div className="min-h-screen bg-ink text-cream p-4">
       <div className="flex items-center gap-3 mb-2">
         <Link
           to="/"
@@ -403,12 +403,16 @@ export default function Scripts() {
 
       {selectMode && (
         <div
-          className="fixed left-0 right-0 bottom-0 z-40 backdrop-blur-xl px-4"
+          className="fixed left-0 right-0 z-40 backdrop-blur-xl"
           style={{
+            // 让位移动端 BottomTabBar；--bottom-tab-h 已含 safe-area-inset-bottom
+            bottom: "var(--bottom-tab-h, 0px)",
             background: "rgba(22, 24, 29, 0.92)",
             borderTop: "1px solid var(--ink-edge)",
             paddingTop: 12,
-            paddingBottom: "calc(env(safe-area-inset-bottom) + 12px)",
+            paddingBottom: "max(env(safe-area-inset-bottom), 12px)",
+            paddingLeft: "calc(env(safe-area-inset-left) + 16px)",
+            paddingRight: "calc(env(safe-area-inset-right) + 16px)",
           }}
         >
           <div className="flex gap-2 max-w-md mx-auto">

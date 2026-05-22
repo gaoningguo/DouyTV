@@ -232,7 +232,12 @@ export default function MangaRead() {
               </div>
             ))}
             {/* 章末跳转 */}
-            <div className="p-6 text-center">
+            <div
+              className="p-6 text-center"
+              style={{
+                paddingBottom: "calc(env(safe-area-inset-bottom) + 24px)",
+              }}
+            >
               {detail ? (
                 <button
                   type="button"

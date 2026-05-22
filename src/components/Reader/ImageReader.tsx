@@ -206,13 +206,17 @@ export default function ImageReader(props: ImageReaderProps) {
           : "h-screen bg-ink text-cream overflow-hidden flex flex-col"
       }
     >
-      {/* 顶部工具栏 —— 横向 / 隐藏时不渲染 */}
+      {/* 顶部工具栏 —— 横向 / 隐藏时不渲染。需自管 safe-area，因为路由 /manga/read 是
+          App.tsx 的 hideNav 范围（沉浸页，外层不加 padding-top/left/right）。*/}
       {chromeVisible && (
         <div
-          className="sticky top-0 z-20 flex items-center gap-2 px-4 py-2 backdrop-blur-md shrink-0"
+          className="sticky top-0 z-20 flex items-center gap-2 py-2 backdrop-blur-md shrink-0"
           style={{
             background: "rgba(14,15,17,0.92)",
             borderBottom: "1px solid var(--cream-line)",
+            paddingTop: "max(env(safe-area-inset-top), 8px)",
+            paddingLeft: "calc(env(safe-area-inset-left) + 16px)",
+            paddingRight: "calc(env(safe-area-inset-right) + 16px)",
           }}
         >
           <button
@@ -295,8 +299,13 @@ export default function ImageReader(props: ImageReaderProps) {
           onClick={() => setShowSettings(false)}
         >
           <div
-            className="w-full p-4 rounded-t-2xl bg-ink"
-            style={{ borderTop: "1px solid var(--cream-line)" }}
+            className="w-full p-4 rounded-t-2xl bg-ink animate-sheet"
+            style={{
+              borderTop: "1px solid var(--cream-line)",
+              paddingBottom: "calc(env(safe-area-inset-bottom) + 16px)",
+              paddingLeft: "calc(env(safe-area-inset-left) + 16px)",
+              paddingRight: "calc(env(safe-area-inset-right) + 16px)",
+            }}
             onClick={(e) => e.stopPropagation()}
           >
             <p className="font-mono text-[10px] tracking-[0.2em] text-cream-faint mb-3">

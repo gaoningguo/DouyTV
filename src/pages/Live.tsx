@@ -530,12 +530,18 @@ function IPTVLive() {
                 background: "rgba(14,15,17,0.88)",
                 borderLeft: "1px solid var(--cream-line)",
                 boxShadow: "-12px 0 32px -8px rgba(0,0,0,0.6)",
+                // 横屏刘海 + Home Indicator 让位
+                paddingRight: "env(safe-area-inset-right)",
+                paddingBottom: "env(safe-area-inset-bottom)",
               }}
             >
               {/* Panel 头 */}
               <div
                 className="flex items-center gap-2 p-3 shrink-0"
-                style={{ borderBottom: "1px solid var(--cream-line)" }}
+                style={{
+                  borderBottom: "1px solid var(--cream-line)",
+                  paddingTop: "calc(env(safe-area-inset-top) + 12px)",
+                }}
               >
                 <div className="flex-1">
                   <p className="font-mono text-[9px] tracking-[0.25em] text-cream-faint">

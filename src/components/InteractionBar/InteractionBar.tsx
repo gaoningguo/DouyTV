@@ -183,7 +183,9 @@ export default function InteractionBar({ item, onShare, onSelectEpisode }: Props
               borderTopLeftRadius: 22,
               borderTopRightRadius: 22,
               borderTop: "1px solid var(--ink-edge)",
-              padding: "20px 18px 28px",
+              padding: "20px 18px",
+              // bottom sheet —— Home Indicator 让位
+              paddingBottom: "calc(env(safe-area-inset-bottom) + 28px)",
             }}
           >
             <div className="flex items-center justify-between mb-1">

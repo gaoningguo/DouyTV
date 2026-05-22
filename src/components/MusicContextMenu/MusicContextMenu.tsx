@@ -180,6 +180,8 @@ export function MusicContextMenuRoot() {
           background: "var(--ink)",
           border: "1px solid var(--cream-line)",
           animation: "sheet-up 220ms ease both",
+          // 移动端是 items-end (bottom sheet)，必须留 Home Indicator 让位
+          paddingBottom: "max(env(safe-area-inset-bottom), 16px)",
         }}
         onClick={(e) => e.stopPropagation()}
       >

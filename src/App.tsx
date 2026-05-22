@@ -173,10 +173,15 @@ export default function App() {
     ? `calc(${sideNavWidth}px + env(safe-area-inset-left))`
     : "env(safe-area-inset-left)";
   const mainPadRight = "env(safe-area-inset-right)";
-  const mainPadBottom =
-    showBottomBar && !isFeedPage
-      ? "calc(56px + env(safe-area-inset-bottom))"
-      : 0;
+  // 底部留位：移动端的 BottomTabBar + 全局 MiniPlayer 都需要避让；
+  // 桌面端 BottomTabBar 不显，但 MiniPlayer 仍会浮在底部，所以也要保留它的高度。
+  // 这两个高度都由各自组件以 CSS 变量暴露：--bottom-tab-h / --miniplayer-h。
+  // Home (isFeedPage) 自身是 100vh 沉浸 feed，让底部组件浮在视频上，不在 wrapper 里加 padding。
+  const mainPadBottom = isFeedPage
+    ? 0
+    : showBottomBar
+    ? "calc(var(--bottom-tab-h, calc(56px + env(safe-area-inset-bottom))) + var(--miniplayer-h, 0px))"
+    : "var(--miniplayer-h, 0px)";
 
   return (
     <>

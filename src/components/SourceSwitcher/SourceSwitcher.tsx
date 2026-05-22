@@ -332,6 +332,8 @@ export default function SourceSwitcher({
         style={{
           background: "var(--ink)",
           borderLeft: "1px solid var(--cream-line)",
+          paddingRight: "env(safe-area-inset-right)",
+          paddingBottom: "env(safe-area-inset-bottom)",
         }}
         onClick={(e) => e.stopPropagation()}
       >
@@ -341,6 +343,7 @@ export default function SourceSwitcher({
           style={{
             background: "var(--ink)",
             borderBottom: "1px solid var(--cream-line)",
+            paddingTop: "calc(env(safe-area-inset-top) + 16px)",
           }}
         >
           <div className="flex-1 min-w-0">

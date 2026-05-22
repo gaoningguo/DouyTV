@@ -44,7 +44,7 @@ export default function MangaDetailPage() {
   const title = detail?.title || initial?.title || "未知";
 
   return (
-    <div className="min-h-screen bg-ink text-cream p-4 pb-24">
+    <div className="min-h-screen bg-ink text-cream p-4">
       <DetailHero
         cover={cover}
         title={title}

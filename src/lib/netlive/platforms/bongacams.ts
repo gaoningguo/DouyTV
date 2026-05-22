@@ -28,45 +28,63 @@ const UA =
 const REFERER = "https://bongacams.com/";
 
 /**
- * BongaCams 套 Cloudflare —— 需 "像浏览器" 的 Accept / Sec-Fetch / Sec-Ch-Ua 头 + h2 才能通过。
+ * 实测 2026-05：直接最朴素的 header 就能过 Cloudflare（Python urllib 都 200）。
+ * 加 sec-ch-ua / Sec-Fetch-* 反而触发 CF Bot Management 识别为爬虫（真浏览器在
+ * 同源 XHR 里 *不* 主动发这些 Client Hints），所以这里保持最小化。
  */
 const COMMON_HEADERS: Record<string, string> = {
   "User-Agent": UA,
   Referer: REFERER,
-  Origin: "https://bongacams.com",
   "Accept-Language": "en-US,en;q=0.9",
   Accept: "application/json, text/javascript, */*; q=0.01",
   "X-Requested-With": "XMLHttpRequest",
-  "Sec-Fetch-Site": "same-origin",
-  "Sec-Fetch-Mode": "cors",
-  "Sec-Fetch-Dest": "empty",
-  "Sec-Ch-Ua":
-    '"Chromium";v="130", "Not(A:Brand";v="99", "Google Chrome";v="130"',
-  "Sec-Ch-Ua-Mobile": "?0",
-  "Sec-Ch-Ua-Platform": '"Windows"',
 };
 
 interface BcRoom {
+  // 实测 2026-05 真实字段（listing_v3.php 响应）
   username?: string;
   display_name?: string;
+  viewers?: number; // 人数（不是 members_count！）
+  vq?: string; // 视频分辨率 "1920x1080"
+  vsid?: string; // video stream id
+  esid?: string; // edge stream id "live-edge65-rn"
+  room?: string; // 房间状态 "public" / "private" / "group"
+  gender?: string; // female / male / couples / transsexual
+  thumb_image?: string; // 含 "{ext}" 占位符，需要替换为 webp/jpg + 加 https: 前缀
+  f?: number;
+  is_top?: boolean;
+  blocks?: number[];
+  // 老接口兼容
   members_count?: number;
   topic?: string;
-  thumb_image?: string;
   thumb_image_blured?: string;
   profile_image?: string;
   profile_images?: { thumbnail_image_medium?: string };
   age?: number;
   country?: string;
-  type?: string; // female / male / couples / transsexual
+  type?: string;
   tags?: string[];
 }
 
 interface BcListResp {
+  status?: string;
+  total_count?: number;
+  online_count?: number;
   models?: BcRoom[];
+}
+
+/** 处理 thumb_image 的 {ext} 占位符 + 补 https 前缀 */
+function buildThumbUrl(thumb?: string): string | undefined {
+  if (!thumb) return undefined;
+  let url = thumb.replace("{ext}", "webp");
+  if (url.startsWith("//")) url = "https:" + url;
+  return url;
 }
 
 function mapRoom(r: BcRoom): NetLiveRoom | undefined {
   if (!r.username) return undefined;
+  // 实测：room === "public" 才是可看的公开直播；其他（"private" / "group"）跳过
+  if (r.room && r.room !== "public") return undefined;
   return {
     platform: "bongacams",
     roomId: r.username,
@@ -74,9 +92,10 @@ function mapRoom(r: BcRoom): NetLiveRoom | undefined {
     uname: r.display_name || r.username,
     avatar:
       r.profile_image ?? r.profile_images?.thumbnail_image_medium,
-    cover: r.thumb_image,
-    online: r.members_count ?? 0,
-    category: (r.tags && r.tags.length > 0 ? r.tags[0] : r.type) ?? r.country,
+    cover: buildThumbUrl(r.thumb_image),
+    online: r.viewers ?? r.members_count ?? 0,
+    category:
+      r.gender ?? (r.tags && r.tags.length > 0 ? r.tags[0] : undefined) ?? r.country,
     live: true,
     link: `https://bongacams.com/${r.username}`,
   };
@@ -200,48 +219,46 @@ async function getLiveStatus(roomId: string): Promise<boolean> {
 }
 
 async function resolve(roomId: string): Promise<NetLiveStream> {
-  // 房间页 HTML 含 `playerData = {...}` 嵌入 JS
-  const res = await scriptFetch(`https://bongacams.com/${roomId}`, {
+  // 实测 2026-05：BongaCams 真实 resolve 路径：
+  //   1. GET /tools/amf.php?method=getRoomData&args[]={user}&args[]=false
+  //      返回 { localData: { videoServerUrl: "//live-edge65-rn.bcvcdn.com", vsid, dataKey }, ... }
+  //   2. 构造 https:{videoServerUrl}/hls/stream_{username}/playlist.m3u8（实测 200 + mpegurl）
+  // HTML scrape 方案已废 —— 房间页 CF 拦 403。
+  const amfUrl = `https://bongacams.com/tools/amf.php?method=getRoomData&args%5B%5D=${encodeURIComponent(roomId)}&args%5B%5D=false`;
+  const res = await scriptFetch(amfUrl, {
     method: "GET",
-    headers: {
-      ...COMMON_HEADERS,
-      Accept:
-        "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
-      "Sec-Fetch-Dest": "document",
-      "Sec-Fetch-Mode": "navigate",
-    },
+    headers: COMMON_HEADERS,
     timeout: 25_000,
     http2: true,
   });
   if (!res.ok) throw new Error(`BongaCams HTTP ${res.status}`);
-  const html = await res.text();
-  // 常见嵌入 1：playerData.streamUrl
-  const m1 = html.match(/"streamUrl"\s*:\s*"([^"]+)"/);
-  if (m1) {
-    const url = m1[1].replace(/\\\//g, "/");
-    return {
-      url,
-      streamType: "hls",
-      qn: "auto",
-      qnLabel: "自适应",
-      referer: REFERER,
-      ua: UA,
-    };
+  const body = await res.json<{
+    status?: string;
+    localData?: { videoServerUrl?: string; vsid?: string; dataKey?: string };
+    performerData?: { isOnline?: boolean; showType?: string };
+  }>();
+  if (body.status !== "success") {
+    throw new Error(`BongaCams 房间 ${roomId} 不可访问 (status=${body.status})`);
   }
-  // 常见嵌入 2：cdnURL + 用户名拼 m3u8
-  const m2 = html.match(/var\s+cdnURL\s*=\s*"([^"]+)"/);
-  if (m2) {
-    const cdn = m2[1].replace(/\\\//g, "/").replace(/\/$/, "");
-    return {
-      url: `${cdn}/hls/stream_${roomId}/playlist.m3u8`,
-      streamType: "hls",
-      qn: "auto",
-      qnLabel: "自适应",
-      referer: REFERER,
-      ua: UA,
-    };
+  if (!body.performerData?.isOnline) {
+    throw new Error(`BongaCams 房间 ${roomId} 未开播`);
   }
-  throw new Error("BongaCams 未提取到 streamUrl（房间未开播 / 私密）");
+  if (body.performerData.showType && body.performerData.showType !== "public") {
+    throw new Error(`BongaCams ${roomId} 当前为 ${body.performerData.showType}（非公开）`);
+  }
+  let videoHost = body.localData?.videoServerUrl ?? "";
+  // 返回的是 `//live-edge65-rn.bcvcdn.com`，补 https:
+  if (videoHost.startsWith("//")) videoHost = "https:" + videoHost;
+  if (!videoHost) throw new Error("BongaCams 未返回 videoServerUrl");
+  const url = `${videoHost.replace(/\/$/, "")}/hls/stream_${encodeURIComponent(roomId)}/playlist.m3u8`;
+  return {
+    url,
+    streamType: "hls",
+    qn: "auto",
+    qnLabel: "自适应",
+    referer: REFERER,
+    ua: UA,
+  };
 }
 
 /* ─────────────── 导出 ─────────────── */

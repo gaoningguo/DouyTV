@@ -50,7 +50,16 @@ async function fetchHtml(url: string): Promise<string> {
     http2: true,
   });
   if (!res.ok) throw new Error(`YouTube HTTP ${res.status}`);
-  return res.text();
+  const html = await res.text();
+  return html;
+}
+
+/** 检测 YouTube 反机器人风控页 —— html 含特定 sign-in/recaptcha 标记则真的没辙。 */
+function looksLikeBotChallenge(html: string): boolean {
+  return (
+    /confirm.+not.+bot|请登录.+不是聊天机器人|sign in to confirm/i.test(html) ||
+    /class="g-recaptcha"/.test(html)
+  );
 }
 
 /* ─────────────── 通用：从 HTML 提取嵌入 JSON ─────────────── */
@@ -386,9 +395,230 @@ interface YtPlayerResponse {
 async function fetchPlayerResponse(
   videoId: string
 ): Promise<YtPlayerResponse | null> {
+  // 关键策略（参考 yt-dlp _DEFAULT_CLIENTS=(android_vr, web_safari)）：
+  //   **直接** 用 Innertube /player 端点，**不**先访问 watch 页。
+  //   watch 页才有"请登录确认非机器人"风控；Innertube 端不会下发同样的挑战页。
+  //   只有当所有 Innertube client 都拿不到 streamingData 时，才退到 watch 页兜底。
+  let innertubeError: Error | null = null;
+  try {
+    const fromInnertube = await fetchPlayerResponseInnertube(videoId);
+    if (fromInnertube) return fromInnertube;
+  } catch (e) {
+    innertubeError = e instanceof Error ? e : new Error(String(e));
+  }
+
+  // 兜底：抓 watch 页 HTML（搜索 / 列表都靠这条，这里复用）
   const url = `https://www.youtube.com/watch?v=${encodeURIComponent(videoId)}`;
-  const html = await fetchHtml(url);
-  return (extractPlayerResponse(html) as YtPlayerResponse) ?? null;
+  try {
+    const html = await fetchHtml(url);
+    if (looksLikeBotChallenge(html)) {
+      throw new Error(
+        innertubeError
+          ? `Innertube 全 client 失败 + watch 页被反机器人拦截。Innertube 最后报错：${innertubeError.message}`
+          : "YouTube 触发反机器人风控（需登录 / poToken）—— 此为 YouTube 政策限制，匿名抓取暂无解。建议改看 Twitch / Bigo / 17Live。"
+      );
+    }
+    const fromWatch = extractPlayerResponse(html) as YtPlayerResponse | null;
+    if (fromWatch) return fromWatch;
+  } catch (e) {
+    throw e instanceof Error
+      ? e
+      : new Error("YouTube 拉流失败（Innertube + watch 页两路都未返 streamingData）");
+  }
+  if (innertubeError) throw innertubeError;
+  return null;
+}
+
+interface InnertubeClient {
+  clientName: string;
+  clientVersion: string;
+  /** X-YouTube-Client-Name 数字 ID */
+  clientNumber: number;
+  userAgent: string;
+  androidSdkVersion?: number;
+  osName?: string;
+  osVersion?: string;
+  deviceMake?: string;
+  deviceModel?: string;
+  /** 某些 embed 客户端需带 thirdParty.embedUrl */
+  asEmbed?: boolean;
+  /** Innertube host：mweb 用 m.youtube.com，其它用 www.youtube.com */
+  host?: string;
+}
+
+/**
+ * yt-dlp v2024+ 的默认匿名客户端顺序（参考 yt_dlp/extractor/youtube/_base.py）：
+ *   1. android_vr —— Oculus Quest 3，无 PO Token 要求，最稳
+ *   2. tv (TVHTML5) —— Smart TV，反爬极宽松
+ *   3. mweb —— 移动 web，HLS 直播专长
+ *   4. web_safari —— Safari UA 的 WEB，能拿 pre-merged HLS
+ *   5. ios —— iOS 客户端
+ *
+ * 每个 client 都按真实 YouTube 客户端发包：clientNumber + userAgent + 完整 context。
+ */
+const INNERTUBE_CLIENTS: InnertubeClient[] = [
+  // ─── android_vr：yt-dlp 首选，无 PoToken 要求，REQUIRE_JS_PLAYER=False ───
+  {
+    clientName: "ANDROID_VR",
+    clientVersion: "1.65.10",
+    clientNumber: 28,
+    deviceMake: "Oculus",
+    deviceModel: "Quest 3",
+    androidSdkVersion: 32,
+    osName: "Android",
+    osVersion: "12L",
+    userAgent:
+      "com.google.android.apps.youtube.vr.oculus/1.65.10 (Linux; U; Android 12L; eureka-user Build/SQ3A.220605.009.A1) gzip",
+  },
+  // ─── tv (TVHTML5)：Smart TV Cobalt 客户端 ───
+  {
+    clientName: "TVHTML5",
+    clientVersion: "7.20260114.12.00",
+    clientNumber: 7,
+    userAgent:
+      "Mozilla/5.0 (ChromiumStylePlatform) Cobalt/25.lts.30.1034943-gold (unlike Gecko), Unknown_TV_Unknown_0/Unknown (Unknown, Unknown)",
+  },
+  // ─── mweb：移动 web，HLS 直播最稳 ───
+  {
+    clientName: "MWEB",
+    clientVersion: "2.20260115.01.00",
+    clientNumber: 2,
+    userAgent:
+      "Mozilla/5.0 (iPad; CPU OS 16_7_10 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/16.6 Mobile/15E148 Safari/604.1,gzip(gfe)",
+    host: "m.youtube.com",
+  },
+  // ─── web_safari：Safari UA + WEB，返 pre-merged HLS formats ───
+  {
+    clientName: "WEB",
+    clientVersion: "2.20260114.08.00",
+    clientNumber: 1,
+    userAgent:
+      "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/15.5 Safari/605.1.15,gzip(gfe)",
+  },
+  // ─── ios：iOS YouTube app ───
+  {
+    clientName: "IOS",
+    clientVersion: "21.02.3",
+    clientNumber: 5,
+    deviceMake: "Apple",
+    deviceModel: "iPhone16,2",
+    osName: "iPhone",
+    osVersion: "18.3.2.22D82",
+    userAgent:
+      "com.google.ios.youtube/21.02.3 (iPhone16,2; U; CPU iOS 18_3_2 like Mac OS X;)",
+  },
+  // ─── web_embedded：嵌入式播放器，最后兜底 ───
+  {
+    clientName: "WEB_EMBEDDED_PLAYER",
+    clientVersion: "1.20260115.01.00",
+    clientNumber: 56,
+    userAgent:
+      "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/130.0.0.0 Safari/537.36",
+    asEmbed: true,
+  },
+];
+
+async function fetchPlayerResponseInnertube(
+  videoId: string
+): Promise<YtPlayerResponse | null> {
+  const apiKey = await getInnertubeApiKey();
+  // YouTube web 公开常量 API key（多年未变；其它 client 用同一 key 也能通）
+  const key = apiKey ?? "AIzaSyAO_FJ2SlqU8Q4STEHLGCilw_Y9_11qcW8";
+  // 收集每个 client 的状态，全失败时拿来报错（比 "拉流失败" 更具体）
+  const statusReasons: string[] = [];
+  for (const client of INNERTUBE_CLIENTS) {
+    try {
+      const host = client.host ?? "www.youtube.com";
+      const origin = `https://${host}`;
+      const headers: Record<string, string> = {
+        "Content-Type": "application/json",
+        "User-Agent": client.userAgent,
+        "X-YouTube-Client-Name": String(client.clientNumber),
+        "X-YouTube-Client-Version": client.clientVersion,
+        Origin: origin,
+        Referer: `${origin}/`,
+        "Accept-Language": "en-US,en;q=0.9",
+      };
+
+      const clientCtx: Record<string, unknown> = {
+        clientName: client.clientName,
+        clientVersion: client.clientVersion,
+        userAgent: client.userAgent,
+        hl: "en",
+        gl: "US",
+        // yt-dlp `_extract_context()` 强制塞这俩 —— Google 后端用来判定是否真实客户端
+        timeZone: "UTC",
+        utcOffsetMinutes: 0,
+      };
+      if (client.androidSdkVersion !== undefined)
+        clientCtx.androidSdkVersion = client.androidSdkVersion;
+      if (client.osName) clientCtx.osName = client.osName;
+      if (client.osVersion) clientCtx.osVersion = client.osVersion;
+      if (client.deviceMake) clientCtx.deviceMake = client.deviceMake;
+      if (client.deviceModel) clientCtx.deviceModel = client.deviceModel;
+
+      const ctx: Record<string, unknown> = { client: clientCtx };
+      if (client.asEmbed) {
+        ctx.thirdParty = { embedUrl: "https://www.youtube.com" };
+      }
+
+      // 完整请求体 = yt-dlp `_generate_player_context()` + checkok 参数
+      const reqBody: Record<string, unknown> = {
+        context: ctx,
+        videoId,
+        contentCheckOk: true,
+        racyCheckOk: true,
+        playbackContext: {
+          contentPlaybackContext: {
+            html5Preference: "HTML5_PREF_WANTS",
+          },
+        },
+      };
+
+      const res = await scriptFetch(
+        `${origin}/youtubei/v1/player?key=${key}&prettyPrint=false`,
+        {
+          method: "POST",
+          headers,
+          json: reqBody,
+          timeout: 25_000,
+          http2: true,
+        }
+      );
+      if (!res.ok) {
+        statusReasons.push(`${client.clientName}: HTTP ${res.status}`);
+        continue;
+      }
+      const data = (await res.json<YtPlayerResponse>()) ?? null;
+      if (!data) {
+        statusReasons.push(`${client.clientName}: 空响应`);
+        continue;
+      }
+      // 拿到 streamingData → 成功
+      if (
+        data.streamingData?.hlsManifestUrl ||
+        data.streamingData?.dashManifestUrl
+      ) {
+        return data;
+      }
+      // 没 streamingData → 记下 playabilityStatus 以备最终报错
+      const status = data.playabilityStatus?.status ?? "NO_STREAMING_DATA";
+      const reason = data.playabilityStatus?.reason ?? "无明确原因";
+      statusReasons.push(`${client.clientName}: ${status} — ${reason}`);
+    } catch (e) {
+      statusReasons.push(
+        `${client.clientName}: ${(e as Error).message ?? String(e)}`
+      );
+    }
+  }
+  // 全失败 —— 抛带具体原因的错（取最后一个 client 的 reason，通常最具描述性）
+  if (statusReasons.length > 0) {
+    const lastReason = statusReasons[statusReasons.length - 1];
+    throw new Error(
+      `YouTube Innertube 全 ${INNERTUBE_CLIENTS.length} 个 client 均失败，最后：${lastReason}`
+    );
+  }
+  return null;
 }
 
 async function getRoomDetail(roomId: string): Promise<NetLiveRoom> {
@@ -425,9 +655,11 @@ async function getLiveStatus(roomId: string): Promise<boolean> {
 async function resolve(roomId: string): Promise<NetLiveStream> {
   const p = await fetchPlayerResponse(roomId);
   if (!p) throw new Error(`YouTube 视频 ${roomId} 未找到`);
-  if (p.playabilityStatus?.status && p.playabilityStatus.status !== "OK") {
+  const status = p.playabilityStatus?.status;
+  if (status && status !== "OK" && status !== "LIVE_STREAM_OFFLINE") {
+    // UNPLAYABLE / ERROR / LOGIN_REQUIRED 等 —— 抛具体 reason 让 UI 显示
     throw new Error(
-      p.playabilityStatus.reason || `YouTube 状态 ${p.playabilityStatus.status}`
+      `${p.playabilityStatus?.reason || `YouTube 状态 ${status}`}（可能是直播已结束 / 区域限制 / 嵌入禁用）`
     );
   }
   const hls = p.streamingData?.hlsManifestUrl;

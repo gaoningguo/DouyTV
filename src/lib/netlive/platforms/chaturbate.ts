@@ -13,6 +13,7 @@ import type {
   NetLiveRoom,
   NetLiveStream,
 } from "../types";
+import { NetLiveListUnsupportedError } from "../types";
 
 const UA =
   "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/130.0.0.0 Safari/537.36";
@@ -84,13 +85,31 @@ async function fetchList(
   for (const [k, v] of Object.entries(params)) {
     url.searchParams.set(k, String(v));
   }
-  const res = await scriptFetch(url.toString(), {
-    method: "GET",
-    headers: COMMON_HEADERS,
-    timeout: 25_000,
-    http2: true,
-  });
-  if (!res.ok) throw new Error(`Chaturbate HTTP ${res.status}`);
+  let res;
+  try {
+    res = await scriptFetch(url.toString(), {
+      method: "GET",
+      headers: COMMON_HEADERS,
+      timeout: 25_000,
+      http2: true,
+    });
+  } catch (e) {
+    // 网络层错误（DNS / SSL / 连接断开）—— 转 sentinel 让 UI 友好提示
+    throw new NetLiveListUnsupportedError(
+      "Chaturbate",
+      `网络层不可达（${(e as Error).message ?? String(e)}）—— 该站启用了 Cloudflare 严格反 scrape，原生 HTTP 客户端 TLS 指纹被识别，请配置代理后重试`
+    );
+  }
+  if (!res.ok) {
+    // 403 / 503 几乎一定是 Cloudflare JS challenge → 友好提示
+    if (res.status === 403 || res.status === 503) {
+      throw new NetLiveListUnsupportedError(
+        "Chaturbate",
+        `Cloudflare HTTP ${res.status} 拦截，请配置代理（设置 → 代理）后重试`
+      );
+    }
+    throw new Error(`Chaturbate HTTP ${res.status}`);
+  }
   const body = await res.json<CbListResp>();
   return body.rooms ?? body.results ?? [];
 }

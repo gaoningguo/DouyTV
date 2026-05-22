@@ -35,6 +35,20 @@ export default function MusicMiniPlayer() {
 
   const hidden = HIDE_PREFIXES.some((p) => location.pathname.startsWith(p));
 
+  // 把当前 MiniPlayer 占据的高度同步到 CSS 变量，让 App.tsx 的 wrapper
+  // padding-bottom 和其他底部固定元素能正确避让。隐藏时清 0。
+  // 高度 = 进度条 2px + 控件行 ~56px + 安全区域。
+  useEffect(() => {
+    if (hidden || !store.current) {
+      document.documentElement.style.setProperty("--miniplayer-h", "0px");
+    } else {
+      document.documentElement.style.setProperty("--miniplayer-h", "58px");
+    }
+    return () => {
+      document.documentElement.style.removeProperty("--miniplayer-h");
+    };
+  }, [hidden, store.current]);
+
   // current 变化 → 重新加载（音频走 wrapAudio 经由 dyproxy 注入 source-aware Referer，
   // 解决 NetEase outer/url 302 跳 CDN 时 WebView 直连被防盗链拒的问题）
   useEffect(() => {

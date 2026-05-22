@@ -62,7 +62,7 @@ export default function MusicHistory() {
   };
 
   return (
-    <div className="min-h-screen bg-ink text-cream p-4 pb-24">
+    <div className="min-h-screen bg-ink text-cream p-4">
       <div className="flex items-center mb-2">
         <button
           type="button"

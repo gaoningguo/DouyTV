@@ -128,3 +128,32 @@ export interface NetLiveAdapter {
   /** 在线状态查询（书架 / 收藏列表批量检测用） */
   getLiveStatus?(roomId: string): Promise<boolean>;
 }
+
+/**
+ * message 前缀 sentinel —— 平台没有公开"推荐 / 分类列表"端点时抛出。
+ * UI 层（Network.tsx）检测到该前缀后渲染友好 EmptyState 而不是红色错误条。
+ * 用 string prefix 而非 instanceof，是为了跨 bundle / serialize 后仍可识别。
+ */
+export const NETLIVE_LIST_UNSUPPORTED_PREFIX = "[LIST_UNSUPPORTED]";
+
+export class NetLiveListUnsupportedError extends Error {
+  readonly platformLabel: string;
+  constructor(platformLabel: string, hint?: string) {
+    const body = hint
+      ? `${platformLabel} 暂不支持推荐列表 / 分类浏览（${hint}）`
+      : `${platformLabel} 暂不支持推荐列表 / 分类浏览`;
+    super(`${NETLIVE_LIST_UNSUPPORTED_PREFIX} ${body}`);
+    this.name = "NetLiveListUnsupportedError";
+    this.platformLabel = platformLabel;
+  }
+}
+
+export function isListUnsupportedMessage(msg: string | null | undefined): boolean {
+  return !!msg && msg.startsWith(NETLIVE_LIST_UNSUPPORTED_PREFIX);
+}
+
+export function stripListUnsupportedPrefix(msg: string): string {
+  return msg.startsWith(NETLIVE_LIST_UNSUPPORTED_PREFIX)
+    ? msg.slice(NETLIVE_LIST_UNSUPPORTED_PREFIX.length).trimStart()
+    : msg;
+}

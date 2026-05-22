@@ -37,7 +37,7 @@ export default function MusicDownloads() {
   }
 
   return (
-    <div className="min-h-screen bg-ink text-cream p-4 pb-24">
+    <div className="min-h-screen bg-ink text-cream p-4">
       <div className="flex items-center gap-3 mb-5">
         <button
           type="button"

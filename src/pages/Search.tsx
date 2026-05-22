@@ -351,7 +351,7 @@ export default function Search() {
   };
 
   return (
-    <div className="min-h-screen bg-ink text-cream p-4 pb-20">
+    <div className="min-h-screen bg-ink text-cream p-4">
       {/* 搜索栏（sticky 顶部） */}
       <form
         onSubmit={onSubmit}

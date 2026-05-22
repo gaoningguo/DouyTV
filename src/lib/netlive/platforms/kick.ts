@@ -107,11 +107,25 @@ async function getRecommend(
   page: number,
   _pageSize: number
 ): Promise<{ list: NetLiveRoom[]; hasMore: boolean }> {
-  const url = `https://kick.com/api/v2/featured-livestreams/en?page=${page}`;
-  const data = await getJson<KickStream[] | { data?: KickStream[] }>(url);
-  const arr = Array.isArray(data) ? data : data?.data ?? [];
-  const list = arr.map(mapStream).filter((r): r is NetLiveRoom => !!r);
-  return { list, hasMore: arr.length >= 20 };
+  // 多套已知 endpoint 兜底（Kick 频繁改版，命名不一致）
+  const candidates = [
+    `https://kick.com/api/v2/featured-livestreams/en?page=${page}`,
+    `https://kick.com/featured-livestreams/en?page=${page}`,
+    `https://kick.com/stream/livestreams/en?page=${page}&limit=24`,
+  ];
+  for (const url of candidates) {
+    try {
+      const data = await getJson<KickStream[] | { data?: KickStream[] }>(url);
+      const arr = Array.isArray(data) ? data : data?.data ?? [];
+      if (arr.length > 0) {
+        const list = arr.map(mapStream).filter((r): r is NetLiveRoom => !!r);
+        return { list, hasMore: arr.length >= 20 };
+      }
+    } catch {
+      /* try next */
+    }
+  }
+  return { list: [], hasMore: false };
 }
 
 /* ─────────────── 分类 ─────────────── */
@@ -143,11 +157,26 @@ async function getCategoryRooms(
   categoryId: string,
   page: number
 ): Promise<{ list: NetLiveRoom[]; hasMore: boolean }> {
-  const url = `https://kick.com/api/v2/categories/${encodeURIComponent(categoryId)}/livestreams?page=${page}`;
-  const data = await getJson<KickStream[] | { data?: KickStream[] }>(url);
-  const arr = Array.isArray(data) ? data : data?.data ?? [];
-  const list = arr.map(mapStream).filter((r): r is NetLiveRoom => !!r);
-  return { list, hasMore: arr.length >= 20 };
+  // Kick 的 category livestreams endpoint 在不同版本下叫法不一，按已知顺序兜底
+  const candidates = [
+    `https://kick.com/api/v2/categories/${encodeURIComponent(categoryId)}/livestreams?page=${page}`,
+    `https://kick.com/api/v2/categories/${encodeURIComponent(categoryId)}/streams?page=${page}`,
+    `https://kick.com/api/v1/categories/${encodeURIComponent(categoryId)}/livestreams?page=${page}`,
+    `https://kick.com/stream/livestreams/en?category=${encodeURIComponent(categoryId)}&page=${page}&limit=24`,
+  ];
+  for (const url of candidates) {
+    try {
+      const data = await getJson<KickStream[] | { data?: KickStream[] }>(url);
+      const arr = Array.isArray(data) ? data : data?.data ?? [];
+      if (arr.length > 0) {
+        const list = arr.map(mapStream).filter((r): r is NetLiveRoom => !!r);
+        return { list, hasMore: arr.length >= 20 };
+      }
+    } catch {
+      /* try next */
+    }
+  }
+  return { list: [], hasMore: false };
 }
 
 /* ─────────────── 搜索 ─────────────── */
@@ -222,14 +251,86 @@ async function resolve(roomId: string): Promise<NetLiveStream> {
   const ch = await fetchChannel(roomId);
   const url = ch.playback_url ?? ch.livestream?.playback_url;
   if (!url) throw new Error("Kick 未返回 playback_url（房间未开播）");
+  // 抓 master m3u8 提取各清晰度 variant，用户能手动切；不抓的话默认 hls.js ABR
+  // 可能停在低码率 → 看着很糊
+  const alternatives = await fetchMasterAlternatives(url).catch(() => []);
+  const top = alternatives[0];
+  // 默认用最高码率的 single-variant URL，避免 hls.js ABR 起步太低
+  // master URL 仍然作为 alternatives[0] 用户可手动 "auto" 回去
+  const defaultUrl = top?.url ?? url;
+  const alts = alternatives.length > 1
+    ? [
+        { qn: "auto", label: "自适应", url },
+        ...alternatives,
+      ]
+    : undefined;
   return {
-    url,
+    url: defaultUrl,
     streamType: "hls",
-    qn: "auto",
-    qnLabel: "自适应",
+    qn: top?.qn ?? "auto",
+    qnLabel: top?.label ?? "自适应",
+    alternatives: alts,
     referer: REFERER,
     ua: UA,
   };
+}
+
+/**
+ * 抓 master m3u8 解析 `#EXT-X-STREAM-INF` 抽 variant。
+ * 与 Twitch 同款逻辑，按 BANDWIDTH 倒序排，最高清晰度排第一便于默认选。
+ */
+async function fetchMasterAlternatives(
+  masterUrl: string
+): Promise<Array<{ qn: string; label: string; url: string }>> {
+  const res = await scriptFetch(masterUrl, {
+    method: "GET",
+    headers: { "User-Agent": UA, Referer: REFERER },
+    timeout: 15_000,
+    http2: true,
+  });
+  if (!res.ok) return [];
+  const text = await res.text();
+  const lines = text.split("\n");
+  const variants: Array<{
+    bw: number;
+    qn: string;
+    label: string;
+    url: string;
+  }> = [];
+  let pendingInf: string | null = null;
+  for (const raw of lines) {
+    const line = raw.trim();
+    if (line.startsWith("#EXT-X-STREAM-INF:")) {
+      pendingInf = line;
+      continue;
+    }
+    if (pendingInf && line && !line.startsWith("#")) {
+      const bwM = pendingInf.match(/BANDWIDTH=([0-9]+)/);
+      const resM = pendingInf.match(/RESOLUTION=([0-9x]+)/);
+      const frM = pendingInf.match(/FRAME-RATE=([0-9.]+)/);
+      const bw = bwM ? parseInt(bwM[1], 10) : 0;
+      const resolution = resM ? resM[1] : "?";
+      const fr = frM ? Math.round(parseFloat(frM[1])) : 0;
+      // label 形如 "1920x1080@60" 或 "1280x720"
+      const heightM = resolution.match(/x([0-9]+)/);
+      const heightLabel = heightM
+        ? `${heightM[1]}p${fr > 30 ? fr : ""}`
+        : resolution;
+      const absUrl = line.startsWith("http")
+        ? line
+        : new URL(line, masterUrl).toString();
+      variants.push({
+        bw,
+        qn: heightLabel || `${variants.length}`,
+        label: heightLabel || resolution,
+        url: absUrl,
+      });
+      pendingInf = null;
+    }
+  }
+  // BANDWIDTH 倒序：最高码率默认排第一
+  variants.sort((a, b) => b.bw - a.bw);
+  return variants.map(({ qn, label, url }) => ({ qn, label, url }));
 }
 
 /* ─────────────── 导出 ─────────────── */

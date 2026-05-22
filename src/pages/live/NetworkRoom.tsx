@@ -243,6 +243,8 @@ export default function NetworkRoom() {
           background: "rgba(14,15,17,0.92)",
           borderBottom: "1px solid var(--cream-line)",
           paddingTop: "max(env(safe-area-inset-top), 8px)",
+          paddingLeft: "calc(env(safe-area-inset-left) + 12px)",
+          paddingRight: "calc(env(safe-area-inset-right) + 12px)",
         }}
       >
         <button
@@ -363,15 +365,25 @@ export default function NetworkRoom() {
           )}
           {room?.introduction && (
             <div
-              className="px-4 py-3 text-[12px] font-mono text-cream-faint leading-relaxed line-clamp-3"
+              className="py-3 text-[12px] font-mono text-cream-faint leading-relaxed line-clamp-3"
               style={{
                 background: "var(--ink-2)",
                 borderTop: "1px solid var(--cream-line)",
+                paddingLeft: "calc(env(safe-area-inset-left) + 16px)",
+                paddingRight: "calc(env(safe-area-inset-right) + 16px)",
               }}
             >
               {room.introduction}
             </div>
           )}
+          {/* 底部 safe-area spacer —— iOS Home Indicator 让位 */}
+          <div
+            aria-hidden
+            style={{
+              background: "var(--ink-2)",
+              height: "env(safe-area-inset-bottom)",
+            }}
+          />
         </main>
 
         {/* 弹幕侧栏 */}
@@ -381,6 +393,10 @@ export default function NetworkRoom() {
             style={{
               background: "var(--ink-2)",
               borderColor: "var(--cream-line)",
+              // 移动端弹幕面板在屏幕底部 → Home Indicator 让位；
+              // 桌面右侧面板贴底也要让；横屏刘海让位
+              paddingBottom: "env(safe-area-inset-bottom)",
+              paddingRight: "env(safe-area-inset-right)",
             }}
           >
             <DanmakuOverlay
@@ -412,10 +428,12 @@ function ResolutionsRow({
   const alts = stream.alternatives ?? [];
   return (
     <div
-      className="flex items-center justify-between px-4 py-2 shrink-0"
+      className="flex items-center justify-between py-2 shrink-0"
       style={{
         background: "var(--ink-2)",
         borderTop: "1px solid var(--cream-line)",
+        paddingLeft: "calc(env(safe-area-inset-left) + 16px)",
+        paddingRight: "calc(env(safe-area-inset-right) + 16px)",
       }}
     >
       <div className="flex items-center gap-2 text-cream-faint">

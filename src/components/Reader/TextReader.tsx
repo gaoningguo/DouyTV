@@ -349,13 +349,16 @@ export default function TextReader(props: TextReaderProps) {
       onTouchStart={onTouchStart}
       onTouchEnd={onTouchEnd}
     >
-      {/* 顶部工具栏 */}
+      {/* 顶部工具栏 —— /books/novel/read 是沉浸路由，自管 safe-area */}
       <div
-        className="sticky top-0 z-20 flex items-center gap-2 px-4 py-2"
+        className="sticky top-0 z-20 flex items-center gap-2 py-2"
         style={{
           background: `${themeStyle.bg}E0`,
           backdropFilter: "blur(8px)",
           borderBottom: `1px solid ${themeStyle.fg}22`,
+          paddingTop: "max(env(safe-area-inset-top), 8px)",
+          paddingLeft: "calc(env(safe-area-inset-left) + 16px)",
+          paddingRight: "calc(env(safe-area-inset-right) + 16px)",
         }}
       >
         <button
@@ -522,10 +525,11 @@ export default function TextReader(props: TextReaderProps) {
         )}
       </div>
 
-      {/* 浮动控制条 */}
+      {/* 浮动控制条 —— 距底部 16px，再加 Home Indicator safe-area */}
       <div
-        className="fixed bottom-4 left-1/2 -translate-x-1/2 z-20 flex items-center gap-1 px-2 py-1 rounded-full"
+        className="fixed left-1/2 -translate-x-1/2 z-20 flex items-center gap-1 px-2 py-1 rounded-full"
         style={{
+          bottom: "calc(env(safe-area-inset-bottom) + 16px)",
           background: `${themeStyle.bg}EE`,
           border: `1px solid ${themeStyle.fg}33`,
         }}

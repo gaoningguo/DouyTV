@@ -13,7 +13,7 @@ interface Props {
 export function SettingsSubPageLayout({ eyebrow, title, children, trailing }: Props) {
   const navigate = useNavigate();
   return (
-    <div className="min-h-screen bg-ink text-cream p-4 pb-20">
+    <div className="min-h-screen bg-ink text-cream p-4">
       <div className="flex items-center gap-3 mb-5">
         <button
           type="button"
