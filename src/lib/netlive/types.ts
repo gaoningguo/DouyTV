@@ -27,7 +27,21 @@ export type NetLivePlatformId =
   | "chaturbate"
   | "stripchat"
   | "bongacams"
-  | "camsoda";
+  | "camsoda"
+  | "pandalive"
+  | "soop"
+  | "fc2live"
+  | "amateurtv"
+  | "cam4"
+  | "camscom"
+  | "dreamcam"
+  | "fansly"
+  | "flirt4free"
+  | "manyvids"
+  | "myfreecams"
+  | "sexchathu"
+  | "streamate"
+  | "xlovecam";
 
 export interface NetLivePlatformMeta {
   id: NetLivePlatformId;
@@ -36,25 +50,48 @@ export interface NetLivePlatformMeta {
   loginRequired?: boolean;
   /** 18+ 成人内容平台 —— 默认隐藏，需用户在设置中开启 adultEnabled 才显示 */
   adult?: boolean;
+  /**
+   * 推荐的默认代理策略 —— 国内 CN IP 可直连 / 海外平台几乎必须走代理:
+   *   - "direct": 默认直连。国内大厂(B站/斗鱼/虎牙/抖音/快手/网易CC)。
+   *   - "proxy":  默认走全局代理。海外 cleansite (Twitch/YouTube/Kick/Trovo) +
+   *               海外 adult cam (Chaturbate/Stripchat/CamSoda/...) + 韩国 BJ (Pandalive/SOOP)。
+   * 用户可在直播页 tab 右键 / 长按改 per-platform override。
+   */
+  defaultProxy?: "direct" | "proxy";
 }
 
 export const NETLIVE_PLATFORMS: NetLivePlatformMeta[] = [
-  { id: "bilibili", label: "哔哩哔哩" },
-  { id: "douyu", label: "斗鱼" },
-  { id: "huya", label: "虎牙" },
-  { id: "douyin", label: "抖音" },
-  { id: "kuaishou", label: "快手" },
-  { id: "cc", label: "网易 CC" },
-  { id: "twitch", label: "Twitch" },
-  { id: "youtube", label: "YouTube" },
-  { id: "kick", label: "Kick" },
-  { id: "trovo", label: "Trovo" },
-  { id: "bigo", label: "Bigo Live" },
-  { id: "live17", label: "17 Live" },
-  { id: "chaturbate", label: "Chaturbate", adult: true },
-  { id: "stripchat", label: "Stripchat", adult: true },
-  { id: "bongacams", label: "BongaCams", adult: true },
-  { id: "camsoda", label: "CamSoda", adult: true },
+  { id: "bilibili", label: "哔哩哔哩", defaultProxy: "direct" },
+  { id: "douyu", label: "斗鱼", defaultProxy: "direct" },
+  { id: "huya", label: "虎牙", defaultProxy: "direct" },
+  { id: "douyin", label: "抖音", defaultProxy: "direct" },
+  { id: "kuaishou", label: "快手", defaultProxy: "direct" },
+  { id: "cc", label: "网易 CC", defaultProxy: "direct" },
+  { id: "twitch", label: "Twitch", defaultProxy: "proxy" },
+  { id: "youtube", label: "YouTube", defaultProxy: "proxy" },
+  { id: "kick", label: "Kick", defaultProxy: "proxy" },
+  { id: "trovo", label: "Trovo", defaultProxy: "proxy" },
+  { id: "bigo", label: "Bigo Live", defaultProxy: "proxy" },
+  { id: "live17", label: "17 Live", defaultProxy: "proxy" },
+  { id: "chaturbate", label: "Chaturbate", adult: true, defaultProxy: "proxy" },
+  { id: "stripchat", label: "Stripchat", adult: true, defaultProxy: "proxy" },
+  { id: "bongacams", label: "BongaCams", adult: true, defaultProxy: "proxy" },
+  { id: "camsoda", label: "CamSoda", adult: true, defaultProxy: "proxy" },
+  { id: "pandalive", label: "PandaTV 판다 (韩国 BJ)", adult: true, defaultProxy: "proxy" },
+  { id: "soop", label: "SOOP (韩国 BJ)", adult: true, defaultProxy: "proxy" },
+  { id: "fc2live", label: "FC2 Live (日本 BJ)", adult: true, defaultProxy: "proxy" },
+  // ─── StreaMonitor 系成人 cam 平台(2026-05 加) ───
+  { id: "amateurtv", label: "AmateurTV", adult: true, defaultProxy: "proxy" },
+  { id: "cam4", label: "Cam4", adult: true, defaultProxy: "proxy" },
+  { id: "camscom", label: "Cams.com", adult: true, defaultProxy: "proxy" },
+  { id: "dreamcam", label: "DreamCam", adult: true, defaultProxy: "proxy" },
+  { id: "fansly", label: "Fansly Live", adult: true, defaultProxy: "proxy" },
+  { id: "flirt4free", label: "Flirt4Free", adult: true, defaultProxy: "proxy" },
+  { id: "manyvids", label: "ManyVids", adult: true, defaultProxy: "proxy" },
+  { id: "myfreecams", label: "MyFreeCams", adult: true, defaultProxy: "proxy" },
+  { id: "sexchathu", label: "SexChat HU", adult: true, defaultProxy: "proxy" },
+  { id: "streamate", label: "Streamate", adult: true, defaultProxy: "proxy" },
+  { id: "xlovecam", label: "XLoveCam", adult: true, defaultProxy: "proxy" },
 ];
 
 export interface NetLiveCategory {
@@ -89,8 +126,17 @@ export interface NetLiveRoom {
 export interface NetLiveStream {
   /** 实际播放 URL */
   url: string;
-  /** 流类型 (m3u8 / flv / dash) —— VideoPlayer 用这个走对应 customType */
-  streamType?: "hls" | "flv" | "dash" | "mp4";
+  /**
+   * 流类型 (m3u8 / flv / dash / mp4 / chunked-mp4 / sample-aes-mp4 / agora-rtc) —— VideoPlayer 用这个走对应 customType。
+   * `chunked-mp4` 用于 AmateurTV / Cam4 等用 `live.mp4?token=` 的 fragmented MP4 长连接,
+   * 必须走 hyper stream proxy(chunked transfer),不能走 dyproxy URI scheme(会卡死)。
+   * `sample-aes-mp4` 用于 a0s.net 系平台 fmp4-hls 端点:Rust 端拉 m3u8 + key,边收 chunked
+   * fragment 边 fMP4 box parse + SAMPLE-AES 逐 sample 原地解密,推明文 fMP4 给 native <video>。
+   * `agora-rtc` 用于 ManyVids 之类已迁移到 Agora WebRTC SFU 的平台:`url` 是 sentinel
+   * `agora-rtc://{channelId}`,真正凭证由下面的 `agora` 字段携带,ArtPlayer 走专门的
+   * customType.agorartc → 懒加载 agora-rtc-sdk-ng 加入频道、subscribe 远端 track。
+   */
+  streamType?: "hls" | "flv" | "dash" | "mp4" | "chunked-mp4" | "sample-aes-mp4" | "agora-rtc";
   qn?: string;
   qnLabel?: string;
   /** 防盗链 Referer，VideoPlayer 通过 dyproxy 透传 */
@@ -99,6 +145,21 @@ export interface NetLiveStream {
   ua?: string;
   /** 平台返回的可选清晰度（同一房间多个 qn） */
   alternatives?: Array<{ qn: string; label: string; url: string }>;
+  /**
+   * Agora WebRTC 凭证 —— `streamType==="agora-rtc"` 时必填。
+   * SDK 走 `client.join(appId, channelId, token, uid)` 加入频道,然后订阅远端 track。
+   * `refresh` 是关键 —— **每次 attachAgora 都调它拿一份全新的 (token, uid)**,
+   * 否则 React StrictMode 双 mount 会用同 token 并发 join 撞 UID_CONFLICT,
+   * 生产环境切回同一房间也会因为 server 端旧 connection 未释放冲突。
+   * 没 refresh 时只 fallback 用初始凭证(适合一次性场景)。
+   */
+  agora?: {
+    appId: string;
+    channelId: string;
+    token: string;
+    uid: number;
+    refresh?: () => Promise<{ channelId: string; token: string; uid: number }>;
+  };
 }
 
 /** Adapter 接口 —— 每个平台实现一份 */

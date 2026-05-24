@@ -11,7 +11,8 @@
  *
  * roomId = channel slug (lowercase username)。
  */
-import { scriptFetch } from "@/source-script/fetch";
+import { createPlatformFetch } from "@/lib/netlive/scriptFetch";
+const scriptFetch = createPlatformFetch("kick");
 import type {
   NetLiveAdapter,
   NetLiveCategory,

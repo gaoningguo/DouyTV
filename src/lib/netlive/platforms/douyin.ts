@@ -12,7 +12,8 @@
  * 签名：所有 `webcast/web/*` 请求都需要 `a_bogus` + `msToken`，通过 vendored ABOGUS_SCRIPT 计算。
  * 不依赖 cookie 登录态——默认 ttwid 即可拿到所有公开数据。
  */
-import { scriptFetch } from "@/source-script/fetch";
+import { createPlatformFetch } from "@/lib/netlive/scriptFetch";
+const scriptFetch = createPlatformFetch("douyin");
 import { ABOGUS_SCRIPT } from "./douyin-abogus";
 import type {
   NetLiveAdapter,

@@ -278,6 +278,33 @@ export default function LiveSourcesHub() {
               </div>
             )}
 
+            {adultEnabled && (
+              <Link
+                to="/settings/stripchat-keys"
+                className="flex items-center justify-between px-3 py-2 rounded-lg mb-3 tap"
+                style={{
+                  background: "var(--ink-3)",
+                  color: "var(--cream-dim)",
+                  border: "1px solid var(--cream-line)",
+                  fontSize: 12,
+                }}
+              >
+                <span className="flex items-center gap-2">
+                  <span
+                    className="font-mono text-[9px] px-1.5 py-0.5 rounded"
+                    style={{
+                      background: "rgba(255,107,53,0.18)",
+                      color: "var(--ember)",
+                    }}
+                  >
+                    STRIPCHAT
+                  </span>
+                  <span>Mouflon 解扰密钥(否则黑屏 / 看广告)</span>
+                </span>
+                <IconChevronRight size={14} />
+              </Link>
+            )}
+
             <p className="text-[10px] text-cream-faint leading-relaxed">
               <strong className="text-cream-dim">⚠ 提示：</strong>
               成人内容平台仅供 18 岁及以上、所在地区法律允许浏览成人内容的用户使用。

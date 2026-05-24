@@ -15,7 +15,8 @@
  *
  * roomId 我们用 channel `login`（小写 username），更稳定也更好分享。
  */
-import { scriptFetch } from "@/source-script/fetch";
+import { createPlatformFetch } from "@/lib/netlive/scriptFetch";
+const scriptFetch = createPlatformFetch("twitch");
 import type {
   NetLiveAdapter,
   NetLiveCategory,

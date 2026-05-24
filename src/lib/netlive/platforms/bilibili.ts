@@ -11,7 +11,8 @@
  *   - URL 含 mcdn 走 `proxy-tf-all-ws.bilivideo.com`；含 upgcxcode 重写为 mirror CDN
  */
 import CryptoJS from "crypto-js";
-import { scriptFetch } from "@/source-script/fetch";
+import { createPlatformFetch } from "@/lib/netlive/scriptFetch";
+const scriptFetch = createPlatformFetch("bilibili");
 import type {
   NetLiveAdapter,
   NetLiveCategory,

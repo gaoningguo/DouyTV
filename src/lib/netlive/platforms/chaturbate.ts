@@ -6,7 +6,8 @@
  *   - `/api/ts/roomlist/room-list/?limit=24&offset=0&genders=f`
  * 这条 endpoint web 端浏览公开房间时直接调用，匿名 OK。
  */
-import { scriptFetch } from "@/source-script/fetch";
+import { createPlatformFetch } from "@/lib/netlive/scriptFetch";
+const scriptFetch = createPlatformFetch("chaturbate");
 import type {
   NetLiveAdapter,
   NetLiveCategory,
@@ -15,8 +16,10 @@ import type {
 } from "../types";
 import { NetLiveListUnsupportedError } from "../types";
 
+// UA 必须和 src-tauri/src/lib.rs#proxy_fetch_h2 的 sec-ch-ua(Chromium v=148)对得上 ——
+// MMCDN 的 bot detection 会拿 UA 字符串和 sec-ch-ua 做交叉验证,版本不一致直接拒。
 const UA =
-  "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/130.0.0.0 Safari/537.36";
+  "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/148.0.0.0 Safari/537.36";
 const REFERER = "https://chaturbate.com/";
 const API_BASE = "https://chaturbate.com/api/ts/roomlist/room-list/";
 
@@ -39,6 +42,7 @@ interface CbRoomRaw {
   chat_room_url_revamped?: string;
   image_url?: string;
   image_url_360x270?: string;
+  img?: string;
   iframe_embed?: string;
   iframe_embed_revamped?: string;
   gender?: string;
@@ -67,7 +71,7 @@ function mapRoom(r: CbRoomRaw): NetLiveRoom | undefined {
       r.display_name ||
       r.username,
     uname: r.display_name || r.username,
-    cover: r.image_url_360x270 || r.image_url,
+    cover: r.image_url_360x270 || r.image_url ||r.img,
     online: r.num_users ?? 0,
     category: r.tags && r.tags.length > 0 ? r.tags[0] : r.gender,
     introduction: r.spoken_languages
@@ -216,26 +220,25 @@ async function getLiveStatus(roomId: string): Promise<boolean> {
 
 /* ─────────────── resolve ─────────────── */
 
+/**
+ * 解析 HLS URL —— 走浏览器实际的工作路径:GET 房间 HTML,从 `window.initialRoomDossier`
+ * 抽 `hls_source`。
+ *
+ * 为什么不用 API 端点:
+ *   - `/get_edge_hls_url_ajax/` (streamlink 用):2026/05 实测已返 403,端点废了
+ *   - `/api/chatvideocontext/{username}/`:返的 token 会触发 CDN `w3: session_duplicated`
+ *     (实际抓包浏览器根本不调这个端点)
+ *
+ * `initialRoomDossier` 是 HTML 里的 JS 字符串字面量,内部 JSON 所有特殊字符都被 \uXXXX
+ * 转义(`"` → `"`,`-` → `-` 等)。直接对 HTML 跑 /"hls_source":/ 是匹配
+ * 不到的 —— 必须先把 JS 字符串字面量反转义(`JSON.parse('"' + raw + '"')` 这个标准
+ * 技巧),再 JSON.parse 出来。
+ *
+ * `http2: true` —— 让 HTML 走 reqwest h2,后续 dyproxy 拉 master m3u8 也走 reqwest h2
+ * (见 src-tauri/src/lib.rs#proxy_fetch_h2),链路协议一致,CDN 不会把"签 token 的 h2
+ * 客户端"和"用 token 的 h1 客户端"当成两个不同身份。
+ */
 async function resolve(roomId: string): Promise<NetLiveStream> {
-  // 优先看 onlinerooms 里是否带 hls_source（部分房间会带）
-  try {
-    const rooms = await fetchList({ limit: 100 });
-    const hit = rooms.find((r) => r.username === roomId);
-    if (hit?.hls_source) {
-      return {
-        url: hit.hls_source,
-        streamType: "hls",
-        qn: "auto",
-        qnLabel: "自适应",
-        referer: REFERER,
-        ua: UA,
-      };
-    }
-  } catch {
-    /* 退到 HTML 解析 */
-  }
-
-  // HTML 解析：fetch 房间页，正则提取 `hls_source` / `dossier`
   const res = await scriptFetch(`https://chaturbate.com/${roomId}/`, {
     method: "GET",
     headers: {
@@ -248,40 +251,33 @@ async function resolve(roomId: string): Promise<NetLiveStream> {
   });
   if (!res.ok) throw new Error(`Chaturbate HTTP ${res.status}`);
   const html = await res.text();
-  // 常见嵌入：window.initialRoomDossier = "..."（URL-encoded JSON）
-  // 或 "hls_source": "https://..."（直接出现在 chatSettings JSON）
-  const m1 = html.match(/"hls_source"\s*:\s*"([^"]+)"/);
-  if (m1) {
-    const url = m1[1].replace(/\\u002F/g, "/").replace(/\\\//g, "/");
-    return {
-      url,
-      streamType: "hls",
-      qn: "auto",
-      qnLabel: "自适应",
-      referer: REFERER,
-      ua: UA,
-    };
+  const m = html.match(/window\.initialRoomDossier\s*=\s*"([^"]+)"/);
+  if (!m) {
+    throw new Error(
+      "Chaturbate 未在 HTML 中找到 initialRoomDossier(房间可能不存在 / 需要登录)"
+    );
   }
-  const m2 = html.match(/window\.initialRoomDossier\s*=\s*"([^"]+)"/);
-  if (m2) {
-    try {
-      const decoded = decodeURIComponent(m2[1]);
-      const parsed = JSON.parse(decoded) as { hls_source?: string };
-      if (parsed.hls_source) {
-        return {
-          url: parsed.hls_source,
-          streamType: "hls",
-          qn: "auto",
-          qnLabel: "自适应",
-          referer: REFERER,
-          ua: UA,
-        };
-      }
-    } catch {
-      /* fall through */
-    }
+  let dossier: { hls_source?: string; room_status?: string };
+  try {
+    const unescaped = JSON.parse('"' + m[1] + '"') as string;
+    dossier = JSON.parse(unescaped);
+  } catch (e) {
+    throw new Error(`Chaturbate dossier JSON 解析失败: ${(e as Error).message}`);
   }
-  throw new Error("Chaturbate 未提取到 hls_source（房间可能未开播 / 需要登录）");
+  if (dossier.room_status && dossier.room_status !== "public") {
+    throw new Error(`Chaturbate 房间状态 ${dossier.room_status},未公开播放`);
+  }
+  if (!dossier.hls_source) {
+    throw new Error("Chaturbate 未开播或未拿到 hls_source");
+  }
+  return {
+    url: dossier.hls_source,
+    streamType: "hls",
+    qn: "auto",
+    qnLabel: "自适应",
+    referer: REFERER,
+    ua: UA,
+  };
 }
 
 /* ─────────────── 导出 ─────────────── */

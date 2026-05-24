@@ -26,17 +26,39 @@ ureq = { version = "2.12", features = ["json", "tls"], default-features = false 
 # HTTP/2 client —— 仅给抖音用（live.douyin.com 强制 HTTP/2 + ALPN h2，ureq 1.x 无法握手）。
 # default-features=false 避开 encoding_rs。tauri-plugin-updater 已经传递性依赖了 reqwest 0.13.x，
 # 共享同版本不会增加 binary size。
-reqwest = { version = "0.13", default-features = false, features = ["rustls", "http2", "json"] }
+# gzip/brotli/deflate/zstd: Chaturbate MMCDN 强制返压缩 body,reqwest 没启用对应解压 feature
+# 时拿到的是压缩字节(utf8 decode 失败 / hls.js 解析挂)。这几个 crate 都是纯 rust 实现,
+# 不会引入 encoding_rs。
+reqwest = { version = "0.13", default-features = false, features = ["rustls", "http2", "json", "gzip", "brotli", "deflate", "zstd", "stream"] }
 
 # 本地流式 HTTP 代理 —— 用于 FLV 直播（Douyu/Huya/Douyin），
 # Tauri 自定义 URI scheme 不支持 chunked streaming，必须用真正的 hyper server。
 hyper = { version = "1", default-features = false, features = ["server", "http1"] }
 hyper-util = { version = "0.1", default-features = false, features = ["server", "http1", "tokio"] }
 http-body-util = "0.1"
-tokio = { version = "1", default-features = false, features = ["net", "rt", "sync", "io-util"] }
+tokio = { version = "1", default-features = false, features = ["net", "rt", "sync", "io-util", "time", "macros"] }
 tokio-stream = { version = "0.1", default-features = false }
 futures-util = { version = "0.3", default-features = false, features = ["std"] }
 bytes = "1"
+
+# FC2 Live —— 拉流需要 WebSocket 握手换 HLS playlist URL（纯信令,不走媒体)。
+# 见 fc2_ws.rs。rustls-tls-native-roots 与 reqwest 共享 rustls 0.23,不会重复链接。
+tokio-tungstenite = { version = "0.24", default-features = false, features = ["connect", "rustls-tls-native-roots"] }
+# rustls 直依赖 —— 仅为给 tokio-tungstenite 安装 process-wide CryptoProvider。
+# reqwest 自己管它的 ClientConfig,但不会装进程级 default;tokio-tungstenite 无 config 就 panic。
+# aws-lc-rs feature 与 reqwest 复用同一份编译产物,不会增加 binary size。
+rustls = { version = "0.23", default-features = false, features = ["aws-lc-rs", "std"] }
+
+# Stripchat Mouflon 解扰用 —— SHA256 哈希 + base64 解码。
+# default-features=false 避开 encoding_rs(与 rustc 1.95 不兼容)
+sha2 = { version = "0.10", default-features = false }
+base64 = { version = "0.22", default-features = false, features = ["std"] }
+
+# AmateurTV / a0s.net 系平台 SAMPLE-AES 解密用 —— 标准 AES-128-CBC,无 padding。
+# 跟 reqwest 的 aws-lc-rs / rustls 不冲突,纯 software 实现。
+aes = { version = "0.8", default-features = false }
+cbc = { version = "0.1", default-features = false, features = ["block-padding"] }
+cipher = { version = "0.4", default-features = false, features = ["block-padding"] }
 
 # 桌面端：系统代理检测 + 自动更新；移动端用 cfg(not(any(target_os = "android", target_os = "ios"))) 编译时排除
 [target.'cfg(not(any(target_os = "android", target_os = "ios")))'.dependencies]

@@ -1,8 +1,9 @@
 /**
  * 网络直播 adapter 注册表。新增平台时在这里注册即可。
  *
- * 18+ 成人平台（chaturbate/stripchat/bongacams/camsoda）在注册表里始终可获取，
- * 是否对 UI 暴露由 `useNetLiveStore.adultEnabled` 决定（见 stores/netlive.ts）。
+ * 18+ 成人平台（chaturbate/stripchat/bongacams/camsoda/pandalive）在注册表里
+ * 始终可获取，是否对 UI 暴露由 `useNetLiveStore.adultEnabled` 决定
+ * （见 stores/netlive.ts）。
  */
 import { bilibiliAdapter } from "./platforms/bilibili";
 import { douyuAdapter } from "./platforms/douyu";
@@ -20,6 +21,21 @@ import { chaturbateAdapter } from "./platforms/chaturbate";
 import { stripchatAdapter } from "./platforms/stripchat";
 import { bongacamsAdapter } from "./platforms/bongacams";
 import { camsodaAdapter } from "./platforms/camsoda";
+import { pandaliveAdapter } from "./platforms/pandalive";
+import { soopAdapter } from "./platforms/soop";
+import { fc2liveAdapter } from "./platforms/fc2live";
+// StreaMonitor 系成人 cam 平台 (2026-05 加 12 个,4 个含 listing + 8 个 resolve-only)
+import { amateurtvAdapter } from "./platforms/amateurtv";
+import { cam4Adapter } from "./platforms/cam4";
+import { camscomAdapter } from "./platforms/camscom";
+import { dreamcamAdapter } from "./platforms/dreamcam";
+import { fanslyAdapter } from "./platforms/fansly";
+import { flirt4freeAdapter } from "./platforms/flirt4free";
+import { manyvidsAdapter } from "./platforms/manyvids";
+import { myfreecamsAdapter } from "./platforms/myfreecams";
+import { sexchathuAdapter } from "./platforms/sexchathu";
+import { streamateAdapter } from "./platforms/streamate";
+import { xlovecamAdapter } from "./platforms/xlovecam";
 import type { NetLiveAdapter, NetLivePlatformId } from "./types";
 
 const adapters: Partial<Record<NetLivePlatformId, NetLiveAdapter>> = {
@@ -39,6 +55,20 @@ const adapters: Partial<Record<NetLivePlatformId, NetLiveAdapter>> = {
   stripchat: stripchatAdapter,
   bongacams: bongacamsAdapter,
   camsoda: camsodaAdapter,
+  pandalive: pandaliveAdapter,
+  soop: soopAdapter,
+  fc2live: fc2liveAdapter,
+  amateurtv: amateurtvAdapter,
+  cam4: cam4Adapter,
+  camscom: camscomAdapter,
+  dreamcam: dreamcamAdapter,
+  fansly: fanslyAdapter,
+  flirt4free: flirt4freeAdapter,
+  manyvids: manyvidsAdapter,
+  myfreecams: myfreecamsAdapter,
+  sexchathu: sexchathuAdapter,
+  streamate: streamateAdapter,
+  xlovecam: xlovecamAdapter,
 };
 
 export function getAdapter(platform: NetLivePlatformId): NetLiveAdapter {

@@ -12,10 +12,16 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { useNetLiveStore } from "@/stores/netlive";
+import { useNetLiveListStore } from "@/stores/netliveList";
+import {
+  useNetliveProxyStore,
+  getEffectiveMode,
+  getDefaultMode,
+  type NetliveProxyMode,
+} from "@/stores/netliveProxy";
 import { getAdapter, listSupportedPlatforms } from "@/lib/netlive/registry";
 import {
   NETLIVE_PLATFORMS,
-  type NetLiveCategory,
   type NetLivePlatformId,
   type NetLiveRoom,
   type NetLiveStream,
@@ -42,7 +48,6 @@ import {
 import type { MediaItem } from "@/types/media";
 
 const DANMAKU_MAX = 120;
-type Section = "recommend" | "favorites" | "history";
 
 /**
  * 优先品类关键字 —— 出现在分类名里的会被排到最前并在默认推荐里加塞。
@@ -89,14 +94,38 @@ export default function NetworkLivePanel() {
   const checkAll = useNetLiveStore((s) => s.checkAll);
   const hydrate = useNetLiveStore((s) => s.hydrate);
 
-  const [list, setList] = useState<NetLiveRoom[]>([]);
-  const [page, setPage] = useState(1);
-  const [hasMore, setHasMore] = useState(false);
+  // 列表 / 导航 / 选择态 走 keep-alive store(切到 /live/room/* 再返回时保留)
+  const list = useNetLiveListStore((s) => s.list);
+  const setList = useNetLiveListStore((s) => s.setList);
+  const appendList = useNetLiveListStore((s) => s.appendList);
+  const page = useNetLiveListStore((s) => s.page);
+  const setPage = useNetLiveListStore((s) => s.setPage);
+  const hasMore = useNetLiveListStore((s) => s.hasMore);
+  const setHasMore = useNetLiveListStore((s) => s.setHasMore);
+  const categories = useNetLiveListStore((s) => s.categories);
+  const setCategories = useNetLiveListStore((s) => s.setCategories);
+  const boostedRooms = useNetLiveListStore((s) => s.boostedRooms);
+  const setBoostedRooms = useNetLiveListStore((s) => s.setBoostedRooms);
+  const section = useNetLiveListStore((s) => s.section);
+  const setSection = useNetLiveListStore((s) => s.setSection);
+  const activeCategory = useNetLiveListStore((s) => s.activeCategory);
+  const setActiveCategory = useNetLiveListStore((s) => s.setActiveCategory);
+  const searchQuery = useNetLiveListStore((s) => s.searchQuery);
+  const setSearchQuery = useNetLiveListStore((s) => s.setSearchQuery);
+  const searchInput = useNetLiveListStore((s) => s.searchInput);
+  const setSearchInput = useNetLiveListStore((s) => s.setSearchInput);
+  const activeRoom = useNetLiveListStore((s) => s.activeRoom);
+  const setActiveRoom = useNetLiveListStore((s) => s.setActiveRoom);
+  const loadedKey = useNetLiveListStore((s) => s.loadedKey);
+  const setLoadedKey = useNetLiveListStore((s) => s.setLoadedKey);
+  const resetForPlatformSwitch = useNetLiveListStore((s) => s.resetForPlatformSwitch);
+  const storedScrollTop = useNetLiveListStore((s) => s.scrollTop);
+  const setStoredScrollTop = useNetLiveListStore((s) => s.setScrollTop);
+
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
   const [resolved, setResolved] = useState<NetLiveStream | null>(null);
-  const [activeRoom, setActiveRoom] = useState<NetLiveRoom | null>(null);
   const [resolvingId, setResolvingId] = useState<string | null>(null);
   const [switchingQn, setSwitchingQn] = useState(false);
 
@@ -104,16 +133,6 @@ export default function NetworkLivePanel() {
   const [danmakuStatus, setDanmakuStatus] = useState<string>("");
   const [danmakuOn, setDanmakuOn] = useState(true);
   const danmakuClientRef = useRef<DanmakuClient | null>(null);
-
-  const [categories, setCategories] = useState<NetLiveCategory[]>([]);
-  const [activeCategory, setActiveCategory] = useState<string | null>(null);
-  const [section, setSection] = useState<Section>("recommend");
-  /** 推荐 feed 的优先品类「加塞」列表 —— 与 list 拼合显示，dedup by roomId */
-  const [boostedRooms, setBoostedRooms] = useState<NetLiveRoom[]>([]);
-
-  /** 搜索：searchQuery 非空时 loadList 走 adapter.search 而不是 getRecommend/getCategoryRooms */
-  const [searchQuery, setSearchQuery] = useState("");
-  const [searchInput, setSearchInput] = useState("");
 
   const supported = useMemo(() => listSupportedPlatforms(), []);
 
@@ -148,8 +167,10 @@ export default function NetworkLivePanel() {
             ? await adapter.getCategoryRooms(categoryId, p)
             : await adapter.getRecommend(p, 30);
         if (gen !== loadGenRef.current) return; // 陈旧请求，丢弃
-        setList((prev) => (append ? [...prev, ...res.list] : res.list));
+        if (append) appendList(res.list);
+        else setList(res.list);
         setHasMore(res.hasMore);
+        setLoadedKey({ platform, category: categoryId, search: query, section: "recommend" });
       } catch (e) {
         if (gen !== loadGenRef.current) return;
         setError((e as Error).message ?? String(e));
@@ -159,18 +180,36 @@ export default function NetworkLivePanel() {
         if (gen === loadGenRef.current) setLoading(false);
       }
     },
-    []
+    [appendList, setList, setHasMore, setLoadedKey]
   );
 
-  // 切平台：清状态 + 拉默认推荐 + 异步拉分类
+  // 切平台:清状态 + 拉默认推荐 + 异步拉分类
+  // 关键:从 /live/room/* 路由返回时组件重 mount,如果 loadedKey 匹配当前 activePlatform 且 list 非空,
+  // 跳过 reset + 重拉(保留滚动 / 列表内容),只补拉缺失的 categories。真的切平台时才 reset。
+  const platformInitedRef = useRef(false);
   useEffect(() => {
-    setActiveCategory(null);
-    setPage(1);
-    setCategories([]);
-    setSection("recommend");
-    setSearchQuery("");
-    setSearchInput("");
-    setList([]); // 立刻清，避免显示老平台旧数据；后续 loading 期间走 skeleton
+    const cachedMatchesPlatform =
+      loadedKey?.platform === activePlatform && list.length > 0;
+    if (!platformInitedRef.current && cachedMatchesPlatform) {
+      // 首次 mount 且 store 已有当前平台数据 → 直接复用,只补 categories
+      platformInitedRef.current = true;
+      if (categories.length === 0) {
+        const adapter = (() => {
+          try { return getAdapter(activePlatform); } catch { return null; }
+        })();
+        if (adapter?.getCategories) {
+          let cancelled = false;
+          adapter.getCategories()
+            .then((cats) => { if (!cancelled) setCategories(cats); })
+            .catch((e) => console.warn("[netlive] categories failed", e));
+          return () => { cancelled = true; };
+        }
+      }
+      return;
+    }
+    platformInitedRef.current = true;
+    // 真的切平台(或首次 mount 且无缓存) → reset 全部 + 重拉
+    resetForPlatformSwitch();
     void loadList(activePlatform, 1, false, null, "");
     const adapter = (() => {
       try {
@@ -190,6 +229,7 @@ export default function NetworkLivePanel() {
     return () => {
       cancelled = true;
     };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [activePlatform, loadList]);
 
   // 切分类 → 重拉第一页（搜索模式不受分类影响）
@@ -227,8 +267,47 @@ export default function NetworkLivePanel() {
         setResolvingId(null);
       }
     },
-    [noteVisit]
+    [noteVisit, setActiveRoom]
   );
+
+  // 跨路由 mount 时 store.activeRoom 还在但 resolved (本地 useState) 已丢 → 自动重 resolve
+  // 让 player aside 恢复播放。NetLiveStream 含 callback 不能 serialize,只能现拉。
+  const reresolvedOnceRef = useRef(false);
+  useEffect(() => {
+    if (reresolvedOnceRef.current) return;
+    if (!activeRoom || resolved) return;
+    reresolvedOnceRef.current = true;
+    void playRoom(activeRoom);
+  }, [activeRoom, resolved, playRoom]);
+
+  // 滚动位置 save/restore —— 桌面 lg+ 滚 mainScrollRef,移动端滚外层 rootScrollRef。
+  // mount 时 restore,unmount 时记入 store。
+  const rootScrollRef = useRef<HTMLDivElement>(null);
+  const mainScrollRef = useRef<HTMLDivElement>(null);
+  useEffect(() => {
+    const root = rootScrollRef.current;
+    const main = mainScrollRef.current;
+    if (storedScrollTop > 0) {
+      // 内容渲染后再 scrollTo,否则容器还没高度
+      const id = window.requestAnimationFrame(() => {
+        if (main && main.scrollHeight > main.clientHeight) main.scrollTop = storedScrollTop;
+        else if (root) root.scrollTop = storedScrollTop;
+      });
+      return () => window.cancelAnimationFrame(id);
+    }
+    return;
+    // 只在 mount 时 restore,storedScrollTop 后续变化不应触发重置
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+  useEffect(() => {
+    return () => {
+      const main = mainScrollRef.current;
+      const root = rootScrollRef.current;
+      const top = Math.max(main?.scrollTop ?? 0, root?.scrollTop ?? 0);
+      setStoredScrollTop(top);
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   const switchQuality = useCallback(
     async (qn: string, fallbackUrl: string) => {
@@ -295,6 +374,7 @@ export default function NetworkLivePanel() {
       streamType: resolved.streamType ?? "hls",
       poster: activeRoom.cover,
       headers: Object.keys(headers).length > 0 ? headers : undefined,
+      agora: resolved.agora,
     };
   }, [resolved, activeRoom]);
 
@@ -389,9 +469,9 @@ export default function NetworkLivePanel() {
   return (
     /* h-full + 子元素自管滚动：移动端整体 scroll + aside sticky；
        桌面 lg 双栏，main / aside 各自 overflow-y-auto，aside 永远在视野里 */
-    <div className="h-full flex flex-col lg:flex-row gap-3 lg:gap-4 p-3 overflow-y-auto lg:overflow-hidden">
+    <div ref={rootScrollRef} className="h-full flex flex-col lg:flex-row gap-3 lg:gap-4 p-3 overflow-y-auto lg:overflow-hidden">
       {/* ───────────── 主区：tabs + 分类 + grid（卡片区独立滚动） ───────────── */}
-      <div className="flex-1 min-w-0 lg:overflow-y-auto lg:min-h-0 order-2 lg:order-1 no-scrollbar">
+      <div ref={mainScrollRef} className="flex-1 min-w-0 lg:overflow-y-auto lg:min-h-0 order-2 lg:order-1 no-scrollbar">
         {/* sticky header —— 平台 tab + section chips + 分类 strip。
             **只在桌面 sticky**：移动端整页一起滚（root 已 overflow-y-auto），
             否则会和 aside 的 sticky top-0 在 root 内争同一 top:0 位置，
@@ -550,20 +630,11 @@ export default function NetworkLivePanel() {
               })}
             </div>
           )}
-        </div>
-
-        {/* 错误条 —— 列表 unsupported 走 EmptyState 友好提示，否则红色错误条 */}
-        {error && (
-          isListUnsupportedMessage(error) ? (
-            <EmptyState
-              icon={<IconStats size={48} />}
-              title={stripListUnsupportedPrefix(error)}
-              subtitle="该平台未提供公开的列表 / 推荐接口。请使用上方搜索框查找主播，或直接输入房间 ID 访问。"
-              className="mt-3 mb-3"
-            />
-          ) : (
+          {/* 红色错误条 —— 放在 sticky header 内,滚到底也能看见(不滚出视口)。
+              List unsupported 的友好 EmptyState 留在 grid 上方,跟着 grid 一起滚。 */}
+          {error && !isListUnsupportedMessage(error) && (
             <div
-              className="p-2 rounded-lg text-[11px] font-mono mt-3 mb-3"
+              className="mt-2 p-2 rounded-lg text-[11px] font-mono"
               style={{
                 background: "rgba(255,80,80,0.08)",
                 color: "#FF6B6B",
@@ -572,7 +643,17 @@ export default function NetworkLivePanel() {
             >
               ✗ {error}
             </div>
-          )
+          )}
+        </div>
+
+        {/* 列表无公开端点 → 友好 EmptyState(跟随 grid 滚,不进 sticky header) */}
+        {error && isListUnsupportedMessage(error) && (
+          <EmptyState
+            icon={<IconStats size={48} />}
+            title={stripListUnsupportedPrefix(error)}
+            subtitle="该平台未提供公开的列表 / 推荐接口。请使用上方搜索框查找主播，或直接输入房间 ID 访问。"
+            className="mt-3 mb-3"
+          />
         )}
 
         {/* Grid（顶部留 padding，避免被 sticky header 卡住开头一行） */}
@@ -621,9 +702,16 @@ export default function NetworkLivePanel() {
           </MediaGrid>
         )}
 
-        {/* 加载更多（仅推荐 section 且有 hasMore） */}
+        {/* 加载更多(仅推荐 section 且有 hasMore)。底部留 BottomTabBar + safe-area 空间,
+            否则移动端按钮被底部导航条遮挡点不到。桌面端 lg+ 没 BottomTabBar,留 safe-area 即可。 */}
         {section === "recommend" && sectionData.length > 0 && hasMore && (
-          <div className="mt-4 flex justify-center">
+          <div
+            className="mt-4 flex justify-center"
+            style={{
+              paddingBottom:
+                "calc(var(--bottom-tab-h, env(safe-area-inset-bottom)) + 12px)",
+            }}
+          >
             <button
               type="button"
               onClick={() => {
@@ -672,7 +760,12 @@ export default function NetworkLivePanel() {
         >
           {mediaItem ? (
             <>
-              <VideoPlayer item={mediaItem} active controls />
+              <VideoPlayer
+                item={mediaItem}
+                active
+                controls
+                netlivePlatform={activeRoom?.platform}
+              />
               {/* 大屏 / 沉浸 按钮：跳转 /live/room/:p/:rid */}
               {activeRoom && (
                 <button
@@ -756,6 +849,8 @@ export default function NetworkLivePanel() {
 /* ═══════════════════════════════════════════════════════════
  * PlatformTabs —— 文本 tab + 底部 underline indicator
  * 复刻 pure_live `popular_page.dart` 的 TabBar 视觉。
+ * 每个 tab 内嵌一个代理状态指示(▴=代理 / ─=直连),长按 / 右键打开
+ * PlatformProxyMenu 切换该平台的 per-platform 代理覆盖。
  * ═══════════════════════════════════════════════════════════ */
 function PlatformTabs({
   active,
@@ -772,15 +867,36 @@ function PlatformTabs({
   onSelect: (p: NetLivePlatformId) => void;
   actions: React.ReactNode;
 }) {
+  // 订阅 overrides 整体 —— 任一平台 override 变化都让 tab 状态指示器重画
+  const overrides = useNetliveProxyStore((s) => s.overrides);
+  const [menuFor, setMenuFor] = useState<NetLivePlatformId | null>(null);
+  const [menuPos, setMenuPos] = useState<{ x: number; y: number } | null>(null);
+  // 长按 timer
+  const longPressTimerRef = useRef<number | null>(null);
+  const clearLongPress = () => {
+    if (longPressTimerRef.current !== null) {
+      window.clearTimeout(longPressTimerRef.current);
+      longPressTimerRef.current = null;
+    }
+  };
+
+  const openMenu = (platform: NetLivePlatformId, x: number, y: number) => {
+    setMenuFor(platform);
+    setMenuPos({ x, y });
+  };
+
   // 18+ 平台：未开启总开关时隐藏对应 tab
   const visiblePlatforms = NETLIVE_PLATFORMS.filter(
     (p) => adultEnabled || !p.adult
   );
   return (
     <div
-      className="flex items-center gap-1 border-b overflow-x-auto"
+      className="flex items-stretch gap-1 border-b"
       style={{ borderColor: "var(--cream-line)" }}
     >
+      {/* tabs 横滚区(actions 不参与,避免平台多时按钮跑右屏外) */}
+      <div className="flex items-center gap-1 overflow-x-auto overflow-y-auto h-12 flex-1 min-w-0 no-scrollbar-x">
+  
       {visiblePlatforms.map((p) => {
         const enabled = supported.includes(p.id);
         const isActive = active === p.id;
@@ -792,13 +908,35 @@ function PlatformTabs({
             ? "#3DDC84"
             : "#FF6B6B"
           : "var(--cream-faint)";
+        // effective = override (if any) > meta.defaultProxy > "direct"
+        const effective: NetliveProxyMode =
+          overrides[p.id] ?? getEffectiveMode(p.id);
+        const isProxy = effective === "proxy";
         return (
           <button
             key={p.id}
             type="button"
             onClick={() => enabled && onSelect(p.id)}
             disabled={!enabled}
-            title={h?.msg ?? (h?.ok ? "可用" : "未检测")}
+            title={`${h?.msg ?? (h?.ok ? "可用" : "未检测")}\n${isProxy ? "走代理" : "直连"}(长按/右键切换)`}
+            onContextMenu={(e) => {
+              if (!enabled) return;
+              e.preventDefault();
+              openMenu(p.id, e.clientX, e.clientY);
+            }}
+            onPointerDown={(e) => {
+              if (!enabled) return;
+              clearLongPress();
+              const x = e.clientX;
+              const y = e.clientY;
+              longPressTimerRef.current = window.setTimeout(() => {
+                openMenu(p.id, x, y);
+                longPressTimerRef.current = null;
+              }, 550);
+            }}
+            onPointerUp={clearLongPress}
+            onPointerLeave={clearLongPress}
+            onPointerCancel={clearLongPress}
             className={`relative px-4 py-2 font-display whitespace-nowrap tap disabled:opacity-40 ${
               isActive
                 ? "text-ember font-bold"
@@ -814,6 +952,17 @@ function PlatformTabs({
                 />
               )}
               {p.label}
+              {enabled && (
+                <span
+                  className="font-mono text-[9px] leading-none"
+                  style={{
+                    color: isProxy ? "var(--ember)" : "var(--cream-faint)",
+                    opacity: isProxy ? 0.95 : 0.55,
+                  }}
+                >
+                  {isProxy ? "▴" : "─"}
+                </span>
+              )}
               {!enabled && (
                 <span className="text-[9px] font-mono text-cream-faint ml-1">
                   即将
@@ -829,8 +978,142 @@ function PlatformTabs({
           </button>
         );
       })}
-      <div className="ml-auto flex items-center gap-1.5 pb-1">{actions}</div>
+      </div>
+      {/* actions 固定在右侧,带左侧分隔线,平台 tabs 多时横滚不影响这里 */}
+      <div
+        className="flex items-center gap-1.5 pb-1 pl-2 flex-shrink-0"
+        style={{ borderLeft: "1px solid var(--cream-line)" }}
+      >
+        {actions}
+      </div>
+      {menuFor && menuPos && (
+        <PlatformProxyMenu
+          platform={menuFor}
+          x={menuPos.x}
+          y={menuPos.y}
+          onClose={() => {
+            setMenuFor(null);
+            setMenuPos(null);
+          }}
+        />
+      )}
     </div>
+  );
+}
+
+/* ═══════════════════════════════════════════════════════════
+ * PlatformProxyMenu —— 平台代理覆盖切换浮层
+ * 右键 / 长按 tab 触发,fixed 定位在点击点附近。
+ * ═══════════════════════════════════════════════════════════ */
+function PlatformProxyMenu({
+  platform,
+  x,
+  y,
+  onClose,
+}: {
+  platform: NetLivePlatformId;
+  x: number;
+  y: number;
+  onClose: () => void;
+}) {
+  const setOverride = useNetliveProxyStore((s) => s.setOverride);
+  const override = useNetliveProxyStore((s) => s.overrides[platform]);
+  const meta = NETLIVE_PLATFORMS.find((p) => p.id === platform);
+  const def = getDefaultMode(platform);
+  const effective: NetliveProxyMode = override ?? def;
+
+  const setAndClose = (val: NetliveProxyMode | null) => {
+    setOverride(platform, val);
+    onClose();
+  };
+
+  // 简易屏内 clamp —— menu 估算宽 200 高 140
+  const clampedX = Math.min(x, window.innerWidth - 220);
+  const clampedY = Math.min(y, window.innerHeight - 160);
+
+  return (
+    <>
+      {/* 点击遮罩外部关闭 */}
+      <div
+        className="fixed inset-0 z-40"
+        onClick={onClose}
+        onContextMenu={(e) => {
+          e.preventDefault();
+          onClose();
+        }}
+      />
+      <div
+        className="fixed z-50 rounded-lg shadow-2xl p-1.5"
+        style={{
+          left: clampedX,
+          top: clampedY,
+          background: "var(--ink-2)",
+          border: "1px solid var(--cream-line)",
+          minWidth: 200,
+        }}
+      >
+        <div
+          className="px-2 py-1 mb-1 text-[10px] font-mono uppercase tracking-wider text-cream-faint"
+          style={{ borderBottom: "1px solid var(--cream-line)" }}
+        >
+          {meta?.label ?? platform} · 代理
+        </div>
+        <ProxyMenuItem
+          label="🔌  走代理"
+          active={effective === "proxy"}
+          isOverride={override === "proxy"}
+          onClick={() => setAndClose("proxy")}
+        />
+        <ProxyMenuItem
+          label="🚀  直连"
+          active={effective === "direct"}
+          isOverride={override === "direct"}
+          onClick={() => setAndClose("direct")}
+        />
+        {override !== undefined && (
+          <ProxyMenuItem
+            label={`↺  恢复推荐 (${def === "proxy" ? "代理" : "直连"})`}
+            active={false}
+            isOverride={false}
+            onClick={() => setAndClose(null)}
+          />
+        )}
+      </div>
+    </>
+  );
+}
+
+function ProxyMenuItem({
+  label,
+  active,
+  isOverride,
+  onClick,
+}: {
+  label: string;
+  active: boolean;
+  isOverride: boolean;
+  onClick: () => void;
+}) {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      className="block w-full text-left px-2.5 py-1.5 rounded text-xs font-display tap"
+      style={{
+        background: active ? "var(--ink-3)" : "transparent",
+        color: active ? "var(--ember)" : "var(--cream-dim)",
+        fontWeight: active ? 600 : 400,
+      }}
+    >
+      <span className="inline-flex items-center gap-1.5">
+        {label}
+        {active && (
+          <span className="text-[9px] font-mono text-phosphor">
+            {isOverride ? "[当前]" : "[默认]"}
+          </span>
+        )}
+      </span>
+    </button>
   );
 }
 

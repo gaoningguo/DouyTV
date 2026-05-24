@@ -76,6 +76,14 @@ export interface ScriptFetchInit {
   /** 走 HTTP/2 客户端（reqwest+rustls） —— 给 live.douyin.com 这类强制 ALPN h2 的端点用。
    *  默认 false 走 ureq HTTP/1.1。 */
   http2?: boolean;
+  /**
+   * 显式覆盖代理:
+   *   - `string` —— 用这个 URL 当代理(http:// 或 socks5://)
+   *   - `null`   —— 强制直连,忽略全局 useProxyStore
+   *   - `undefined`(默认) —— 跟随全局 `getActiveProxyUrl()`
+   * 用于 NetLive 平台级 per-platform 代理覆盖,见 lib/netlive/scriptFetch.ts。
+   */
+  proxyOverride?: string | null;
 }
 
 export interface ScriptFetchResponse {

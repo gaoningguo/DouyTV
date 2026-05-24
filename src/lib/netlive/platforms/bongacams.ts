@@ -15,7 +15,8 @@
  *
  * roomId = username。
  */
-import { scriptFetch } from "@/source-script/fetch";
+import { createPlatformFetch } from "@/lib/netlive/scriptFetch";
+const scriptFetch = createPlatformFetch("bongacams");
 import type {
   NetLiveAdapter,
   NetLiveCategory,

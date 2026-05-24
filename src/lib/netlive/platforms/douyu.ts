@@ -9,7 +9,8 @@
  * 全部 HTTP 经 scriptFetch（Tauri 下走 Rust ureq 绕 CORS / 支持代理）。
  */
 import CryptoJS from "crypto-js";
-import { scriptFetch } from "@/source-script/fetch";
+import { createPlatformFetch } from "@/lib/netlive/scriptFetch";
+const scriptFetch = createPlatformFetch("douyu");
 import type {
   NetLiveAdapter,
   NetLiveCategory,

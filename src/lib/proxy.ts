@@ -114,6 +114,11 @@ export function wrapWithProxy(
 ): string {
   if (!isTauri || !item.url) return item.url || "";
 
+  // Agora WebRTC SFU(ManyVids 系)—— SDK 自己管 WebSocket / WebRTC 网络栈,
+  // dyproxy / stream proxy 都不掺和。url 是 sentinel "agora-rtc://{channelId}",
+  // ArtPlayer customType.agorartc 拿到后从 item.agora 里读真实凭证。
+  if (item.streamType === "agora-rtc") return item.url;
+
   const ua = getHeader(item.headers, "User-Agent");
   // 防盗链：源脚本未指定 Referer 时回落到 https://movie.douban.com/。
   // 与 MoonTV 的 video-proxy / image-proxy 默认 Referer 一致，绕过 Douban
@@ -124,34 +129,84 @@ export function wrapWithProxy(
   // streamType 判定：显式优先；"auto" / undefined / 未知 → URL 启发式
   let isHls: boolean;
   let isFlv: boolean;
+  let isChunkedMp4: boolean;
+  let isSampleAesMp4: boolean;
   switch (item.streamType) {
     case "hls":
       isHls = true;
       isFlv = false;
+      isChunkedMp4 = false;
+      isSampleAesMp4 = false;
       break;
     case "flv":
       isHls = false;
       isFlv = true;
+      isChunkedMp4 = false;
+      isSampleAesMp4 = false;
+      break;
+    case "chunked-mp4":
+      // 平台返的 live.mp4?token=... fragmented MP4 长连接(AmateurTV / Cam4 / a0s.net 系)。
+      // body 是合法 .mp4 但 Transfer-Encoding: chunked,必须走 hyper stream proxy,
+      // 不能走 dyproxy URI scheme(后者拿完整 Vec<u8> 才响应 → 直播流读不到 EOF 卡死)。
+      isHls = false;
+      isFlv = false;
+      isChunkedMp4 = true;
+      isSampleAesMp4 = false;
+      break;
+    case "sample-aes-mp4":
+      // a0s.net 系平台 fmp4-hls 端点:Rust 端拉 m3u8 + key.bin,SAMPLE-AES 逐 sample 解密
+      // 后推明文 fMP4 给 native <video>。走 stream proxy + decrypt=sample-aes。
+      isHls = false;
+      isFlv = false;
+      isChunkedMp4 = false;
+      isSampleAesMp4 = true;
       break;
     case "mp4":
     case "dash":
       isHls = false;
       isFlv = false;
+      isChunkedMp4 = false;
+      isSampleAesMp4 = false;
       break;
     default:
       // "auto" / undefined / 任何未知值
       isHls = urlLooksLikeHls(item.url);
       isFlv = !isHls && /\.flv(\?|$)/i.test(item.url);
+      isChunkedMp4 = false;
+      isSampleAesMp4 = false;
   }
 
-  // FLV 直播：走本地 hyper 流代理（chunked streaming，dyproxy 没法做）
-  if (isFlv) {
+  // SAMPLE-AES 解密代理:走 stream proxy + decrypt=sample-aes。
+  // URL 是 fmp4-hls m3u8,Rust 端拉 m3u8 + key + fragment,逐 sample 解密后推明文给 native。
+  if (isSampleAesMp4) {
+    const port = getStreamProxyPort();
+    if (port) {
+      const u = new URL(`http://127.0.0.1:${port}/`);
+      u.searchParams.set("url", item.url);
+      u.searchParams.set("decrypt", "sample-aes");
+      if (ua) u.searchParams.set("ua", ua);
+      if (referer) u.searchParams.set("referer", referer);
+      if (!opts.bypassSystemProxy && opts.proxyUrl) {
+        u.searchParams.set("proxy", opts.proxyUrl);
+      }
+      return u.toString();
+    }
+    console.warn("[proxy] sample-aes-mp4 但 stream proxy 端口未就绪");
+    return item.url;
+  }
+
+  // FLV / chunked-MP4 直播：都走本地 hyper 流代理(chunked streaming, dyproxy 做不了)
+  if (isFlv || isChunkedMp4) {
     const port = getStreamProxyPort();
     if (port) {
       const u = new URL(`http://127.0.0.1:${port}/`);
       u.searchParams.set("url", item.url);
       if (ua) u.searchParams.set("ua", ua);
       if (referer) u.searchParams.set("referer", referer);
+      // proxy 让 stream proxy 透传给 ureq / WS 桥(AmateurTV / Cam4 等海外平台必须走代理)
+      if (!opts.bypassSystemProxy && opts.proxyUrl) {
+        u.searchParams.set("proxy", opts.proxyUrl);
+      }
       return u.toString();
     }
     // 端口未就绪 fallback：走 dyproxy（功能有限但起码 referer 注入到位）

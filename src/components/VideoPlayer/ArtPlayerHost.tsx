@@ -29,9 +29,53 @@ import mpegts from "mpegts.js";
 import type { MediaItem } from "@/types/media";
 import { wrapWithProxy } from "@/lib/proxy";
 import { useProxyStore } from "@/stores/proxy";
+import { useNetliveProxyStore, resolveProxyForPlatform } from "@/stores/netliveProxy";
+import type { NetLivePlatformId } from "@/lib/netlive/types";
 import { useDanmakuStore } from "@/stores/danmaku";
 import { convertDanmakuFormat, getDanmakuById, matchAnime } from "@/lib/danmaku/api";
 import { loadDanmakuMemory } from "@/components/DanmakuPanel";
+
+// agora-rtc-sdk-ng 类型(实际 SDK 走动态 import 懒加载,不在 initial bundle)
+type AgoraClient = {
+  on: (ev: string, cb: (...args: unknown[]) => void) => void;
+  subscribe: (user: AgoraRemoteUser, mediaType: "video" | "audio") => Promise<void>;
+  join: (appId: string, channel: string, token: string, uid: number) => Promise<number>;
+  leave: () => Promise<void>;
+  setClientRole: (role: "host" | "audience") => Promise<void>;
+};
+type AgoraRemoteTrack = {
+  play: (element?: HTMLElement | string) => void;
+  stop: () => void;
+  setVolume?: (v: number) => void;
+};
+type AgoraRemoteUser = {
+  uid: number | string;
+  videoTrack?: AgoraRemoteTrack;
+  audioTrack?: AgoraRemoteTrack;
+};
+
+/**
+ * Agora client / track 提升为模块级 singleton + 串行 leave queue。
+ *
+ * 为什么:Agora server 对同一个 (token, uid) 并发 join 会报 `UID_CONFLICT`。
+ * React 18 StrictMode dev 模式双 mount/unmount,组件 ref 在第二次 mount 时已重置,
+ * 看不到第一次的 client,于是用同一份 item.agora 再 join 一次 → 撞 server 还没释放的旧 connection。
+ * 改成 module-level + leave chain:任何新 join 必须 `await agoraLeaveChain`,确保
+ * 老 connection 在 server 端释放完毕。生产环境切主播每次拿新 token 也走同一条路,稳。
+ */
+let agoraGlobalClient: AgoraClient | null = null;
+let agoraGlobalTracks: AgoraRemoteTrack[] = [];
+let agoraLeaveChain: Promise<void> = Promise.resolve();
+
+function scheduleAgoraLeave(client: AgoraClient, tracks: AgoraRemoteTrack[]) {
+  const next = (async () => {
+    await agoraLeaveChain;
+    for (const t of tracks) { try { t.stop(); } catch { /* ignore */ } }
+    try { await client.leave(); } catch { /* ignore */ }
+  })();
+  agoraLeaveChain = next;
+  return next;
+}
 
 export interface VideoPlayerHandle {
   play: () => void;
@@ -69,6 +113,12 @@ export interface VideoPlayerProps {
   danmuComments?: Danmu[];
   /** 弹幕是否显示。控件 toggle 和外部传值都会改这个。 */
   danmakuVisible?: boolean;
+  /**
+   * NetLive 平台 id —— 不为空时,代理 URL 走该平台的 per-platform 覆盖
+   * (`stores/netliveProxy.ts`),不再读全局 `useProxyStore`。供直播页传入,
+   * 视频流分片 fetch 跟列表 API 用同一份代理决策。
+   */
+  netlivePlatform?: NetLivePlatformId;
 }
 
 const FILTER_ADS_KEY = "douytv:filter-ads";
@@ -118,6 +168,15 @@ function detectArtType(item: MediaItem): string | undefined {
   if (item.streamType === "flv") return "flv";
   if (item.streamType === "dash") return "mpd";
   if (item.streamType === "mp4") return undefined; // 原生
+  // chunked-mp4 = AmateurTV / Cam4 之类的 fragmented MP4 长连接(走 stream proxy 后,
+  // body 看上去就是普通 .mp4,native <video> 直接能播)
+  if (item.streamType === "chunked-mp4") return undefined;
+  // sample-aes-mp4 = a0s.net 系平台 fmp4-hls(Rust 端 SAMPLE-AES 逐 sample 解密后,
+  // 推出来的是明文 chunked fMP4,native <video> 直接消费)
+  if (item.streamType === "sample-aes-mp4") return undefined;
+  // agora-rtc = ManyVids 系 Agora WebRTC SFU。走 customType.agorartc 接管,
+  // SDK 懒加载 + join 频道 + subscribe 远端 track,绕开 ArtPlayer 的 URL 加载机制。
+  if (item.streamType === "agora-rtc") return "agorartc";
   const u = item.url.toLowerCase();
   if (u.includes(".m3u8")) return "m3u8";
   if (u.includes(".flv")) return "flv";
@@ -259,6 +318,7 @@ const ArtPlayerHost = forwardRef<VideoPlayerHandle, VideoPlayerProps>(
       onRequestSwitchSource,
       danmuComments,
       danmakuVisible = true,
+      netlivePlatform,
     } = props;
 
     const containerRef = useRef<HTMLDivElement>(null);
@@ -274,6 +334,11 @@ const ArtPlayerHost = forwardRef<VideoPlayerHandle, VideoPlayerProps>(
     });
     const hlsRef = useRef<Hls | null>(null);
     const mpegtsRef = useRef<mpegts.Player | null>(null);
+    // Agora WebRTC(ManyVids 系)—— client + tracks 走 module-level singleton(见顶部
+    // agoraGlobalClient / agoraLeaveChain 注释,解决 React StrictMode 双 mount 导致的
+    // UID_CONFLICT)。组件这里只持有"我们当前组件挂的 Agora 容器"引用,cleanup 时
+    // schedule leave。
+    const agoraContainerRef = useRef<HTMLElement | null>(null);
     const lastProgressTs = useRef(0);
     const proxyEnabled = useProxyStore((s) => s.mode !== "off");
     const proxyUrl = useProxyStore((s) =>
@@ -282,6 +347,12 @@ const ArtPlayerHost = forwardRef<VideoPlayerHandle, VideoPlayerProps>(
         : s.mode === "auto"
           ? s.systemProxyUrl
           : ""
+    );
+    // NetLive 平台 per-platform 代理覆盖 —— 仅订阅当前 platform 那个 override 值,
+    // 别的平台变更不会触发本组件 re-render。globalProxy 变化会让 resolveProxyForPlatform
+    // 重算,所以同时也订阅 useProxyStore 上面那两行就够了。
+    const platformOverride = useNetliveProxyStore((s) =>
+      netlivePlatform ? s.overrides[netlivePlatform] : undefined,
     );
     // 用户在弹幕设置里勾的"首页 Feed 显示弹幕"。响应式读取，
     // 用户在设置页改了之后，Home 的播放器立即跟随显隐。
@@ -297,12 +368,32 @@ const ArtPlayerHost = forwardRef<VideoPlayerHandle, VideoPlayerProps>(
     const [videoAspect, setVideoAspect] = useState<number>(16 / 9);
 
     const wrappedUrl = useMemo(
-      () =>
-        wrapWithProxy(item, {
+      () => {
+        // NetLive 场景:用 per-platform 覆盖决定 proxyUrl / bypass,这样
+        // segment / m3u8 fetch 跟 adapter 列表 API 用同一份代理决策。
+        if (netlivePlatform) {
+          const { proxyUrl: pUrl, bypass } = resolveProxyForPlatform(netlivePlatform);
+          return wrapWithProxy(item, {
+            filterAds,
+            proxyUrl: bypass ? undefined : pUrl,
+            bypassSystemProxy: bypass,
+          });
+        }
+        return wrapWithProxy(item, {
           filterAds,
           proxyUrl: proxyEnabled ? proxyUrl : undefined,
-        }),
-      [item.url, item.streamType, item.headers, filterAds, proxyEnabled, proxyUrl]
+        });
+      },
+      [
+        item.url,
+        item.streamType,
+        item.headers,
+        filterAds,
+        proxyEnabled,
+        proxyUrl,
+        netlivePlatform,
+        platformOverride,
+      ],
     );
 
     // hls.js loader + 错误识别。MoonTV 的 customType.m3u8 移植版（精简）。
@@ -482,13 +573,163 @@ const ArtPlayerHost = forwardRef<VideoPlayerHandle, VideoPlayerProps>(
       [item.kind, onError]
     );
 
+    // Agora WebRTC loader —— ManyVids 之类已迁移到 Agora WebRTC SFU 的平台。
+    // 走动态 import() 懒加载 agora-rtc-sdk-ng(~500KB),只在 customType 命中时拉。
+    // 凭证从 item.agora 取(adapter.resolve 透传)。SDK 会**在容器里新建一个 <video>**
+    // (videoTrack.play(parentEl) 行为),所以我们传 video.parentElement,并把 ArtPlayer
+    // 原 <video> 隐藏(否则会双视频堆叠 + 闪烁)。
+    const attachAgora = useCallback(
+      async (video: HTMLVideoElement, _url: string) => {
+        const payload = item.agora;
+        if (!payload?.appId) {
+          setError("缺少 Agora App ID(见 manyvids.ts MANYVIDS_AGORA_APP_ID 注释)");
+          onError?.(new Error("Agora payload missing appId"));
+          return;
+        }
+        if (!payload.channelId || !payload.token) {
+          setError("Agora 凭证不完整");
+          onError?.(new Error("Agora payload missing channelId/token"));
+          return;
+        }
+
+        // 旧 client 排队 leave(可能是同组件第二次 attachAgora,或 StrictMode 双 mount 残留)
+        if (agoraGlobalClient) {
+          scheduleAgoraLeave(agoraGlobalClient, agoraGlobalTracks);
+          agoraGlobalClient = null;
+          agoraGlobalTracks = [];
+        }
+        // 等所有 pending leave 完成 —— 保证 Agora server 端那个 (token, uid) 已释放,
+        // 新 join 才不会撞 UID_CONFLICT。
+        await agoraLeaveChain;
+
+        // 每次 attach 都拿全新 (token, uid)。adapter 实现 refresh() = 每次 POST joinChannel。
+        // StrictMode 双 mount 第二次会拿到独立 uid,不会跟第一次撞;生产切回同房间也是新 token。
+        // refresh 失败时 fallback 用 payload 里的初始凭证试一次。
+        let creds = { channelId: payload.channelId, token: payload.token, uid: payload.uid };
+        if (payload.refresh) {
+          try {
+            creds = await payload.refresh();
+          } catch (e) {
+            console.warn("[ArtPlayerHost] agora refresh failed, using initial creds", e);
+          }
+        }
+
+        // ArtPlayer 容器(.art-video-player) —— Agora 会在此插入它自己的 <video>
+        const parent = video.parentElement;
+        if (!parent) {
+          setError("ArtPlayer 容器丢失");
+          onError?.(new Error("video.parentElement is null"));
+          return;
+        }
+        agoraContainerRef.current = parent;
+        // 隐藏 ArtPlayer 原 <video>(它不会有 src,但占位 + 黑屏会盖住 Agora 创建的 video)
+        video.style.display = "none";
+
+        let AgoraRTC: { createClient: (cfg: { mode: string; codec: string }) => AgoraClient };
+        try {
+          const mod = await import("agora-rtc-sdk-ng");
+          // ESM default export 兼容 cjs 互操作
+          AgoraRTC = (mod as unknown as { default?: typeof AgoraRTC }).default ?? (mod as unknown as typeof AgoraRTC);
+        } catch (e) {
+          setError("Agora SDK 加载失败");
+          onError?.(e instanceof Error ? e : new Error(String(e)));
+          return;
+        }
+
+        const client = AgoraRTC.createClient({ mode: "live", codec: "vp8" });
+        agoraGlobalClient = client;
+        agoraGlobalTracks = [];
+        try {
+          await client.setClientRole("audience");
+        } catch { /* SDK 某些版本不支持,忽略 */ }
+
+        client.on("user-published", async (...args: unknown[]) => {
+          const user = args[0] as AgoraRemoteUser;
+          const mediaType = args[1] as "video" | "audio";
+          if (client !== agoraGlobalClient) return; // 已切换/销毁
+          console.log(`[agora] user-published uid=${user.uid} type=${mediaType}`);
+          try {
+            await client.subscribe(user, mediaType);
+          } catch (e) {
+            console.warn("[ArtPlayerHost] agora subscribe failed", e);
+            return;
+          }
+          if (mediaType === "video" && user.videoTrack && agoraContainerRef.current) {
+            // ArtPlayer 的 .art-poster / .art-mask / .art-loading 会盖住 Agora 创建的 video,
+            // 把它们隐藏让画面露出来。Agora SDK 会在容器里 append:
+            //   <div class="agora_video_player" id="agora-video-player-track-..."><video/></div>
+            // 我们再 force 内部 video 全屏 fit。
+            const parent = agoraContainerRef.current;
+            const masks = parent.querySelectorAll<HTMLElement>(
+              ".art-poster, .art-mask, .art-loading, .art-state, .art-bottom"
+            );
+            // 只藏视觉遮罩(.art-bottom 控件栏保留)。这里只隐藏会盖画面的层。
+            parent.querySelectorAll<HTMLElement>(".art-poster, .art-mask, .art-loading, .art-state")
+              .forEach((el) => { el.style.display = "none"; });
+            void masks; // 仅记号,实际隐藏已在 querySelectorAll forEach 里
+            console.log("[agora] playing videoTrack into container", parent);
+            user.videoTrack.play(parent);
+            agoraGlobalTracks.push(user.videoTrack);
+            // play() 后 SDK 把它的 div 插到 container 末尾,确保 fit + 在顶层
+            requestAnimationFrame(() => {
+              const agoraDiv = parent.querySelector<HTMLElement>(".agora_video_player");
+              if (agoraDiv) {
+                agoraDiv.style.position = "absolute";
+                agoraDiv.style.inset = "0";
+                agoraDiv.style.width = "100%";
+                agoraDiv.style.height = "100%";
+                agoraDiv.style.zIndex = "10";
+                const v = agoraDiv.querySelector("video");
+                if (v) {
+                  v.style.width = "100%";
+                  v.style.height = "100%";
+                  v.style.objectFit = "contain";
+                }
+                console.log("[agora] agora_video_player applied", agoraDiv);
+              } else {
+                console.warn("[agora] .agora_video_player not found in container after play()");
+              }
+            });
+          }
+          if (mediaType === "audio" && user.audioTrack) {
+            console.log("[agora] playing audioTrack");
+            user.audioTrack.play();
+            agoraGlobalTracks.push(user.audioTrack);
+          }
+        });
+        client.on("user-unpublished", (...args: unknown[]) => {
+          const user = args[0] as AgoraRemoteUser;
+          const mediaType = args[1] as "video" | "audio";
+          const t = mediaType === "video" ? user.videoTrack : user.audioTrack;
+          if (t) { try { t.stop(); } catch { /* ignore */ } }
+        });
+        client.on("exception", (...args: unknown[]) => {
+          console.warn("[ArtPlayerHost] agora exception", args[0]);
+        });
+
+        try {
+          await client.join(payload.appId, creds.channelId, creds.token, creds.uid);
+        } catch (e) {
+          setError(`Agora join 失败: ${e instanceof Error ? e.message : String(e)}`);
+          onError?.(e instanceof Error ? e : new Error(String(e)));
+          if (agoraGlobalClient === client) {
+            scheduleAgoraLeave(client, agoraGlobalTracks);
+            agoraGlobalClient = null;
+            agoraGlobalTracks = [];
+          }
+        }
+      },
+      [item.agora, onError]
+    );
+
     // 实例化 ArtPlayer（仅在挂载时一次）
     useEffect(() => {
       const el = containerRef.current;
       if (!el) return;
 
-      // 切到新 item → 重置宽高比占位；新视频的 loadedmetadata 触发后再更新
+      // 切到新 item → 重置宽高比占位 + 清掉上一个 item 残留的错误遮罩(否则切到正常房间还盖着)
       setVideoAspect(16 / 9);
+      setError(null);
 
       const initialType = detectArtType(item);
       const skipMarks = readSkipMarks(item.id);
@@ -547,6 +788,7 @@ const ArtPlayerHost = forwardRef<VideoPlayerHandle, VideoPlayerProps>(
         customType: {
           m3u8: (video: HTMLVideoElement, url: string) => attachHls(video, url),
           flv: (video: HTMLVideoElement, url: string) => attachFlv(video, url),
+          agorartc: (video: HTMLVideoElement, url: string) => { void attachAgora(video, url); },
         },
         // 工具栏左侧：上一集 / 下一集（合集时）。propsRef 让闭包始终读最新 prop，
         // 避免切集后按钮调用旧 callback。隐藏由 CSS .art-control[data-state="off"] 控制。
@@ -768,6 +1010,15 @@ const ArtPlayerHost = forwardRef<VideoPlayerHandle, VideoPlayerProps>(
               /* ignore */
             }
             mpegtsRef.current = null;
+          }
+          // Agora WebRTC 清理:走 module-level singleton + leave chain,避免 StrictMode
+          // 双 mount 时两次 join 同一 token 撞 UID_CONFLICT。schedule 立即返回,实际 leave
+          // 异步排队执行;下次 attachAgora `await agoraLeaveChain` 会等它跑完。
+          if (agoraGlobalClient) {
+            scheduleAgoraLeave(agoraGlobalClient, agoraGlobalTracks);
+            agoraGlobalClient = null;
+            agoraGlobalTracks = [];
+            agoraContainerRef.current = null;
           }
           art.destroy(false);
         } catch (e) {
@@ -1028,11 +1279,18 @@ const ArtPlayerHost = forwardRef<VideoPlayerHandle, VideoPlayerProps>(
                 type="button"
                 onClick={() => {
                   setError(null);
-                  // 强制重挂当前 URL（不重新解析）
+                  // 强制重挂当前 URL(不重新解析)。按流类型分发,不能一律走 attachHls,
+                  // 否则 Agora sentinel URL "agora-rtc://..." 会被 hls.js 当 m3u8 加载 → manifestLoadError。
                   const art = artRef.current;
                   const v = art?.video as HTMLVideoElement | undefined;
                   if (art && v) {
-                    attachHls(v, wrappedUrl);
+                    if (item.streamType === "agora-rtc") {
+                      void attachAgora(v, wrappedUrl);
+                    } else if (item.streamType === "flv") {
+                      attachFlv(v, wrappedUrl);
+                    } else {
+                      attachHls(v, wrappedUrl);
+                    }
                   }
                 }}
                 className="px-4 py-2 rounded-full text-xs font-display font-semibold tap text-cream"

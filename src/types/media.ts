@@ -8,7 +8,7 @@ export interface MediaItem {
   title: string;
   poster?: string;
   url: string;
-  streamType?: "auto" | "mp4" | "hls" | "dash" | "flv";
+  streamType?: "auto" | "mp4" | "hls" | "dash" | "flv" | "chunked-mp4" | "sample-aes-mp4" | "agora-rtc";
   headers?: Record<string, string>;
   duration?: number;
   sourceId?: string;
@@ -19,6 +19,19 @@ export interface MediaItem {
   remarks?: string;
   /** 类型标签（用于推荐 type_match） */
   typeName?: string;
+
+  /**
+   * Agora WebRTC 凭证 —— `streamType==="agora-rtc"` 时必填,透传自 NetLiveStream。
+   * ArtPlayerHost 走 customType.agorartc 时读取并懒加载 agora-rtc-sdk-ng 加入频道。
+   * `refresh` 让每次 attach 都拿全新 (token, uid),避免 UID_CONFLICT。
+   */
+  agora?: {
+    appId: string;
+    channelId: string;
+    token: string;
+    uid: number;
+    refresh?: () => Promise<{ channelId: string; token: string; uid: number }>;
+  };
 
   // —— 合集 / 选集相关（仅 video kind 在 VideoFeed 内使用） ——
   /** 该合集的所有集（来自 detail.playbacks[0].episodes） */

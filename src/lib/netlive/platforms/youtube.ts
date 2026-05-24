@@ -13,7 +13,8 @@
  * (`ytInitialPlayerResponse` 和 `ytInitialData`) 五年内 基本未动，所以稳定性能用。
  * roomId 我们用 videoId（11 字符的 YouTube 视频 ID），不是频道 ID —— 一个频道可能同时多场直播。
  */
-import { scriptFetch } from "@/source-script/fetch";
+import { createPlatformFetch } from "@/lib/netlive/scriptFetch";
+const scriptFetch = createPlatformFetch("youtube");
 import type {
   NetLiveAdapter,
   NetLiveCategory,

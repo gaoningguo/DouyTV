@@ -12,7 +12,8 @@
  * 推荐 / 分类 / 搜索 / 状态 endpoint 与之前一致（与 pure_live 同）。
  */
 import CryptoJS from "crypto-js";
-import { scriptFetch } from "@/source-script/fetch";
+import { createPlatformFetch } from "@/lib/netlive/scriptFetch";
+const scriptFetch = createPlatformFetch("huya");
 import type {
   NetLiveAdapter,
   NetLiveCategory,

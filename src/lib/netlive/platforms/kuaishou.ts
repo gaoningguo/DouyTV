@@ -11,7 +11,8 @@
  * 快手无重度签名，但需要 ttwid 类 cookie（首次访问页面 set-cookie 即可）。
  * 搜索接口走不通（pure_live 直接返回空），保持一致。
  */
-import { scriptFetch } from "@/source-script/fetch";
+import { createPlatformFetch } from "@/lib/netlive/scriptFetch";
+const scriptFetch = createPlatformFetch("kuaishou");
 import type {
   NetLiveAdapter,
   NetLiveCategory,

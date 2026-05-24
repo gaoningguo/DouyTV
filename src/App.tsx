@@ -26,6 +26,10 @@ import SettingsNovel from "@/pages/settings/Novel";
 import SettingsMangaSrc from "@/pages/settings/MangaSrc";
 import SettingsVideoHub from "@/pages/settings/VideoSourcesHub";
 import SettingsLiveHub from "@/pages/settings/LiveSourcesHub";
+import SettingsStripchatKeys, {
+  loadKeysFromStorage as loadStripchatKeys,
+  syncKeysToRust as syncStripchatKeys,
+} from "@/pages/settings/StripchatKeys";
 import MusicHome from "@/pages/music/Home";
 import MusicSearch from "@/pages/music/Search";
 import MusicPlaylist from "@/pages/music/Playlist";
@@ -71,6 +75,7 @@ import { useLiveSubStore } from "@/stores/liveSubscription";
 import { useLibraryStore } from "@/stores/library";
 import { useLiveStore } from "@/stores/live";
 import { useProxyStore } from "@/stores/proxy";
+import { useNetliveProxyStore } from "@/stores/netliveProxy";
 import { useMusicStore } from "@/stores/music";
 import { useBooksStore } from "@/stores/books";
 import { useMangaStore } from "@/stores/manga";
@@ -138,10 +143,14 @@ export default function App() {
     useLiveSubStore.getState().hydrate();
     useLiveSubStore.getState().bootRefresh();
     useProxyStore.getState().hydrate();
+    useNetliveProxyStore.getState().hydrate();
     void useMusicStore.getState().hydrate();
     void useBooksStore.getState().hydrate();
     void useMangaStore.getState().hydrate();
     useSyncStore.getState().hydrate();
+    // Stripchat Mouflon 解扰 key 跨进程不持久化(Rust 端是进程内 jar),
+    // 启动时把 localStorage 的 key 一次性同步过去
+    void syncStripchatKeys(loadStripchatKeys());
     const stopAutoSync = startAutoSyncTimer();
     return () => {
       stopAutoSync();
@@ -205,6 +214,10 @@ export default function App() {
           <Route path="/settings/live-epg" element={<SettingsLiveEpg />} />
           <Route path="/settings/live-add" element={<SettingsLiveAdd />} />
           <Route path="/settings/live-import" element={<SettingsLiveImport />} />
+          <Route
+            path="/settings/stripchat-keys"
+            element={<SettingsStripchatKeys />}
+          />
           <Route path="/settings/local-scan" element={<SettingsLocalScan />} />
           <Route path="/settings/proxy" element={<SettingsProxy />} />
           <Route path="/settings/danmaku" element={<SettingsDanmaku />} />

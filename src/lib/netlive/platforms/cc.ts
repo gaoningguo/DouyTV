@@ -13,7 +13,8 @@
  *
  * 无签名，全公开 JSON。
  */
-import { scriptFetch } from "@/source-script/fetch";
+import { createPlatformFetch } from "@/lib/netlive/scriptFetch";
+const scriptFetch = createPlatformFetch("cc");
 import type {
   NetLiveAdapter,
   NetLiveCategory,

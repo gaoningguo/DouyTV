@@ -15,7 +15,8 @@
  *
  * roomId = username。
  */
-import { scriptFetch } from "@/source-script/fetch";
+import { createPlatformFetch } from "@/lib/netlive/scriptFetch";
+const scriptFetch = createPlatformFetch("stripchat");
 import type {
   NetLiveAdapter,
   NetLiveCategory,
@@ -263,14 +264,19 @@ async function getLiveStatus(roomId: string): Promise<boolean> {
 /* ─────────────── resolve ─────────────── */
 
 /**
- * 实测 2026-05：匿名访问 stripchat 任何主播 master playlist 都 200，但 variant
- * playlist 强制返回带 `#EXT-X-MOUFLON-ADVERT` 标记的广告 VOD（chunk path 是
- * `cpa/v2/chunk_NNN.m4s`，cpa = cost per action）—— 这是 stripchat 反 scrape 策略，
- * 真直播必须带登录 session cookie 才返。
+ * Stripchat 自 2025-08 起对 m3u8 做 Mouflon 加扰：
+ *   1. master.m3u8 顶部含 6 行 `#EXT-X-MOUFLON:PSCH:v2:{pkey}`
+ *   2. variant 必须带 `?psch=v2&pkey={任一 pkey}` 否则 302 跳广告 VOD
+ *      (`/cpa/v2/stream.m3u8`，带 `#EXT-X-MOUFLON-ADVERT` 标记)
+ *   3. 带 pkey 的真 variant 里每个分片以 `#EXT-X-MOUFLON:URI:<url_with_encrypted_seg>`
+ *      + `media.mp4` 占位符表示，需要 pkey 配对的 pdkey 用 SHA256+XOR+Base64 解扰段名
  *
- * 我们当前能做的：
- *   1. 抓 master 后探测 variant，若都是广告 → 抛清晰错误告知用户
- *   2. 极少数主播 variant 不返广告时直接使用
+ * 我们在 dyproxy 的 m3u8 重写器里（`src-tauri/src/lib.rs` + `mouflon.rs`）
+ * 检测 host = doppiocdn，master 时注入 pkey 查询，variant 时解扰并替换占位符。
+ * 用户需在「设置 → 直播管理 → 网络 → Stripchat 解扰密钥」录入 `pkey:pdkey` 对，
+ * 否则只能进房但画面黑屏（分片解扰失败）。
+ *
+ * 仅保留 streamName 提取兜底逻辑，真正的解扰在 dyproxy 层完成。
  */
 async function resolve(roomId: string): Promise<NetLiveStream> {
   // /cam 接口响应结构是 { cam: { streamName, userStreamName, ... } }，
@@ -311,15 +317,15 @@ async function resolve(roomId: string): Promise<NetLiveStream> {
     streamName = m[1];
   }
 
-  // Stripchat 反爬：匿名拉 master 后 variant 几乎都是广告。还是返回 master URL ——
-  // 让用户播放看到广告时知道是平台限制，并在 UI 提示需要浏览器登录。
-  // 一旦官方修改策略允许匿名直播，这条 URL 自然能恢复。
+  // Stripchat 反爬：匿名 master 200，但 variant 不带 ?psch=v2&pkey= 会 302 跳广告。
+  // dyproxy 的 m3u8 重写器检测到 doppiocdn host + Mouflon 标记后自动注入 pkey
+  // 并用用户在设置里配的 pdkey 解扰分片名。
   const hls = `https://edge-hls.doppiocdn.com/hls/${streamName}/master/${streamName}_auto.m3u8`;
   return {
     url: hls,
     streamType: "hls",
     qn: "auto",
-    qnLabel: "自适应 ⚠ 匿名访问可能只能看广告片段",
+    qnLabel: "自适应（需在设置中配 Mouflon 解扰密钥）",
     referer: REFERER,
     ua: UA,
   };
