@@ -45,7 +45,7 @@ const COMMON_HEADERS: Record<string, string> = {
 
 /* ───────────────────────────────────────────── */
 
-async function safeJson<T>(res: Response): Promise<T> {
+async function safeJson<T>(res: any): Promise<T> {
   const text = await res.text();
 
   if (!text || !text.trim()) {

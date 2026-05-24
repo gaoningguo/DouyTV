@@ -237,7 +237,6 @@ function extractInitState(
 /* ─────────────── 推荐 ─────────────── */
 
 async function getRecommend(
-  page: number,
   pageSize: number
 ): Promise<{
   list: NetLiveRoom[];
@@ -379,7 +378,7 @@ async function getCategoryRooms(
   }
 
   if (page === 1) {
-    return getRecommend(1, limit);
+    return getRecommend(limit);
   }
 
   return {
