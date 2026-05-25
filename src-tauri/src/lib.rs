@@ -1164,12 +1164,106 @@ async fn open_cf_challenge(
 #[cfg(not(desktop))]
 #[tauri::command]
 async fn open_cf_challenge(
-    _url: String,
-    _ua: Option<String>,
+    app: tauri::AppHandle,
+    url: String,
+    ua: Option<String>,
     _proxy_url: Option<String>,
 ) -> Result<bool, String> {
-    // 移动端不支持 cookies() 抽取(Android)/ 多窗口体验差(iOS),前端会显示降级提示
-    Ok(false)
+    #[cfg(target_os = "android")]
+    {
+        let _ = (app, url, ua);
+        return Ok(false);
+    }
+
+    #[cfg(target_os = "ios")]
+    {
+        use tauri::{Manager, WebviewUrl, WebviewWindowBuilder};
+
+        let parsed_url = Url::parse(&url).map_err(|e| format!("bad url: {e}"))?;
+        let host = parsed_url.host_str().unwrap_or("").to_lowercase();
+        if host.is_empty() {
+            return Err("url has no host".into());
+        }
+
+        if cf_cookies::get_cookie_header_for_url(&url)
+            .map(|s| s.contains("cf_clearance="))
+            .unwrap_or(false)
+        {
+            return Ok(true);
+        }
+
+        if app.get_webview_window("cf-challenge").is_some() {
+            return Ok(false);
+        }
+
+        let mut builder = WebviewWindowBuilder::new(
+            &app,
+            "cf-challenge",
+            WebviewUrl::External(parsed_url.clone()),
+        )
+        .title("人机验证");
+
+        if let Some(u) = ua.as_deref().filter(|s| !s.is_empty()) {
+            builder = builder.user_agent(u);
+        }
+
+        let win = builder
+            .build()
+            .map_err(|e| format!("build window failed: {e}"))?;
+
+        let mut got_clearance = false;
+        for _ in 0..150 {
+            tokio::time::sleep(std::time::Duration::from_secs(2)).await;
+
+            if app.get_webview_window("cf-challenge").is_none() {
+                break;
+            }
+
+            let win_ref = win.clone();
+            let cookies_result =
+                tauri::async_runtime::spawn_blocking(move || win_ref.cookies())
+                    .await
+                    .map_err(|e| e.to_string())?;
+
+            if let Ok(cookies) = cookies_result {
+                let mut harvested: Vec<(String, String)> = Vec::new();
+                let mut found_clearance = false;
+                for c in cookies {
+                    let domain = c
+                        .domain()
+                        .unwrap_or("")
+                        .trim_start_matches('.')
+                        .to_lowercase();
+                    if domain.is_empty() {
+                        continue;
+                    }
+                    if host == domain || host.ends_with(&format!(".{}", domain)) {
+                        if c.name() == "cf_clearance" {
+                            found_clearance = true;
+                        }
+                        harvested.push((c.name().to_string(), c.value().to_string()));
+                    }
+                }
+                if found_clearance {
+                    cf_cookies::store_cookies_for_host(&host, harvested);
+                    got_clearance = true;
+                    break;
+                }
+            }
+        }
+
+        if let Some(w) = app.get_webview_window("cf-challenge") {
+            let _ = w.destroy();
+        }
+
+        return Ok(got_clearance);
+    }
+
+    #[allow(unreachable_code)]
+    {
+        let _ = (app, url, ua);
+        Ok(false)
+    }
 }
 
 #[tauri::command]

@@ -5007,11 +5007,11 @@ dependencies = [
  "futures-util",
  "log 0.4.29",
  "rustls",
- "rustls-native-certs",
  "rustls-pki-types",
  "tokio",
  "tokio-rustls",
  "tungstenite",
+ "webpki-roots 0.26.11",
 ]
 
 [[package]]

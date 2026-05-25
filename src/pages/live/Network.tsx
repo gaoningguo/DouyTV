@@ -11,6 +11,7 @@
  */
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useNavigate } from "react-router-dom";
+import { useViewport } from "@/hooks/useViewport";
 import { useNetLiveStore } from "@/stores/netlive";
 import { useNetLiveListStore } from "@/stores/netliveList";
 import {
@@ -80,6 +81,7 @@ function categoryPriority(name: string | undefined): number {
 
 export default function NetworkLivePanel() {
   const navigate = useNavigate();
+  const { isDesktop } = useViewport();
   const activePlatform = useNetLiveStore((s) => s.activePlatform);
   const favorites = useNetLiveStore((s) => s.favorites);
   const history = useNetLiveStore((s) => s.history);
@@ -272,13 +274,15 @@ export default function NetworkLivePanel() {
 
   // 跨路由 mount 时 store.activeRoom 还在但 resolved (本地 useState) 已丢 → 自动重 resolve
   // 让 player aside 恢复播放。NetLiveStream 含 callback 不能 serialize,只能现拉。
+  // 仅桌面端,移动端 aside 不渲染就不必 resolve。
   const reresolvedOnceRef = useRef(false);
   useEffect(() => {
+    if (!isDesktop) return;
     if (reresolvedOnceRef.current) return;
     if (!activeRoom || resolved) return;
     reresolvedOnceRef.current = true;
     void playRoom(activeRoom);
-  }, [activeRoom, resolved, playRoom]);
+  }, [isDesktop, activeRoom, resolved, playRoom]);
 
   // 滚动位置 save/restore —— 桌面 lg+ 滚 mainScrollRef,移动端滚外层 rootScrollRef。
   // mount 时 restore,unmount 时记入 store。
@@ -333,12 +337,13 @@ export default function NetworkLivePanel() {
     [activeRoom, resolved]
   );
 
-  /* ───────────── 弹幕：activeRoom 变化时启停 ───────────── */
+  /* ───────────── 弹幕：activeRoom 变化时启停（仅桌面端 aside 可见时） ───────────── */
   useEffect(() => {
     danmakuClientRef.current?.stop();
     danmakuClientRef.current = null;
     setDanmaku([]);
     setDanmakuStatus("");
+    if (!isDesktop) return;
     if (!activeRoom || !danmakuOn) return;
     if (activeRoom.platform !== "douyu") return;
     const client = createDouyuDanmaku(activeRoom.roomId, {
@@ -358,7 +363,7 @@ export default function NetworkLivePanel() {
     return () => {
       client.stop();
     };
-  }, [activeRoom, danmakuOn]);
+  }, [isDesktop, activeRoom, danmakuOn]);
 
   /* ───────────── MediaItem 给 VideoPlayer ───────────── */
   const mediaItem = useMemo<MediaItem | undefined>(() => {
@@ -450,9 +455,18 @@ export default function NetworkLivePanel() {
   /* ───────────── 卡片回调：稳定引用，配合 RoomCard memo 减 re-render ───────────── */
   const handleSelectRoom = useCallback(
     (r: NetLiveRoom) => {
+      if (!isDesktop) {
+        // 移动端：跳转全屏房间页（斗鱼/虎牙模式）
+        navigate(
+          `/live/room/${r.platform}/${encodeURIComponent(r.roomId)}`,
+          { state: { room: r } }
+        );
+        noteVisit(r);
+        return;
+      }
       void playRoom(r);
     },
-    [playRoom]
+    [isDesktop, navigate, noteVisit, playRoom]
   );
   const handleFavToggle = useCallback(
     (r: NetLiveRoom) => {
@@ -467,7 +481,7 @@ export default function NetworkLivePanel() {
     : null;
 
   return (
-    /* h-full + 子元素自管滚动：移动端整体 scroll + aside sticky；
+    /* h-full + 子元素自管滚动：移动端整体 scroll；
        桌面 lg 双栏，main / aside 各自 overflow-y-auto，aside 永远在视野里 */
     <div ref={rootScrollRef} className="h-full flex flex-col lg:flex-row gap-3 lg:gap-4 p-3 overflow-y-auto lg:overflow-hidden">
       {/* ───────────── 主区：tabs + 分类 + grid（卡片区独立滚动） ───────────── */}
@@ -702,41 +716,28 @@ export default function NetworkLivePanel() {
           </MediaGrid>
         )}
 
-        {/* 加载更多(仅推荐 section 且有 hasMore)。底部留 BottomTabBar + safe-area 空间,
+        {/* 加载更多：移动端 IntersectionObserver 自动触发，桌面端保留按钮。
+            底部留 BottomTabBar + safe-area 空间,
             否则移动端按钮被底部导航条遮挡点不到。桌面端 lg+ 没 BottomTabBar,留 safe-area 即可。 */}
         {section === "recommend" && sectionData.length > 0 && hasMore && (
-          <div
-            className="mt-4 flex justify-center"
-            style={{
-              paddingBottom:
-                "calc(var(--bottom-tab-h, env(safe-area-inset-bottom)) + 12px)",
+          <LoadMoreTrigger
+            loading={loading}
+            isDesktop={isDesktop}
+            onLoadMore={() => {
+              const np = page + 1;
+              setPage(np);
+              void loadList(activePlatform, np, true, activeCategory, searchQuery);
             }}
-          >
-            <button
-              type="button"
-              onClick={() => {
-                const np = page + 1;
-                setPage(np);
-                void loadList(activePlatform, np, true, activeCategory, searchQuery);
-              }}
-              disabled={loading}
-              className="px-4 py-2 rounded-lg text-[11px] font-display font-semibold tap text-cream disabled:opacity-50"
-              style={{
-                background: "var(--ink-2)",
-                border: "1px solid var(--cream-line)",
-              }}
-            >
-              {loading ? "加载中…" : "加载更多"}
-            </button>
-          </div>
+          />
         )}
         </div>
       </div>
 
-      {/* ───────────── 侧栏：player + resolutions + 弹幕。永远可见 ─────────────
-           移动端：sticky 在视口顶端（DOM 顺序排第一，order-1）。
+      {/* ───────────── 侧栏：player + resolutions + 弹幕。仅桌面端显示 ─────────────
+           移动端点击卡片直接跳全屏房间页，不需要 inline player。
            桌面：右侧 420px 一栏，max-h-full + overflow-y-auto，
                  不随卡片区滚动，常驻视野。 */}
+      {isDesktop && (
       <aside
         className="
           order-1 lg:order-2
@@ -842,6 +843,7 @@ export default function NetworkLivePanel() {
           />
         )}
       </aside>
+      )}
     </div>
   );
 }
@@ -895,7 +897,7 @@ function PlatformTabs({
       style={{ borderColor: "var(--cream-line)" }}
     >
       {/* tabs 横滚区(actions 不参与,避免平台多时按钮跑右屏外) */}
-      <div className="flex items-center gap-1 overflow-x-auto overflow-y-auto h-12 flex-1 min-w-0 no-scrollbar-x">
+      <div className="flex items-center gap-0.5 overflow-x-auto overflow-y-auto h-11 flex-1 min-w-0 no-scrollbar-x">
   
       {visiblePlatforms.map((p) => {
         const enabled = supported.includes(p.id);
@@ -937,12 +939,12 @@ function PlatformTabs({
             onPointerUp={clearLongPress}
             onPointerLeave={clearLongPress}
             onPointerCancel={clearLongPress}
-            className={`relative px-4 py-2 font-display whitespace-nowrap tap disabled:opacity-40 ${
+            className={`relative px-2.5 lg:px-4 py-2 font-display whitespace-nowrap tap disabled:opacity-40 ${
               isActive
                 ? "text-ember font-bold"
                 : "text-cream-dim hover:text-cream font-medium"
             }`}
-            style={{ fontSize: 13 }}
+            style={{ fontSize: 12 }}
           >
             <span className="inline-flex items-center gap-1.5">
               {enabled && (
@@ -1364,6 +1366,71 @@ function ToolbarButton({
     >
       {children}
     </button>
+  );
+}
+
+/* ═══════════════════════════════════════════════════════════
+ * LoadMoreTrigger —— 移动端 IntersectionObserver 自动加载,
+ * 桌面端保留按钮(避免误触)。
+ * ═══════════════════════════════════════════════════════════ */
+function LoadMoreTrigger({
+  loading,
+  isDesktop,
+  onLoadMore,
+}: {
+  loading: boolean;
+  isDesktop: boolean;
+  onLoadMore: () => void;
+}) {
+  const sentinelRef = useRef<HTMLDivElement | null>(null);
+
+  useEffect(() => {
+    if (isDesktop) return;
+    const el = sentinelRef.current;
+    if (!el) return;
+    const observer = new IntersectionObserver(
+      (entries) => {
+        for (const entry of entries) {
+          if (entry.isIntersecting && !loading) {
+            onLoadMore();
+            break;
+          }
+        }
+      },
+      { rootMargin: "200px" }
+    );
+    observer.observe(el);
+    return () => observer.disconnect();
+  }, [isDesktop, loading, onLoadMore]);
+
+  return (
+    <div
+      ref={sentinelRef}
+      className="mt-4 flex justify-center"
+      style={{
+        paddingBottom:
+          "calc(var(--bottom-tab-h, env(safe-area-inset-bottom)) + 12px)",
+      }}
+    >
+      {isDesktop ? (
+        <button
+          type="button"
+          onClick={onLoadMore}
+          disabled={loading}
+          className="px-4 py-2 rounded-lg text-[11px] font-display font-semibold tap text-cream disabled:opacity-50"
+          style={{
+            background: "var(--ink-2)",
+            border: "1px solid var(--cream-line)",
+          }}
+        >
+          {loading ? "加载中…" : "加载更多"}
+        </button>
+      ) : (
+        <span className="text-[10px] font-mono text-cream-faint">
+          {loading ? "加载中…" : "下滑加载更多"}
+        </span>
+      )}
+    </div>
   );
 }
 

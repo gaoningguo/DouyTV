@@ -126,10 +126,17 @@ async function fetchAll(): Promise<CcModel[]> {
   const mapping = data.mapping ?? [];
   const rows = data.models ?? [];
   if (mapping.length === 0) throw new Error("Cams.com listing 缺 mapping 字段");
+  const BATCH_SIZE = 100;
   const out: CcModel[] = [];
-  for (const r of rows) {
-    const m = rowToModel(r, mapping);
-    if (m) out.push(m);
+  for (let i = 0; i < rows.length; i += BATCH_SIZE) {
+    const batch = rows.slice(i, i + BATCH_SIZE);
+    for (const r of batch) {
+      const m = rowToModel(r, mapping);
+      if (m) out.push(m);
+    }
+    if (i + BATCH_SIZE < rows.length) {
+      await new Promise(resolve => setTimeout(resolve, 0));
+    }
   }
   cache = { at: now, models: out };
   return out;

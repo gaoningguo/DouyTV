@@ -29,6 +29,7 @@ ureq = { version = "2.12", features = ["json", "tls"], default-features = false 
 # gzip/brotli/deflate/zstd: Chaturbate MMCDN 强制返压缩 body,reqwest 没启用对应解压 feature
 # 时拿到的是压缩字节(utf8 decode 失败 / hls.js 解析挂)。这几个 crate 都是纯 rust 实现,
 # 不会引入 encoding_rs。
+# reqwest 0.13 的 "rustls" feature 内置 webpki-roots(Mozilla CA),iOS/Android 无需系统证书链。
 reqwest = { version = "0.13", default-features = false, features = ["rustls", "http2", "json", "gzip", "brotli", "deflate", "zstd", "stream"] }
 
 # 本地流式 HTTP 代理 —— 用于 FLV 直播（Douyu/Huya/Douyin），
@@ -42,8 +43,9 @@ futures-util = { version = "0.3", default-features = false, features = ["std"] }
 bytes = "1"
 
 # FC2 Live —— 拉流需要 WebSocket 握手换 HLS playlist URL（纯信令,不走媒体)。
-# 见 fc2_ws.rs。rustls-tls-native-roots 与 reqwest 共享 rustls 0.23,不会重复链接。
-tokio-tungstenite = { version = "0.24", default-features = false, features = ["connect", "rustls-tls-native-roots"] }
+# 见 fc2_ws.rs。用 webpki-roots 内置 Mozilla CA 证书,iOS/Android 上 native-roots
+# 无法加载系统证书链(报 "no native root CA certificates found")。
+tokio-tungstenite = { version = "0.24", default-features = false, features = ["connect", "rustls-tls-webpki-roots"] }
 # rustls 直依赖 —— 仅为给 tokio-tungstenite 安装 process-wide CryptoProvider。
 # reqwest 自己管它的 ClientConfig,但不会装进程级 default;tokio-tungstenite 无 config 就 panic。
 # aws-lc-rs feature 与 reqwest 复用同一份编译产物,不会增加 binary size。

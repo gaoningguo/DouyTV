@@ -265,6 +265,19 @@ jobs:
       - name: Initialize iOS project
         run: pnpm tauri ios init
 
+      - name: Apply iOS app icons
+        run: |
+          set -e
+          APPICON_DIR=$(find src-tauri/gen/apple -type d -name "AppIcon.appiconset" -print -quit)
+          if [ -z "$APPICON_DIR" ]; then
+            echo "::error::Cannot find AppIcon.appiconset after tauri ios init"
+            find src-tauri/gen/apple -maxdepth 5 -print || true
+            exit 1
+          fi
+          cp src-tauri/icons/ios/* "$APPICON_DIR/"
+          echo "Applied iOS icons to $APPICON_DIR"
+          ls -la "$APPICON_DIR"
+
       # 【关键】必须用 tauri ios build，不能直接调 xcodebuild。
       # 因为 tauri-cli 在 pbxproj 注入的 Run Script Phase 会调
       # `tauri ios xcode-script`，那个子命令在入口处无条件 read_options()
