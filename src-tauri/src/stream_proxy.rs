@@ -427,58 +427,111 @@ async fn handle_sample_aes_decrypt(
         return Ok(builder.body(boxed_full(Bytes::new())).unwrap());
     }
 
-    // chunked decrypt 协程:从 reqwest 的 bytes_stream 接 chunk,过 StreamDecryptor,推到 mpsc
+    // chunked decrypt 协程:从 reqwest 的 bytes_stream 接 chunk,过 StreamDecryptor,推到 mpsc。
+    // fragment EOF 时自动重新拉 m3u8 获取新 token + 新 fragment URL,继续推流,
+    // 避免播放器检测到流结束后反复重连(iOS 上尤其明显)。
     let (tx, rx) = mpsc::channel::<Result<Bytes, std::io::Error>>(CHANNEL_CAP);
     let key = resolved.key;
     let iv = resolved.iv;
+    let m3u8_url_for_task = m3u8_url.clone();
+    let proxy_for_task = proxy.clone();
     tauri::async_runtime::spawn(async move {
         let mut decryptor = sa::StreamDecryptor::new(key, iv);
         let mut total_in: u64 = 0;
         let mut total_out: u64 = 0;
-        let mut byte_stream = upstream.bytes_stream();
-        while let Some(item) = byte_stream.next().await {
-            match item {
-                Ok(chunk) => {
-                    total_in += chunk.len() as u64;
-                    match decryptor.feed(chunk) {
-                        Ok(out_chunks) => {
-                            for c in out_chunks {
-                                total_out += c.len() as u64;
-                                if tx.send(Ok(c)).await.is_err() {
-                                    eprintln!(
-                                        "[sample_aes] client closed (in {total_in} / out {total_out} bytes)"
-                                    );
-                                    return;
+        let mut current_upstream = upstream;
+        let mut reconnects: u32 = 0;
+        const MAX_RECONNECTS: u32 = 120; // 每次 fragment 约 30-60s,120 次 ≈ 1-2 小时
+
+        loop {
+            let mut byte_stream = current_upstream.bytes_stream();
+            let mut got_data = false;
+            while let Some(item) = byte_stream.next().await {
+                match item {
+                    Ok(chunk) => {
+                        got_data = true;
+                        total_in += chunk.len() as u64;
+                        match decryptor.feed(chunk) {
+                            Ok(out_chunks) => {
+                                for c in out_chunks {
+                                    total_out += c.len() as u64;
+                                    if tx.send(Ok(c)).await.is_err() {
+                                        eprintln!(
+                                            "[sample_aes] client closed (in {total_in} / out {total_out} bytes)"
+                                        );
+                                        return;
+                                    }
                                 }
                             }
-                        }
-                        Err(e) => {
-                            eprintln!("[sample_aes] decrypt err: {e}");
-                            let _ = tx
-                                .send(Err(std::io::Error::new(
-                                    std::io::ErrorKind::Other,
-                                    e,
-                                )))
-                                .await;
-                            return;
+                            Err(e) => {
+                                eprintln!("[sample_aes] decrypt err: {e}");
+                                let _ = tx
+                                    .send(Err(std::io::Error::new(
+                                        std::io::ErrorKind::Other,
+                                        e,
+                                    )))
+                                    .await;
+                                return;
+                            }
                         }
                     }
+                    Err(e) => {
+                        eprintln!(
+                            "[sample_aes] upstream read err (in {total_in} / out {total_out}): {e}"
+                        );
+                        break;
+                    }
+                }
+            }
+
+            // Fragment stream ended — try to reconnect with fresh m3u8 token
+            reconnects += 1;
+            if reconnects > MAX_RECONNECTS {
+                eprintln!("[sample_aes] max reconnects reached, stopping");
+                return;
+            }
+            if !got_data {
+                eprintln!("[sample_aes] fragment returned no data, stopping");
+                return;
+            }
+            eprintln!(
+                "[sample_aes] fragment EOF (in {total_in} / out {total_out}), reconnect #{reconnects}..."
+            );
+
+            // Brief pause to avoid hammering the server
+            tokio::time::sleep(Duration::from_millis(500)).await;
+
+            // Re-resolve m3u8 for fresh token
+            let params = sa::SampleAesParams {
+                m3u8_url: m3u8_url_for_task.clone(),
+                proxy: proxy_for_task.clone(),
+            };
+            let new_resolved = match sa::resolve_m3u8(&params).await {
+                Ok(r) => r,
+                Err(e) => {
+                    eprintln!("[sample_aes] re-resolve m3u8 failed: {e}");
+                    return;
+                }
+            };
+
+            // Update key if changed
+            decryptor = sa::StreamDecryptor::new(new_resolved.key, new_resolved.iv);
+
+            // Open new fragment stream
+            match sa::open_fragment_stream(&new_resolved.fragment_url, proxy_for_task.as_deref()).await {
+                Ok(resp) => {
+                    if !resp.status().is_success() {
+                        eprintln!("[sample_aes] reconnect fragment HTTP {}", resp.status());
+                        return;
+                    }
+                    current_upstream = resp;
                 }
                 Err(e) => {
-                    eprintln!(
-                        "[sample_aes] upstream read err (in {total_in} / out {total_out}): {e}"
-                    );
-                    let _ = tx
-                        .send(Err(std::io::Error::new(
-                            std::io::ErrorKind::Other,
-                            format!("upstream: {e}"),
-                        )))
-                        .await;
+                    eprintln!("[sample_aes] reconnect fragment failed: {e}");
                     return;
                 }
             }
         }
-        eprintln!("[sample_aes] upstream EOF (in {total_in} / out {total_out})");
     });
 
     let stream = ReceiverStream::new(rx).map(|res| match res {

@@ -79,13 +79,17 @@ interface CcStreamResp {
 
 /* ─────────────── 列式 → 对象 mapper ─────────────── */
 
-function rowToModel(
-  row: Array<string | number | boolean | null>,
-  mapping: string[],
-): CcModel | undefined {
-  // mapping 里必有 screen_name/stream_name/gender/chat_type;少其一就丢
+/** 预计算 mapping 索引表,避免每行重建 */
+function buildMappingIndex(mapping: string[]): Record<string, number> {
   const idx: Record<string, number> = {};
   for (let i = 0; i < mapping.length; i++) idx[mapping[i]] = i;
+  return idx;
+}
+
+function rowToModel(
+  row: Array<string | number | boolean | null>,
+  idx: Record<string, number>,
+): CcModel | undefined {
   const get = (k: string): unknown => (idx[k] !== undefined ? row[idx[k]] : undefined);
   const screen = String(get("screen_name") ?? "").trim();
   const stream = String(get("stream_name") ?? screen).trim();
@@ -126,12 +130,13 @@ async function fetchAll(): Promise<CcModel[]> {
   const mapping = data.mapping ?? [];
   const rows = data.models ?? [];
   if (mapping.length === 0) throw new Error("Cams.com listing 缺 mapping 字段");
+  const idx = buildMappingIndex(mapping);
   const BATCH_SIZE = 100;
   const out: CcModel[] = [];
   for (let i = 0; i < rows.length; i += BATCH_SIZE) {
     const batch = rows.slice(i, i + BATCH_SIZE);
     for (const r of batch) {
-      const m = rowToModel(r, mapping);
+      const m = rowToModel(r, idx);
       if (m) out.push(m);
     }
     if (i + BATCH_SIZE < rows.length) {

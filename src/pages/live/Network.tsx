@@ -481,17 +481,15 @@ export default function NetworkLivePanel() {
     : null;
 
   return (
-    /* h-full + 子元素自管滚动：移动端整体 scroll；
+    /* h-full + overflow-hidden：顶部 header 固定，中间 grid 独立滚动。
        桌面 lg 双栏，main / aside 各自 overflow-y-auto，aside 永远在视野里 */
-    <div ref={rootScrollRef} className="h-full flex flex-col lg:flex-row gap-3 lg:gap-4 p-3 overflow-y-auto lg:overflow-hidden">
+    <div ref={rootScrollRef} className="h-full flex flex-col lg:flex-row gap-0 lg:gap-4 p-0 lg:p-3 overflow-hidden">
       {/* ───────────── 主区：tabs + 分类 + grid（卡片区独立滚动） ───────────── */}
-      <div ref={mainScrollRef} className="flex-1 min-w-0 lg:overflow-y-auto lg:min-h-0 order-2 lg:order-1 no-scrollbar">
-        {/* sticky header —— 平台 tab + section chips + 分类 strip。
-            **只在桌面 sticky**：移动端整页一起滚（root 已 overflow-y-auto），
-            否则会和 aside 的 sticky top-0 在 root 内争同一 top:0 位置，
-            导致 header z-20 把 player aside (z-10) 顶部盖住。 */}
+      <div className="flex-1 min-w-0 flex flex-col lg:min-h-0 order-2 lg:order-1">
+        {/* 固定 header —— 平台 tab + section chips + 分类 strip。
+            移动端和桌面端都固定在顶部，不随列表滚动。 */}
         <div
-          className="-mx-3 px-3 pt-1 pb-2 lg:sticky lg:top-0 lg:z-20"
+          className="px-3 pt-1 pb-2 shrink-0 z-20"
           style={{
             background: "var(--ink)",
             borderBottom: "1px solid var(--cream-line)",
@@ -660,7 +658,9 @@ export default function NetworkLivePanel() {
           )}
         </div>
 
-        {/* 列表无公开端点 → 友好 EmptyState(跟随 grid 滚,不进 sticky header) */}
+        {/* Grid 滚动区 —— 唯一可滚动区域,header 固定不动 */}
+        <div ref={mainScrollRef} className="flex-1 min-h-0 overflow-y-auto px-3 pt-3 no-scrollbar">
+        {/* 列表无公开端点 → 友好 EmptyState */}
         {error && isListUnsupportedMessage(error) && (
           <EmptyState
             icon={<IconStats size={48} />}
@@ -670,8 +670,6 @@ export default function NetworkLivePanel() {
           />
         )}
 
-        {/* Grid（顶部留 padding，避免被 sticky header 卡住开头一行） */}
-        <div className="pt-3">
         {showSkeleton ? (
           <MediaGrid dense>
             {Array.from({ length: 12 }).map((_, i) => (

@@ -201,6 +201,7 @@ export default function NetworkRoom() {
       streamType: stream.streamType ?? "hls",
       poster: room.cover,
       headers: Object.keys(headers).length > 0 ? headers : undefined,
+      agora: stream.agora,
     };
   }, [stream, room]);
 
