@@ -514,8 +514,8 @@ async fn handle_sample_aes_decrypt(
                 }
             };
 
-            // Update key if changed
-            decryptor = sa::StreamDecryptor::new(new_resolved.key, new_resolved.iv);
+            // Update key if changed — 不重建 decryptor，保留 initialized 状态避免重复推 ftyp/moov
+            decryptor.update_key(new_resolved.key);
 
             // Open new fragment stream
             match sa::open_fragment_stream(&new_resolved.fragment_url, proxy_for_task.as_deref()).await {

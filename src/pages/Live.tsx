@@ -130,7 +130,12 @@ export default function Live() {
   }, [tab]);
 
   return (
-    <div className="h-screen bg-ink text-cream flex flex-col overflow-hidden">
+    <div
+      className="bg-ink text-cream flex flex-col overflow-hidden"
+      style={{
+        height: "calc(100vh - env(safe-area-inset-top) - var(--bottom-tab-h, 0px) - var(--miniplayer-h, 0px))",
+      }}
+    >
       <div
         className="flex items-end gap-1 px-3 pt-3 shrink-0"
         style={{ borderBottom: "1px solid var(--cream-line)" }}
@@ -340,7 +345,7 @@ function IPTVLive() {
       : subscriptions.find((s) => s.id === activeSource)?.name ?? "未知源";
 
   return (
-    <div className="h-screen bg-ink text-cream flex flex-col overflow-hidden">
+    <div className="h-full bg-ink text-cream flex flex-col overflow-hidden">
       {/* 顶部 sticky bar */}
       <div
         className="flex items-center gap-2 p-3 shrink-0 backdrop-blur-xl z-20"

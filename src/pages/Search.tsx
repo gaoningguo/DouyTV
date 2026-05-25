@@ -355,8 +355,8 @@ export default function Search() {
       {/* 搜索栏（sticky 顶部） */}
       <form
         onSubmit={onSubmit}
-        className="flex items-center gap-2 mb-4 sticky top-0 py-2 z-10 backdrop-blur-xl"
-        style={{ background: "rgba(14,15,17,0.92)" }}
+        className="flex items-center gap-2 mb-4 sticky py-2 z-10 backdrop-blur-xl"
+        style={{ top: "env(safe-area-inset-top)", background: "rgba(14,15,17,0.92)" }}
       >
         <div
           className="flex-1 flex items-center gap-2 px-3 py-2 rounded-full"

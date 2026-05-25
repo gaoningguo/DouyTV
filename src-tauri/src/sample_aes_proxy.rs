@@ -644,6 +644,8 @@ pub struct StreamDecryptor {
     tracks: TrackTable,
     /// 上一个 moof 给的 sample 序列(IV + subsamples),mdat 来时按顺序消费
     pending_samples: Vec<SampleInfo>,
+    /// 首个 ftyp+moov 已推送后置 true；重连时跳过后续 fragment 的重复初始化段
+    initialized: bool,
 }
 
 impl StreamDecryptor {
@@ -653,7 +655,13 @@ impl StreamDecryptor {
             buf: BytesMut::with_capacity(1024 * 1024),
             tracks: TrackTable::default(),
             pending_samples: Vec::new(),
+            initialized: false,
         }
+    }
+
+    /// 重连时更新 key（如果服务端轮转了 token/key）。不重置 initialized 状态。
+    pub fn update_key(&mut self, key: [u8; 16]) {
+        self.key = key;
     }
 
     /// 喂一段 chunked 数据。返回(0 或多个)已处理的输出 Bytes。
@@ -700,8 +708,10 @@ impl StreamDecryptor {
 
             match &kind {
                 b"ftyp" | b"styp" | b"sidx" | b"free" | b"skip" | b"prft" => {
-                    // 透传
-                    out.push(box_bytes.freeze());
+                    if !self.initialized {
+                        out.push(box_bytes.freeze());
+                    }
+                    // 重连后的重复 ftyp/styp 静默丢弃
                 }
                 b"moov" => {
                     let body = &box_bytes[header_len..];
@@ -711,7 +721,11 @@ impl StreamDecryptor {
                         self.tracks.kinds.len(),
                         self.tracks.kinds
                     );
-                    out.push(box_bytes.freeze());
+                    if !self.initialized {
+                        out.push(box_bytes.freeze());
+                        self.initialized = true;
+                    }
+                    // 重连后的重复 moov 只更新 track table，不推给播放器
                 }
                 b"moof" => {
                     let body = &box_bytes[header_len..];

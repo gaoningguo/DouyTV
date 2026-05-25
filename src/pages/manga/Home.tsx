@@ -34,8 +34,9 @@ export default function MangaHome() {
   return (
     <div className="min-h-screen bg-ink text-cream">
       <div
-        className="sticky top-0 z-10 flex gap-2 px-3 pt-3 pb-2 backdrop-blur-md"
+        className="sticky z-10 flex gap-2 px-3 pt-3 pb-2 backdrop-blur-md"
         style={{
+          top: "env(safe-area-inset-top)",
           background: "rgba(14,15,17,0.92)",
           borderBottom: "1px solid var(--cream-line)",
         }}

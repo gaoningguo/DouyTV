@@ -485,7 +485,7 @@ export default function NetworkLivePanel() {
        桌面 lg 双栏，main / aside 各自 overflow-y-auto，aside 永远在视野里 */
     <div ref={rootScrollRef} className="h-full flex flex-col lg:flex-row gap-0 lg:gap-4 p-0 lg:p-3 overflow-hidden">
       {/* ───────────── 主区：tabs + 分类 + grid（卡片区独立滚动） ───────────── */}
-      <div className="flex-1 min-w-0 flex flex-col lg:min-h-0 order-2 lg:order-1">
+      <div className="flex-1 min-w-0 min-h-0 flex flex-col order-2 lg:order-1">
         {/* 固定 header —— 平台 tab + section chips + 分类 strip。
             移动端和桌面端都固定在顶部，不随列表滚动。 */}
         <div
