@@ -30,12 +30,10 @@ export default function BooksHome() {
   }, [tab]);
 
   return (
-    <div className="min-h-screen bg-ink text-cream">
-      {/* 顶部 tab bar */}
+    <div className="flex-1 min-h-0 flex flex-col overflow-hidden bg-ink text-cream">
       <div
-        className="sticky z-10 flex gap-2 px-3 pt-3 pb-2 backdrop-blur-md"
+        className="shrink-0 flex gap-2 px-3 pt-3 pb-2"
         style={{
-          top: "env(safe-area-inset-top)",
           background: "rgba(14,15,17,0.92)",
           borderBottom: "1px solid var(--cream-line)",
         }}
@@ -47,7 +45,9 @@ export default function BooksHome() {
           网络小说
         </TabBtn>
       </div>
-      {tab === "opds" ? <OpdsPanel /> : <NovelHome />}
+      <div className="flex-1 min-h-0 overflow-y-auto">
+        {tab === "opds" ? <OpdsPanel /> : <NovelHome />}
+      </div>
     </div>
   );
 }

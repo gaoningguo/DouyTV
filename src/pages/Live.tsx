@@ -130,12 +130,7 @@ export default function Live() {
   }, [tab]);
 
   return (
-    <div
-      className="bg-ink text-cream flex flex-col overflow-hidden"
-      style={{
-        height: "calc(100vh - env(safe-area-inset-top) - var(--bottom-tab-h, 0px) - var(--miniplayer-h, 0px))",
-      }}
-    >
+    <div className="flex-1 min-h-0 bg-ink text-cream flex flex-col overflow-hidden">
       <div
         className="flex items-end gap-1 px-3 pt-3 shrink-0"
         style={{ borderBottom: "1px solid var(--cream-line)" }}
@@ -608,7 +603,7 @@ function IPTVLive() {
                 {subscriptions.length === 0 && sourceCounts.none === 0 && (
                   <p className="text-[10px] text-cream-faint mt-1">
                     还没有订阅源
-                    <Link to="/settings/live-subs" className="text-ember ml-1">
+                    <Link to="/settings/live-hub" className="text-ember ml-1">
                       去添加 →
                     </Link>
                   </p>

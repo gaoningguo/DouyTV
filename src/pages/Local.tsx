@@ -138,8 +138,11 @@ export default function Local() {
   }
 
   return (
-    <div className="min-h-screen bg-ink text-cream p-4">
-      <div className="mb-5 flex items-start justify-between gap-3">
+    <div className="flex-1 min-h-0 flex flex-col overflow-hidden bg-ink text-cream">
+      <div
+        className="shrink-0 flex items-start justify-between gap-3 px-4 pt-4 pb-3"
+        style={{ borderBottom: "1px solid var(--cream-line)" }}
+      >
         <div className="min-w-0">
           <p className="font-mono text-[9px] tracking-[0.25em] text-cream-faint">
             STORAGE · LOCAL
@@ -161,6 +164,7 @@ export default function Local() {
           扫描设置
         </Link>
       </div>
+      <div className="flex-1 min-h-0 overflow-y-auto p-4">
 
       {!isTauri && (
         <p
@@ -282,6 +286,7 @@ export default function Local() {
           <p className="text-sm text-cream-dim">该目录下没有支持的视频文件</p>
         </div>
       )}
+      </div>
     </div>
   );
 }

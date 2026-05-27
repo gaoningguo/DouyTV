@@ -58,3 +58,13 @@ pub fn store_cookies_for_host(host: &str, kvs: Vec<(String, String)>) -> bool {
     }
     got_clearance
 }
+
+/// 清除指定 host 的 cf_clearance cookie（用于强制重新验证）。
+pub fn clear_clearance_for_host(host: &str) {
+    let host = host.to_lowercase();
+    if let Ok(mut write) = jar().write() {
+        if let Some(bucket) = write.get_mut(&host) {
+            bucket.remove("cf_clearance");
+        }
+    }
+}

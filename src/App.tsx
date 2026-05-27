@@ -2,7 +2,6 @@ import { useEffect, useState } from "react";
 import { Route, Routes, useLocation } from "react-router-dom";
 import Home from "@/pages/Home";
 import Library from "@/pages/Library";
-import Scripts from "@/pages/Scripts";
 import Search from "@/pages/Search";
 import Detail from "@/pages/Detail";
 import Play from "@/pages/Play";
@@ -10,10 +9,6 @@ import Live from "@/pages/Live";
 import NetworkRoom from "@/pages/live/NetworkRoom";
 import Local from "@/pages/Local";
 import Settings from "@/pages/Settings";
-import SettingsLiveSubs from "@/pages/settings/LiveSubs";
-import SettingsLiveEpg from "@/pages/settings/LiveEpg";
-import SettingsLiveAdd from "@/pages/settings/LiveAdd";
-import SettingsLiveImport from "@/pages/settings/LiveImport";
 import SettingsLocalScan from "@/pages/settings/LocalScan";
 import SettingsProxy from "@/pages/settings/Proxy";
 import SettingsDanmaku from "@/pages/settings/Danmaku";
@@ -76,6 +71,8 @@ import { useLibraryStore } from "@/stores/library";
 import { useLiveStore } from "@/stores/live";
 import { useProxyStore } from "@/stores/proxy";
 import { useNetliveProxyStore } from "@/stores/netliveProxy";
+import { useExternalPluginStore } from "@/stores/netliveExternalPlugins";
+import { usePluginSubscriptionStore } from "@/stores/netlivePluginSubscription";
 import { useMusicStore } from "@/stores/music";
 import { useBooksStore } from "@/stores/books";
 import { useMangaStore } from "@/stores/manga";
@@ -142,6 +139,9 @@ export default function App() {
     useLiveStore.getState().hydrate();
     useLiveSubStore.getState().hydrate();
     useLiveSubStore.getState().bootRefresh();
+    useExternalPluginStore.getState().hydrate();
+    usePluginSubscriptionStore.getState().hydrate();
+    usePluginSubscriptionStore.getState().bootRefresh();
     useProxyStore.getState().hydrate();
     useNetliveProxyStore.getState().hydrate();
     void useMusicStore.getState().hydrate();
@@ -201,7 +201,10 @@ export default function App() {
           paddingRight: mainPadRight,
           paddingBottom: mainPadBottom,
           transition: "padding-left 200ms ease",
-          minHeight: "100vh",
+          height: "100dvh",
+          overflow: "hidden",
+          display: "flex",
+          flexDirection: "column",
         }}
       >
         <Routes>
@@ -210,10 +213,6 @@ export default function App() {
           <Route path="/settings" element={<Settings />} />
           <Route path="/settings/video-hub" element={<SettingsVideoHub />} />
           <Route path="/settings/live-hub" element={<SettingsLiveHub />} />
-          <Route path="/settings/live-subs" element={<SettingsLiveSubs />} />
-          <Route path="/settings/live-epg" element={<SettingsLiveEpg />} />
-          <Route path="/settings/live-add" element={<SettingsLiveAdd />} />
-          <Route path="/settings/live-import" element={<SettingsLiveImport />} />
           <Route
             path="/settings/stripchat-keys"
             element={<SettingsStripchatKeys />}
@@ -228,7 +227,7 @@ export default function App() {
           <Route path="/settings/updates" element={<SettingsUpdates />} />
           <Route path="/settings/novel" element={<SettingsNovel />} />
           <Route path="/settings/manga-src" element={<SettingsMangaSrc />} />
-          <Route path="/scripts" element={<Scripts />} />
+          <Route path="/scripts" element={<SettingsVideoHub />} />
           <Route path="/search" element={<Search />} />
           <Route path="/live" element={<Live />} />
           <Route

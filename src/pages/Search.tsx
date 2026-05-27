@@ -351,12 +351,14 @@ export default function Search() {
   };
 
   return (
-    <div className="min-h-screen bg-ink text-cream p-4">
-      {/* 搜索栏（sticky 顶部） */}
+    <div className="flex-1 min-h-0 flex flex-col overflow-hidden bg-ink text-cream">
       <form
         onSubmit={onSubmit}
-        className="flex items-center gap-2 mb-4 sticky py-2 z-10 backdrop-blur-xl"
-        style={{ top: "env(safe-area-inset-top)", background: "rgba(14,15,17,0.92)" }}
+        className="shrink-0 flex items-center gap-2 px-4 pt-4 pb-3 backdrop-blur-xl"
+        style={{
+          background: "rgba(14,15,17,0.92)",
+          borderBottom: "1px solid var(--cream-line)",
+        }}
       >
         <div
           className="flex-1 flex items-center gap-2 px-3 py-2 rounded-full"
@@ -394,6 +396,8 @@ export default function Search() {
           搜索
         </button>
       </form>
+
+      <div className="flex-1 min-h-0 overflow-y-auto p-4">
 
       {/* 历史 —— 紧贴搜索栏下方，仅未输入关键词时显示 */}
       {!keyword && history.length > 0 && (
@@ -600,6 +604,7 @@ export default function Search() {
       )}
 
       {/* 历史已移到搜索栏下方 */}
+      </div>
     </div>
   );
 }

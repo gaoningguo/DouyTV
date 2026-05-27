@@ -8,13 +8,18 @@ interface Props {
   children: ReactNode;
   /** 顶栏右侧自定义区域（如「全部刷新」按钮） */
   trailing?: ReactNode;
+  /** 固定在 header 下方、滚动区上方的工具栏（tab 切换、批量操作等） */
+  toolbar?: ReactNode;
 }
 
-export function SettingsSubPageLayout({ eyebrow, title, children, trailing }: Props) {
+export function SettingsSubPageLayout({ eyebrow, title, children, trailing, toolbar }: Props) {
   const navigate = useNavigate();
   return (
-    <div className="min-h-screen bg-ink text-cream p-4">
-      <div className="flex items-center gap-3 mb-5">
+    <div className="flex-1 min-h-0 flex flex-col overflow-hidden bg-ink text-cream">
+      <div
+        className="shrink-0 flex items-center gap-3 px-4 pt-4 pb-3"
+        style={{ borderBottom: "1px solid var(--cream-line)" }}
+      >
         <button
           type="button"
           onClick={() => navigate(-1)}
@@ -37,7 +42,8 @@ export function SettingsSubPageLayout({ eyebrow, title, children, trailing }: Pr
         </div>
         {trailing}
       </div>
-      {children}
+      {toolbar && <div className="shrink-0">{toolbar}</div>}
+      <div className="flex-1 min-h-0 overflow-y-auto p-4">{children}</div>
     </div>
   );
 }

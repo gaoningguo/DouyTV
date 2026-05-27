@@ -84,8 +84,11 @@ export default function Library() {
   }
 
   return (
-    <div className="min-h-screen bg-ink text-cream p-4">
-      <div className="mb-5">
+    <div className="flex-1 min-h-0 flex flex-col overflow-hidden bg-ink text-cream">
+      <div
+        className="shrink-0 px-4 pt-4 pb-3"
+        style={{ borderBottom: "1px solid var(--cream-line)" }}
+      >
         <p className="font-mono text-[10px] tracking-[0.25em] text-cream-faint">
           PROFILE · LIBRARY
         </p>
@@ -93,10 +96,11 @@ export default function Library() {
           我的
         </h1>
       </div>
+      <div className="flex-1 min-h-0 overflow-y-auto p-4">
 
       <section className="grid grid-cols-4 gap-2 mb-5">
         {[
-          { to: "/scripts", value: scripts.length, label: "SOURCES", color: "ember" as const },
+          { to: "/settings/video-hub", value: scripts.length, label: "SOURCES", color: "ember" as const },
           { to: undefined as string | undefined, value: favorites.length, label: "LIKED", color: "ember" as const },
           { to: undefined as string | undefined, value: history.length, label: "WATCHED", color: "vhs" as const },
           { to: "/live", value: channels.length, label: "CHANNELS", color: "phosphor" as const },
@@ -403,6 +407,7 @@ export default function Library() {
       <p className="font-mono text-[10px] text-cream-faint mt-2 text-center tracking-[0.2em]">
         更多设置 → 底部「设置」 tab
       </p>
+      </div>
     </div>
   );
 }

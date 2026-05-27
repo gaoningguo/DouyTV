@@ -14,6 +14,14 @@ const PROXY_ORIGIN = (() => {
     : "dyproxy://localhost";
 })();
 
+// iOS 检测：WKWebView 内 <video> 无法访问 http://127.0.0.1 本地流代理，
+// 且原生播放器不支持裸 chunked fMP4，需要走 dyproxy HLS + 逐 segment 解密。
+const IS_IOS = (() => {
+  if (typeof navigator === "undefined") return false;
+  return /iPhone|iPad|iPod/i.test(navigator.userAgent) ||
+    (navigator.platform === "MacIntel" && navigator.maxTouchPoints > 1);
+})();
+
 /**
  * 本地 hyper 流式代理端口 —— Tauri 启动时调一次 get_stream_proxy_port 缓存。
  * FLV / MPEG-TS 直播必须走这个 server（不是 dyproxy），因为 Tauri URI scheme
@@ -68,6 +76,7 @@ interface ProxyOpts {
   filterAds?: boolean;
   proxyUrl?: string;
   bypassSystemProxy?: boolean;
+  cencDecrypt?: boolean;
 }
 
 /** 通用代理 URL 构造 — 用原生 URL API，杜绝拼接转义错误。 */
@@ -85,6 +94,7 @@ function buildProxyUrl(
     if (params.ua) u.searchParams.set("ua", params.ua);
     if (params.referer) u.searchParams.set("referer", params.referer);
     if (params.filterAds === false) u.searchParams.set("filter_ads", "0");
+    if (params.cencDecrypt) u.searchParams.set("cenc_decrypt", "1");
     if (params.bypassSystemProxy) {
       u.searchParams.set("bypass_proxy", "1");
     } else if (params.proxyUrl) {
@@ -92,7 +102,6 @@ function buildProxyUrl(
     }
     return u.toString();
   } catch (e) {
-    // 极少见：upstream 含非法 ASCII / URL 解析失败
     console.warn("[proxy] buildProxyUrl 失败，回退原始 URL：", upstream, e);
     return upstream;
   }
@@ -176,9 +185,23 @@ export function wrapWithProxy(
       isSampleAesMp4 = false;
   }
 
-  // SAMPLE-AES 解密代理:走 stream proxy + decrypt=sample-aes。
-  // URL 是 fmp4-hls m3u8,Rust 端拉 m3u8 + key + fragment,逐 sample 解密后推明文给 native。
+  // SAMPLE-AES 解密代理:
+  // iOS: 走 dyproxy m3u8 + 逐 segment CENC 解密（iOS WKWebView <video> 无法访问 localhost HTTP,
+  //       且原生播放器不支持裸 chunked fMP4）。Rust 端拉 m3u8、提取 key、strip #EXT-X-KEY,
+  //       segment URL 注入 cenc_key/cenc_iv,segment handler 拉取+解密+返回明文 fMP4。
+  //       iOS 原生 HLS 播放器看到的是无加密 CMAF HLS。
+  // 其它平台: 走 stream proxy + decrypt=sample-aes（chunked fMP4 流式解密）。
   if (isSampleAesMp4) {
+    if (IS_IOS) {
+      return buildProxyUrl("m3u8", item.url, {
+        ua,
+        referer,
+        filterAds: opts.filterAds,
+        proxyUrl: opts.proxyUrl,
+        bypassSystemProxy: opts.bypassSystemProxy,
+        cencDecrypt: true,
+      });
+    }
     const port = getStreamProxyPort();
     if (port) {
       const u = new URL(`http://127.0.0.1:${port}/`);

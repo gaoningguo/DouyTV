@@ -61,22 +61,27 @@ export default function MusicLibrary() {
   );
 
   return (
-    <div className="min-h-screen bg-ink text-cream p-4">
+    <div className="flex-1 min-h-0 flex flex-col overflow-hidden bg-ink text-cream">
       {/* 顶部 eyebrow + title */}
-      <div className="mb-5">
+      <div
+        className="shrink-0 px-4 pt-4 pb-3"
+        style={{ borderBottom: "1px solid var(--cream-line)" }}
+      >
         <p className="font-mono text-[10px] tracking-[0.25em] text-cream-faint">
           MUSIC · LIBRARY
         </p>
         <h1 className="font-display text-2xl font-extrabold tracking-tight">我的音乐</h1>
       </div>
 
-      {/* 桌面专属：下载管理入口 */}
-      {isDesktop() && (
-        <Link
-          to="/music/downloads"
-          className="flex items-center gap-3 p-3 mb-5 rounded-lg tap"
-          style={{
-            background: "var(--ink-2)",
+      {/* tab 栏固定 */}
+      <div className="shrink-0 px-4 pt-3">
+        {/* 桌面专属：下载管理入口 */}
+        {isDesktop() && (
+          <Link
+            to="/music/downloads"
+            className="flex items-center gap-3 p-3 mb-3 rounded-lg tap"
+            style={{
+              background: "var(--ink-2)",
             border: "1px solid var(--cream-line)",
           }}
         >
@@ -118,8 +123,9 @@ export default function MusicLibrary() {
           </button>
         )}
       </div>
+      </div>
 
-      <div className="mt-3">
+      <div className="flex-1 min-h-0 overflow-y-auto px-4 pb-4">
         {tab === "playlists" && (
           <PlaylistsView playlists={playlists} onNewList={handleNewList} />
         )}

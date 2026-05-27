@@ -98,7 +98,7 @@ export default function NetworkRoom() {
     setLoading(true);
     setError(null);
     try {
-      const adapter = getAdapter(platform);
+      const adapter = await getAdapter(platform);
       const s = await adapter.resolve(roomId);
       setStream(s);
     } catch (e) {
@@ -112,7 +112,7 @@ export default function NetworkRoom() {
   const fetchDetail = useCallback(async () => {
     if (!platform || !roomId) return;
     try {
-      const adapter = getAdapter(platform);
+      const adapter = await getAdapter(platform);
       if (adapter.getRoomDetail) {
         const d = await adapter.getRoomDetail(roomId);
         setRoom(d);
@@ -175,7 +175,7 @@ export default function NetworkRoom() {
       }
       setSwitching(true);
       try {
-        const fresh = await getAdapter(platform).resolve(roomId);
+        const fresh = await (await getAdapter(platform)).resolve(roomId);
         const match = fresh.alternatives?.find((a) => a.qn === qn);
         const url = match?.url || fresh.url;
         setStream({ ...fresh, url, qn });
@@ -341,7 +341,7 @@ export default function NetworkRoom() {
               </div>
             )}
             {mediaItem ? (
-              <VideoPlayer item={mediaItem} active controls />
+              <VideoPlayer item={mediaItem} active controls netlivePlatform={platform} />
             ) : (
               <div className="absolute inset-0 flex flex-col items-center justify-center text-cream-faint font-mono text-[12px]">
                 {loading ? (

@@ -42,9 +42,9 @@ interface NetLiveStore {
   setAdultEnabled: (v: boolean) => void;
 }
 
-const VALID_PLATFORM_IDS: ReadonlySet<NetLivePlatformId> = new Set(
-  NETLIVE_PLATFORMS.map((p) => p.id)
-);
+function isValidPlatform(id: string): boolean {
+  return NETLIVE_PLATFORMS.some((p) => p.id === id) || listSupportedPlatforms().includes(id);
+}
 
 function loadJson<T>(key: string, fallback: T): T {
   try {
@@ -79,9 +79,9 @@ export const useNetLiveStore = create<NetLiveStore>((set, get) => ({
     try {
       const ap = localStorage.getItem(ACTIVE_PLATFORM_KEY);
       const activePlatform: NetLivePlatformId =
-        ap && VALID_PLATFORM_IDS.has(ap as NetLivePlatformId)
-          ? (ap as NetLivePlatformId)
-          : "bilibili";
+        ap && isValidPlatform(ap)
+          ? ap
+          : (listSupportedPlatforms()[0] ?? "bilibili");
       const favorites = loadJson<NetLiveRoom[]>(FAV_KEY, []);
       const history = loadJson<NetLiveRoom[]>(HISTORY_KEY, []);
       const health = loadJson<NetLiveStore["health"]>(HEALTH_KEY, {});
@@ -158,7 +158,7 @@ export const useNetLiveStore = create<NetLiveStore>((set, get) => ({
     // 串行而不是并行 —— 多数平台同 IP 高频请求容易触发风控
     for (const p of filtered) {
       try {
-        const adapter = getAdapter(p);
+        const adapter = await getAdapter(p);
         await adapter.getRecommend(1, 3);
         next[p] = { ok: true, ts: Date.now() };
       } catch (e) {

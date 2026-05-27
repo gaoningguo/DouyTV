@@ -171,9 +171,14 @@ function detectArtType(item: MediaItem): string | undefined {
   // chunked-mp4 = AmateurTV / Cam4 之类的 fragmented MP4 长连接(走 stream proxy 后,
   // body 看上去就是普通 .mp4,native <video> 直接能播)
   if (item.streamType === "chunked-mp4") return undefined;
-  // sample-aes-mp4 = a0s.net 系平台 fmp4-hls(Rust 端 SAMPLE-AES 逐 sample 解密后,
-  // 推出来的是明文 chunked fMP4,native <video> 直接消费)
-  if (item.streamType === "sample-aes-mp4") return undefined;
+  // sample-aes-mp4 = a0s.net 系平台 fmp4-hls。
+  // iOS: 走 dyproxy m3u8 + 逐 segment CENC 解密 → 原生 HLS 播放器消费无加密 HLS。
+  // 其它平台: Rust stream proxy 推明文 chunked fMP4 → native <video> 直接消费。
+  if (item.streamType === "sample-aes-mp4") {
+    const isIOS = /iPhone|iPad|iPod/i.test(navigator.userAgent) ||
+      (navigator.platform === "MacIntel" && (navigator as any).maxTouchPoints > 1);
+    return isIOS ? "m3u8" : undefined;
+  }
   // agora-rtc = ManyVids 系 Agora WebRTC SFU。走 customType.agorartc 接管,
   // SDK 懒加载 + join 频道 + subscribe 远端 track,绕开 ArtPlayer 的 URL 加载机制。
   if (item.streamType === "agora-rtc") return "agorartc";

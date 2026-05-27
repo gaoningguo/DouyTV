@@ -200,8 +200,11 @@ export default function Settings() {
   const enabledCount = scripts.filter((s) => s.enabled).length;
 
   return (
-    <div className="min-h-screen bg-ink text-cream p-4">
-      <div className="mb-5">
+    <div className="flex-1 min-h-0 flex flex-col overflow-hidden bg-ink text-cream">
+      <div
+        className="shrink-0 px-4 pt-4 pb-3"
+        style={{ borderBottom: "1px solid var(--cream-line)" }}
+      >
         <p className="font-mono text-[10px] tracking-[0.25em] text-cream-faint">
           SETTINGS · CONTROL
         </p>
@@ -209,6 +212,7 @@ export default function Settings() {
           设置
         </h1>
       </div>
+      <div className="flex-1 min-h-0 overflow-y-auto p-4">
 
       {/* 内容源 —— 合并入口 */}
       <section className="mb-6">
@@ -506,6 +510,7 @@ export default function Settings() {
       <p className="font-mono text-[10px] text-cream-faint mt-6 text-center tracking-[0.2em]">
         DOUYTV · MOONTV COMPATIBLE · v0.1.0
       </p>
+      </div>
     </div>
   );
 }

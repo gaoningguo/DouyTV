@@ -11,37 +11,7 @@
  *  - NetLive 来源是平台 API 实时数据（推荐 / 分类 / 搜索）
  */
 
-export type NetLivePlatformId =
-  | "bilibili"
-  | "douyu"
-  | "huya"
-  | "douyin"
-  | "kuaishou"
-  | "cc"
-  | "twitch"
-  | "youtube"
-  | "kick"
-  | "trovo"
-  | "bigo"
-  | "live17"
-  | "chaturbate"
-  | "stripchat"
-  | "bongacams"
-  | "camsoda"
-  | "pandalive"
-  | "soop"
-  | "fc2live"
-  | "amateurtv"
-  | "cam4"
-  | "camscom"
-  | "dreamcam"
-  | "fansly"
-  | "flirt4free"
-  | "manyvids"
-  | "myfreecams"
-  | "sexchathu"
-  | "streamate"
-  | "xlovecam";
+export type NetLivePlatformId = string;
 
 export interface NetLivePlatformMeta {
   id: NetLivePlatformId;
@@ -60,39 +30,16 @@ export interface NetLivePlatformMeta {
   defaultProxy?: "direct" | "proxy";
 }
 
-export const NETLIVE_PLATFORMS: NetLivePlatformMeta[] = [
-  { id: "bilibili", label: "哔哩哔哩", defaultProxy: "direct" },
-  { id: "douyu", label: "斗鱼", defaultProxy: "direct" },
-  { id: "huya", label: "虎牙", defaultProxy: "direct" },
-  { id: "douyin", label: "抖音", defaultProxy: "direct" },
-  { id: "kuaishou", label: "快手", defaultProxy: "direct" },
-  { id: "cc", label: "网易 CC", defaultProxy: "direct" },
-  { id: "twitch", label: "Twitch", defaultProxy: "proxy" },
-  { id: "youtube", label: "YouTube", defaultProxy: "proxy" },
-  { id: "kick", label: "Kick", defaultProxy: "proxy" },
-  { id: "trovo", label: "Trovo", defaultProxy: "proxy" },
-  { id: "bigo", label: "Bigo Live", defaultProxy: "proxy" },
-  { id: "live17", label: "17 Live", defaultProxy: "proxy" },
-  { id: "chaturbate", label: "Chaturbate", adult: true, defaultProxy: "proxy" },
-  { id: "stripchat", label: "Stripchat", adult: true, defaultProxy: "proxy" },
-  { id: "bongacams", label: "BongaCams", adult: true, defaultProxy: "proxy" },
-  { id: "camsoda", label: "CamSoda", adult: true, defaultProxy: "proxy" },
-  { id: "pandalive", label: "PandaTV 판다 (韩国 BJ)", adult: true, defaultProxy: "proxy" },
-  { id: "soop", label: "SOOP (韩国 BJ)", adult: true, defaultProxy: "proxy" },
-  { id: "fc2live", label: "FC2 Live (日本 BJ)", adult: true, defaultProxy: "proxy" },
-  // ─── StreaMonitor 系成人 cam 平台(2026-05 加) ───
-  { id: "amateurtv", label: "AmateurTV", adult: true, defaultProxy: "proxy" },
-  { id: "cam4", label: "Cam4", adult: true, defaultProxy: "proxy" },
-  { id: "camscom", label: "Cams.com", adult: true, defaultProxy: "proxy" },
-  { id: "dreamcam", label: "DreamCam", adult: true, defaultProxy: "proxy" },
-  { id: "fansly", label: "Fansly Live", adult: true, defaultProxy: "proxy" },
-  { id: "flirt4free", label: "Flirt4Free", adult: true, defaultProxy: "proxy" },
-  { id: "manyvids", label: "ManyVids", adult: true, defaultProxy: "proxy" },
-  { id: "myfreecams", label: "MyFreeCams", adult: true, defaultProxy: "proxy" },
-  { id: "sexchathu", label: "SexChat HU", adult: true, defaultProxy: "proxy" },
-  { id: "streamate", label: "Streamate", adult: true, defaultProxy: "proxy" },
-  { id: "xlovecam", label: "XLoveCam", adult: true, defaultProxy: "proxy" },
-];
+/**
+ * 平台元数据 —— 由 useExternalPluginStore 在 hydrate 时从已注册插件填充。
+ * 主仓库不再硬编码,见 stores/netliveExternalPlugins.ts#hydrate。
+ */
+export const NETLIVE_PLATFORMS: NetLivePlatformMeta[] = [];
+
+export function setNetLivePlatforms(metas: NetLivePlatformMeta[]) {
+  NETLIVE_PLATFORMS.length = 0;
+  for (const m of metas) NETLIVE_PLATFORMS.push(m);
+}
 
 export interface NetLiveCategory {
   id: string;

@@ -107,7 +107,7 @@ export default function MusicHome() {
 
   if (!hasMusicBackend()) {
     return (
-      <div className="min-h-screen bg-ink text-cream p-4">
+      <div className="flex-1 min-h-0 flex flex-col overflow-hidden bg-ink text-cream p-4">
         <div className="mb-5">
           <p className="font-mono text-[10px] tracking-[0.25em] text-cream-faint">
             MUSIC · NOT CONFIGURED
@@ -125,9 +125,12 @@ export default function MusicHome() {
   }
 
   return (
-    <div className="min-h-screen bg-ink text-cream p-4">
+    <div className="flex-1 min-h-0 flex flex-col overflow-hidden bg-ink text-cream">
       {/* 顶部 hero */}
-      <div className="flex items-end justify-between mb-5">
+      <div
+        className="shrink-0 flex items-end justify-between px-4 pt-4 pb-3"
+        style={{ borderBottom: "1px solid var(--cream-line)" }}
+      >
         <div>
           <p className="font-mono text-[10px] tracking-[0.25em] text-cream-faint">
             MUSIC · BROWSE
@@ -147,6 +150,7 @@ export default function MusicHome() {
           <IconSearch size={16} />
         </button>
       </div>
+      <div className="flex-1 min-h-0 overflow-y-auto p-4">
 
       {/* 4 大入口磁贴 —— MusicFree operations 风格 */}
       <div className="grid grid-cols-4 gap-2.5 mb-6">
@@ -291,6 +295,7 @@ export default function MusicHome() {
           </ul>
         </section>
       )}
+      </div>
     </div>
   );
 }

@@ -162,7 +162,7 @@ export default function NetworkLivePanel() {
       setLoading(true);
       setError(null);
       try {
-        const adapter = getAdapter(platform);
+        const adapter = await getAdapter(platform);
         const res = query.trim() && adapter.search
           ? await adapter.search(query.trim(), p)
           : categoryId && adapter.getCategoryRooms
@@ -196,16 +196,14 @@ export default function NetworkLivePanel() {
       // 首次 mount 且 store 已有当前平台数据 → 直接复用,只补 categories
       platformInitedRef.current = true;
       if (categories.length === 0) {
-        const adapter = (() => {
-          try { return getAdapter(activePlatform); } catch { return null; }
-        })();
-        if (adapter?.getCategories) {
-          let cancelled = false;
+        let cancelled = false;
+        getAdapter(activePlatform).then((adapter) => {
+          if (cancelled || !adapter?.getCategories) return;
           adapter.getCategories()
-            .then((cats) => { if (!cancelled) setCategories(cats); })
-            .catch((e) => console.warn("[netlive] categories failed", e));
-          return () => { cancelled = true; };
-        }
+            .then((cats: ReturnType<typeof categories.slice>) => { if (!cancelled) setCategories(cats); })
+            .catch(() => {});
+        }).catch(() => {});
+        return () => { cancelled = true; };
       }
       return;
     }
@@ -213,21 +211,16 @@ export default function NetworkLivePanel() {
     // 真的切平台(或首次 mount 且无缓存) → reset 全部 + 重拉
     resetForPlatformSwitch();
     void loadList(activePlatform, 1, false, null, "");
-    const adapter = (() => {
-      try {
-        return getAdapter(activePlatform);
-      } catch {
-        return null;
-      }
-    })();
-    if (!adapter?.getCategories) return;
     let cancelled = false;
-    adapter
-      .getCategories()
-      .then((cats) => {
-        if (!cancelled) setCategories(cats);
-      })
-      .catch((e) => console.warn("[netlive] categories failed", e));
+    getAdapter(activePlatform).then((adapter) => {
+      if (cancelled || !adapter?.getCategories) return;
+      adapter
+        .getCategories()
+        .then((cats) => {
+          if (!cancelled) setCategories(cats);
+        })
+        .catch((e) => console.warn("[netlive] categories failed", e));
+    }).catch(() => {});
     return () => {
       cancelled = true;
     };
@@ -259,7 +252,7 @@ export default function NetworkLivePanel() {
       setResolvingId(`${room.platform}:${room.roomId}`);
       setError(null);
       try {
-        const stream = await getAdapter(room.platform).resolve(room.roomId);
+        const stream = await (await getAdapter(room.platform)).resolve(room.roomId);
         setResolved(stream);
         setActiveRoom(room);
         noteVisit(room);
@@ -322,7 +315,7 @@ export default function NetworkLivePanel() {
       }
       setSwitchingQn(true);
       try {
-        const fresh = await getAdapter(activeRoom.platform).resolve(
+        const fresh = await (await getAdapter(activeRoom.platform)).resolve(
           activeRoom.roomId
         );
         const match = fresh.alternatives?.find((a) => a.qn === qn);
@@ -401,30 +394,25 @@ export default function NetworkLivePanel() {
     setBoostedRooms([]);
     if (section !== "recommend" || activeCategory !== null) return;
     if (categories.length === 0) return;
-    const adapter = (() => {
-      try {
-        return getAdapter(activePlatform);
-      } catch {
-        return null;
-      }
-    })();
-    if (!adapter?.getCategoryRooms) return;
-    const fetchCatRooms = adapter.getCategoryRooms.bind(adapter);
-    const targets = sortedCategories
-      .filter((c) => categoryPriority(c.name) < PRIORITY_KEYWORDS.length)
-      .slice(0, 3);
-    if (targets.length === 0) return;
     let cancelled = false;
-    Promise.allSettled(targets.map((c) => fetchCatRooms(c.id, 1))).then(
-      (results) => {
-        if (cancelled) return;
-        const rooms: NetLiveRoom[] = [];
-        for (const r of results) {
-          if (r.status === "fulfilled") rooms.push(...r.value.list.slice(0, 8));
+    getAdapter(activePlatform).then((adapter) => {
+      if (cancelled || !adapter?.getCategoryRooms) return;
+      const fetchCatRooms = adapter.getCategoryRooms.bind(adapter);
+      const targets = sortedCategories
+        .filter((c) => categoryPriority(c.name) < PRIORITY_KEYWORDS.length)
+        .slice(0, 3);
+      if (targets.length === 0) return;
+      Promise.allSettled(targets.map((c) => fetchCatRooms(c.id, 1))).then(
+        (results) => {
+          if (cancelled) return;
+          const rooms: NetLiveRoom[] = [];
+          for (const r of results) {
+            if (r.status === "fulfilled") rooms.push(...r.value.list.slice(0, 8));
+          }
+          setBoostedRooms(rooms);
         }
-        setBoostedRooms(rooms);
-      }
-    );
+      );
+    }).catch(() => {});
     return () => {
       cancelled = true;
     };

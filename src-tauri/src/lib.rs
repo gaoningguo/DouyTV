@@ -625,6 +625,7 @@ fn build_proxy_url(
     filter_ads: bool,
     proxy: Option<&str>,
     bypass_proxy: bool,
+    cenc_key_hex: Option<&str>,
 ) -> String {
     let mut s = format!(
         "{}/proxy/{}?url={}",
@@ -652,7 +653,94 @@ fn build_proxy_url(
             s.push_str(&format!("&proxy={}", percent_encode_uri_component(p)));
         }
     }
+    if let Some(k) = cenc_key_hex {
+        s.push_str(&format!("&cenc_key={}", k));
+    }
     s
+}
+
+/// iOS CENC 解密:从 m3u8 文本提取 #EXT-X-KEY URI,拉取 key bytes,返回 hex 编码。
+/// 失败时返回 None(segment 将不解密,可能花屏但不会崩)。
+fn extract_and_fetch_cenc_key(
+    m3u8_text: &str,
+    base_url: &str,
+    ua: Option<&str>,
+    referer: Option<&str>,
+    proxy: Option<&str>,
+) -> Option<String> {
+    // 找 #EXT-X-KEY:...URI="..."
+    let key_line = m3u8_text.lines().find(|l| l.trim().starts_with("#EXT-X-KEY:"))?;
+    let uri_start = key_line.find("URI=\"")?;
+    let after = &key_line[uri_start + 5..];
+    let uri_end = after.find('"')?;
+    let key_uri_raw = &after[..uri_end];
+
+    // 解析为绝对 URL
+    let key_url = if key_uri_raw.starts_with("http://") || key_uri_raw.starts_with("https://") {
+        key_uri_raw.to_string()
+    } else if let Ok(base) = url::Url::parse(base_url) {
+        base.join(key_uri_raw).map(|u| u.to_string()).unwrap_or_else(|_| key_uri_raw.to_string())
+    } else {
+        key_uri_raw.to_string()
+    };
+
+    eprintln!("[cenc_decrypt] fetching key from: {}", key_url.split('?').next().unwrap_or(&key_url));
+
+    // 拉 key bytes(同步,在 spawn_blocking 内)
+    let key_bytes = match proxy_fetch(&key_url, ua, referer, proxy, None) {
+        Ok(r) if r.status == 200 && r.bytes.len() >= 16 => r.bytes,
+        Ok(r) => {
+            eprintln!("[cenc_decrypt] key fetch failed: status={} len={}", r.status, r.bytes.len());
+            return None;
+        }
+        Err(e) => {
+            eprintln!("[cenc_decrypt] key fetch error: {e}");
+            return None;
+        }
+    };
+
+    let hex: String = key_bytes[..16].iter().map(|b| format!("{:02x}", b)).collect();
+    eprintln!("[cenc_decrypt] got key: {hex}");
+    Some(hex)
+}
+
+/// iOS CENC segment 解密:解析 fMP4 box 结构,用 sample_aes_proxy 的 CENC AES-CTR 逻辑解密。
+/// 失败时返回原始 bytes(花屏好过崩溃)。
+fn decrypt_cenc_segment(raw: &[u8], key_hex: &str) -> Vec<u8> {
+    use crate::sample_aes_proxy::StreamDecryptor;
+
+    if key_hex.len() != 32 {
+        eprintln!("[cenc_decrypt] invalid key_hex len={}", key_hex.len());
+        return raw.to_vec();
+    }
+    let mut key = [0u8; 16];
+    for i in 0..16 {
+        key[i] = match u8::from_str_radix(&key_hex[i * 2..i * 2 + 2], 16) {
+            Ok(b) => b,
+            Err(_) => {
+                eprintln!("[cenc_decrypt] invalid key_hex");
+                return raw.to_vec();
+            }
+        };
+    }
+
+    // 用 StreamDecryptor 处理整个 segment(它内部会解析 ftyp/moov/moof/mdat)
+    let mut decryptor = StreamDecryptor::new(key, [0u8; 16]);
+    match decryptor.feed(bytes::Bytes::from(raw.to_vec())) {
+        Ok(chunks) => {
+            let total: usize = chunks.iter().map(|c| c.len()).sum();
+            let mut out = Vec::with_capacity(total);
+            for c in chunks {
+                out.extend_from_slice(&c);
+            }
+            eprintln!("[cenc_decrypt] segment decrypted: {} → {} bytes", raw.len(), out.len());
+            out
+        }
+        Err(e) => {
+            eprintln!("[cenc_decrypt] segment decrypt failed: {e}");
+            raw.to_vec()
+        }
+    }
 }
 
 /// 将 m3u8 中所有 URI（KEY / 子 m3u8 / 分片）改写为代理 URL。
@@ -670,6 +758,7 @@ fn rewrite_m3u8(
     filter_ads: bool,
     proxy: Option<&str>,
     bypass_proxy: bool,
+    cenc_key_hex: Option<&str>,
 ) -> String {
     let base = match Url::parse(base_url) {
         Ok(u) => u,
@@ -770,6 +859,10 @@ fn rewrite_m3u8(
         // 否则 hls.js 拿到相对 URI 会相对 dyproxy 自身解析 → /proxy/<relative> 找不到 url param 报 400
         if trimmed.starts_with('#') {
             prev_stream_inf = trimmed.starts_with("#EXT-X-STREAM-INF:");
+            // iOS CENC 解密模式:跳过 #EXT-X-KEY 行(segment 由 proxy 端解密后返回明文)
+            if cenc_key_hex.is_some() && trimmed.starts_with("#EXT-X-KEY:") {
+                continue;
+            }
             if let Some(start) = trimmed.find("URI=\"") {
                 let after = &trimmed[start + 5..];
                 if let Some(end) = after.find('"') {
@@ -795,6 +888,7 @@ fn rewrite_m3u8(
                         filter_ads,
                         proxy,
                         bypass_proxy,
+                        if sub_path == "segment" { cenc_key_hex } else { None },
                     );
                     let before = &trimmed[..start + 5];
                     let tail = &after[end..];
@@ -850,6 +944,7 @@ fn rewrite_m3u8(
             filter_ads,
             proxy,
             bypass_proxy,
+            if !is_m3u8 { cenc_key_hex } else { None },
         ));
         prev_stream_inf = false;
     }
@@ -969,15 +1064,17 @@ async fn open_cf_challenge(
     url: String,
     ua: Option<String>,
     proxy_url: Option<String>,
+    force: Option<bool>,
 ) -> Result<bool, String> {
     use std::sync::{Arc, Mutex};
     use tauri::{Manager, WebviewUrl, WebviewWindowBuilder, WindowEvent};
     use tokio::sync::oneshot;
 
     eprintln!(
-        "[cf-challenge] command invoked, url={url}, ua={:?}, proxy={:?}",
+        "[cf-challenge] command invoked, url={url}, ua={:?}, proxy={:?}, force={:?}",
         ua.as_deref().map(|s| &s[..s.len().min(40)]),
-        proxy_url
+        proxy_url,
+        force
     );
 
     let parsed_url = Url::parse(&url).map_err(|e| format!("bad url: {e}"))?;
@@ -986,14 +1083,20 @@ async fn open_cf_challenge(
         return Err("url has no host".into());
     }
 
-    // 如果 jar 里已经有 cf_clearance,说明上一次验证刚刚成功 —— 直接返 true,
-    // 避免被同一波并发请求二次触发弹窗
-    if cf_cookies::get_cookie_header_for_url(&url)
-        .map(|s| s.contains("cf_clearance="))
-        .unwrap_or(false)
-    {
-        eprintln!("[cf-challenge] jar already has cf_clearance for {host}, skipping window");
-        return Ok(true);
+    // force=true 时清除旧的 cf_clearance（调用方已确认现有 cookie 无效）
+    if force.unwrap_or(false) {
+        cf_cookies::clear_clearance_for_host(&host);
+        eprintln!("[cf-challenge] force=true, cleared stale cf_clearance for {host}");
+    } else {
+        // 非 force 模式：如果 jar 里已经有 cf_clearance,说明上一次验证刚刚成功 —— 直接返 true,
+        // 避免被同一波并发请求二次触发弹窗
+        if cf_cookies::get_cookie_header_for_url(&url)
+            .map(|s| s.contains("cf_clearance="))
+            .unwrap_or(false)
+        {
+            eprintln!("[cf-challenge] jar already has cf_clearance for {host}, skipping window");
+            return Ok(true);
+        }
     }
 
     // 已有窗口:不要关掉(否则第二个 invoke 把第一个的窗口关了,用户看到"闪一下")
@@ -1168,10 +1271,11 @@ async fn open_cf_challenge(
     url: String,
     ua: Option<String>,
     _proxy_url: Option<String>,
+    force: Option<bool>,
 ) -> Result<bool, String> {
     #[cfg(target_os = "android")]
     {
-        let _ = (app, url, ua);
+        let _ = (app, url, ua, force);
         return Ok(false);
     }
 
@@ -1185,7 +1289,9 @@ async fn open_cf_challenge(
             return Err("url has no host".into());
         }
 
-        if cf_cookies::get_cookie_header_for_url(&url)
+        if force.unwrap_or(false) {
+            cf_cookies::clear_clearance_for_host(&host);
+        } else if cf_cookies::get_cookie_header_for_url(&url)
             .map(|s| s.contains("cf_clearance="))
             .unwrap_or(false)
         {
@@ -1754,6 +1860,17 @@ pub fn run() {
                             return;
                         }
                     };
+                    // iOS CENC 解密模式:从 m3u8 提取 KEY URI → 拉 key bytes → hex 编码
+                    // 传给 rewrite_m3u8,后者会 strip #EXT-X-KEY 并在 segment URL 注入 cenc_key
+                    let cenc_decrypt = params
+                        .get("cenc_decrypt")
+                        .map(|v| v == "1" || v == "true")
+                        .unwrap_or(false);
+                    let cenc_key_hex: Option<String> = if cenc_decrypt {
+                        extract_and_fetch_cenc_key(&text, target_url, ua, referer, proxy)
+                    } else {
+                        None
+                    };
                     let rewritten = rewrite_m3u8(
                         &text,
                         target_url,
@@ -1762,6 +1879,7 @@ pub fn run() {
                         filter_ads,
                         proxy,
                         bypass_proxy,
+                        cenc_key_hex.as_deref(),
                     );
                     // a0s.net debug: 打印重写后给 hls.js 的内容
                     if target_url.contains(".a0s.net") {
@@ -1791,6 +1909,12 @@ pub fn run() {
                 }
 
                 // segment / key / mp4 / 图片 / 其他 — 二进制透传
+                // iOS CENC 解密:segment URL 带 cenc_key 时,对 fMP4 segment 做 CENC AES-CTR 解密
+                let bytes = if let Some(key_hex) = params.get("cenc_key") {
+                    decrypt_cenc_segment(&bytes, key_hex)
+                } else {
+                    bytes
+                };
                 let mut builder = tauri::http::Response::builder()
                     .status(status)
                     .header("Content-Type", content_type)

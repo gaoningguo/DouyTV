@@ -32,11 +32,10 @@ export default function MangaHome() {
   }, [tab]);
 
   return (
-    <div className="min-h-screen bg-ink text-cream">
+    <div className="flex-1 min-h-0 flex flex-col overflow-hidden bg-ink text-cream">
       <div
-        className="sticky z-10 flex gap-2 px-3 pt-3 pb-2 backdrop-blur-md"
+        className="shrink-0 flex gap-2 px-3 pt-3 pb-2"
         style={{
-          top: "env(safe-area-inset-top)",
           background: "rgba(14,15,17,0.92)",
           borderBottom: "1px solid var(--cream-line)",
         }}
@@ -48,7 +47,9 @@ export default function MangaHome() {
           JSON 自定义源
         </TabBtn>
       </div>
-      {tab === "suwayomi" ? <SuwayomiPanel /> : <MangaSrcHome />}
+      <div className="flex-1 min-h-0 overflow-y-auto">
+        {tab === "suwayomi" ? <SuwayomiPanel /> : <MangaSrcHome />}
+      </div>
     </div>
   );
 }

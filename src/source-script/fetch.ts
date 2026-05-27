@@ -137,6 +137,7 @@ async function openCfChallengeDedup(
     url: origin,
     ua: ua && ua.length > 0 ? ua : null,
     proxyUrl: proxyUrl && proxyUrl.length > 0 ? proxyUrl : null,
+    force: true,
   })
     .then((ok) => {
       console.info(
