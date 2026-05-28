@@ -58,8 +58,11 @@ export default function MangaSearch() {
   }, [sources, sourceId, keyword]);
 
   return (
-    <div className="min-h-screen bg-ink text-cream p-4">
-      <div className="flex items-center gap-3 mb-5">
+    <div className="flex-1 min-h-0 flex flex-col overflow-hidden bg-ink text-cream">
+      <div
+        className="shrink-0 flex items-center gap-3 px-4 pt-4 pb-3"
+        style={{ borderBottom: "1px solid var(--cream-line)" }}
+      >
         <button
           type="button"
           onClick={() => navigate(-1)}
@@ -76,6 +79,8 @@ export default function MangaSearch() {
           <h1 className="font-display text-xl font-extrabold tracking-tight">搜索漫画</h1>
         </div>
       </div>
+
+      <div className="flex-1 min-h-0 overflow-y-auto p-4">
 
       {sources.length > 0 && (
         <div className="flex gap-1 overflow-x-auto no-scrollbar mb-3 pb-1">
@@ -160,6 +165,7 @@ export default function MangaSearch() {
           ))}
         </MediaGrid>
       )}
+      </div>
     </div>
   );
 }

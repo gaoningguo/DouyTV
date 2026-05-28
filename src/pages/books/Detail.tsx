@@ -43,7 +43,7 @@ export default function BooksDetail() {
 
   if (!item) {
     return (
-      <div className="min-h-screen bg-ink text-cream p-4 flex flex-col items-center justify-center">
+      <div className="flex-1 min-h-0 flex flex-col items-center justify-center bg-ink text-cream p-4">
         <p className="text-sm text-cream-dim mb-3">没有缓存的书籍元数据</p>
         <button
           type="button"
@@ -67,7 +67,8 @@ export default function BooksDetail() {
   const progress = store.getProgress(sourceId, bookId);
 
   return (
-    <div className="min-h-screen bg-ink text-cream p-4">
+    <div className="flex-1 min-h-0 flex flex-col overflow-hidden bg-ink text-cream">
+      <div className="flex-1 min-h-0 overflow-y-auto p-4">
       <DetailHero
         cover={item.cover}
         proxyCover
@@ -135,6 +136,7 @@ export default function BooksDetail() {
           此条目没有提供 EPUB / PDF 下载链接
         </p>
       )}
+      </div>
     </div>
   );
 }

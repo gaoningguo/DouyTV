@@ -180,8 +180,11 @@ export default function MangaSrcHome() {
   };
 
   return (
-    <div className="min-h-screen bg-ink text-cream p-4">
-      <div className="mb-3 flex items-center gap-2">
+    <div className="flex-1 min-h-0 flex flex-col overflow-hidden bg-ink text-cream">
+      <div
+        className="shrink-0 flex items-center gap-2 px-4 pt-4 pb-3"
+        style={{ borderBottom: "1px solid var(--cream-line)" }}
+      >
         <div className="flex-1">
           <p className="font-mono text-[10px] tracking-[0.25em] text-cream-faint">
             MANGA · JSON SOURCES
@@ -202,6 +205,7 @@ export default function MangaSrcHome() {
           源管理
         </Link>
       </div>
+      <div className="flex-1 min-h-0 overflow-y-auto p-4">
 
       {/* 顶部子 tab */}
       <div
@@ -461,6 +465,7 @@ export default function MangaSrcHome() {
           )}
         </>
       )}
+      </div>
     </div>
   );
 }

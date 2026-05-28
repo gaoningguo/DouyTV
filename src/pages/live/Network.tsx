@@ -873,10 +873,22 @@ function PlatformTabs({
     setMenuPos({ x, y });
   };
 
-  // 18+ 平台：未开启总开关时隐藏对应 tab
+  // 18+ 平台：未开启总开关时隐藏对应 tab，并按成人内容和代理状态排序
   const visiblePlatforms = NETLIVE_PLATFORMS.filter(
     (p) => adultEnabled || !p.adult
-  );
+  ).sort((a, b) => {
+    // 1. 非成人优先
+    const aAdult = !!a.adult;
+    const bAdult = !!b.adult;
+    if (aAdult !== bAdult) return aAdult ? 1 : -1;
+    
+    // 2. 直连优先
+    const aProxy = (overrides[a.id] ?? getEffectiveMode(a.id)) === "proxy";
+    const bProxy = (overrides[b.id] ?? getEffectiveMode(b.id)) === "proxy";
+    if (aProxy !== bProxy) return aProxy ? 1 : -1;
+
+    return 0;
+  });
   return (
     <div
       className="flex items-stretch gap-1 border-b"

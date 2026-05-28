@@ -160,7 +160,7 @@ export default function MangaSrcDetail() {
 
   if (!source) {
     return (
-      <div className="min-h-screen bg-ink text-cream p-4 flex items-center justify-center">
+      <div className="flex-1 min-h-0 flex items-center justify-center bg-ink text-cream p-4">
         <p className="text-cream-faint text-sm">源不存在</p>
       </div>
     );
@@ -186,7 +186,8 @@ export default function MangaSrcDetail() {
   };
 
   return (
-    <div className="min-h-screen bg-ink text-cream p-4">
+    <div className="flex-1 min-h-0 flex flex-col overflow-hidden bg-ink text-cream">
+      <div className="flex-1 min-h-0 overflow-y-auto p-4">
       <DetailHero
         cover={cover}
         proxyCover
@@ -350,6 +351,7 @@ export default function MangaSrcDetail() {
           })}
         </ul>
       </section>
+      </div>
     </div>
   );
 }

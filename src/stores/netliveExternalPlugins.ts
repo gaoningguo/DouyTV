@@ -23,6 +23,9 @@ interface ExternalPluginState {
   enable: (key: string) => void;
   disable: (key: string) => void;
   updateCode: (key: string, code: string) => void;
+  batchEnable: (keys: string[]) => void;
+  batchDisable: (keys: string[]) => void;
+  batchRemove: (keys: string[]) => void;
 }
 
 const unregisterMap = new Map<string, () => void>();
@@ -40,16 +43,6 @@ function loadFromStorage(): NetLivePluginDescriptor[] {
     const raw = localStorage.getItem(STORAGE_KEY);
     if (!raw) return [];
     return JSON.parse(raw) as NetLivePluginDescriptor[];
-  } catch {
-    return [];
-  }
-}
-
-async function loadDefaultPlugins(): Promise<NetLivePluginDescriptor[]> {
-  try {
-    const res = await fetch("/default-plugins.json");
-    if (!res.ok) return [];
-    return (await res.json()) as NetLivePluginDescriptor[];
   } catch {
     return [];
   }
@@ -104,21 +97,6 @@ export const useExternalPluginStore = create<ExternalPluginState>((set, get) => 
   hydrate: () => {
     if (get().hydrated) return;
     const plugins = loadFromStorage();
-    if (plugins.length === 0) {
-      loadDefaultPlugins().then((defaults) => {
-        if (defaults.length === 0) {
-          set({ hydrated: true });
-          hydrateReadyResolve?.();
-          return;
-        }
-        for (const p of defaults) tryRegister(p);
-        persist(defaults);
-        syncPlatformMetas(defaults);
-        set({ plugins: defaults, hydrated: true });
-        hydrateReadyResolve?.();
-      });
-      return;
-    }
     for (const p of plugins) tryRegister(p);
     syncPlatformMetas(plugins);
     set({ plugins, hydrated: true });
@@ -170,6 +148,39 @@ export const useExternalPluginStore = create<ExternalPluginState>((set, get) => 
     persist(plugins);
     const desc = plugins.find((p) => p.key === key);
     if (desc?.enabled) tryRegister(desc);
+    set({ plugins });
+  },
+
+  batchEnable: (keys) => {
+    const keySet = new Set(keys);
+    const plugins = get().plugins.map((p) =>
+      keySet.has(p.key) ? { ...p, enabled: true } : p
+    );
+    persist(plugins);
+    for (const p of plugins) {
+      if (keySet.has(p.key) && p.enabled) tryRegister(p);
+    }
+    syncPlatformMetas(plugins);
+    set({ plugins });
+  },
+
+  batchDisable: (keys) => {
+    for (const k of keys) tryUnregister(k);
+    const keySet = new Set(keys);
+    const plugins = get().plugins.map((p) =>
+      keySet.has(p.key) ? { ...p, enabled: false } : p
+    );
+    persist(plugins);
+    syncPlatformMetas(plugins);
+    set({ plugins });
+  },
+
+  batchRemove: (keys) => {
+    for (const k of keys) tryUnregister(k);
+    const keySet = new Set(keys);
+    const plugins = get().plugins.filter((p) => !keySet.has(p.key));
+    persist(plugins);
+    syncPlatformMetas(plugins);
     set({ plugins });
   },
 }));

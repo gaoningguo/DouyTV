@@ -73,7 +73,7 @@ export default function MusicUserPlaylist() {
 
   if (!playlist) {
     return (
-      <div className="min-h-screen bg-ink text-cream p-4 flex flex-col items-center justify-center">
+      <div className="flex-1 min-h-0 flex flex-col items-center justify-center bg-ink text-cream p-4">
         <p className="text-sm text-cream-dim mb-3">歌单不存在</p>
         <button
           type="button"
@@ -87,8 +87,8 @@ export default function MusicUserPlaylist() {
   }
 
   return (
-    <div className="min-h-screen bg-ink text-cream p-4">
-      <div className="flex items-center mb-2">
+    <div className="flex-1 min-h-0 flex flex-col overflow-hidden bg-ink text-cream">
+      <div className="shrink-0 px-4 pt-3 pb-1">
         <button
           type="button"
           onClick={() => navigate(-1)}
@@ -98,6 +98,7 @@ export default function MusicUserPlaylist() {
           ← 返回
         </button>
       </div>
+      <div className="flex-1 min-h-0 overflow-y-auto p-4">
 
       <MusicDetailHeader
         eyebrow="MUSIC · MY PLAYLIST"
@@ -186,6 +187,7 @@ export default function MusicUserPlaylist() {
           </ul>
         </>
       )}
+      </div>
     </div>
   );
 }

@@ -94,8 +94,8 @@ export default function MusicArtist() {
   }, [tab, loadWorks]);
 
   return (
-    <div className="min-h-screen bg-ink text-cream p-4">
-      <div className="flex items-center mb-2">
+    <div className="flex-1 min-h-0 flex flex-col overflow-hidden bg-ink text-cream">
+      <div className="shrink-0 px-4 pt-3 pb-1">
         <button
           type="button"
           onClick={() => navigate(-1)}
@@ -105,6 +105,7 @@ export default function MusicArtist() {
           ← 返回
         </button>
       </div>
+      <div className="flex-1 min-h-0 overflow-y-auto p-4">
 
       {/* 歌手 hero —— 圆形头像 + 信息（不用 MusicDetailHeader 因为头像是圆形不是方形封面） */}
       <header
@@ -272,6 +273,7 @@ export default function MusicArtist() {
           加载更多
         </button>
       )}
+      </div>
     </div>
   );
 }

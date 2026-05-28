@@ -40,8 +40,11 @@ export default function MusicRecommendTag() {
   }, [load]);
 
   return (
-    <div className="min-h-screen bg-ink text-cream p-4">
-      <div className="flex items-center gap-3 mb-5">
+    <div className="flex-1 min-h-0 flex flex-col overflow-hidden bg-ink text-cream">
+      <div
+        className="shrink-0 flex items-center gap-3 px-4 pt-4 pb-3"
+        style={{ borderBottom: "1px solid var(--cream-line)" }}
+      >
         <button
           type="button"
           onClick={() => navigate(-1)}
@@ -61,6 +64,7 @@ export default function MusicRecommendTag() {
         </div>
       </div>
 
+      <div className="flex-1 min-h-0 overflow-y-auto p-4">
       {error && (
         <p
           className="p-2 rounded text-xs font-mono mb-3"
@@ -127,6 +131,7 @@ export default function MusicRecommendTag() {
           )}
         </>
       )}
+      </div>
     </div>
   );
 }

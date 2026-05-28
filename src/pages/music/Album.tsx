@@ -60,8 +60,8 @@ export default function MusicAlbum() {
   }, [detail]);
 
   return (
-    <div className="min-h-screen bg-ink text-cream p-4">
-      <div className="flex items-center mb-2">
+    <div className="flex-1 min-h-0 flex flex-col overflow-hidden bg-ink text-cream">
+      <div className="shrink-0 px-4 pt-3 pb-1">
         <button
           type="button"
           onClick={() => navigate(-1)}
@@ -71,6 +71,7 @@ export default function MusicAlbum() {
           ← 返回
         </button>
       </div>
+      <div className="flex-1 min-h-0 overflow-y-auto p-4">
 
       {error && (
         <p
@@ -140,6 +141,7 @@ export default function MusicAlbum() {
           )}
         </>
       ) : null}
+      </div>
     </div>
   );
 }

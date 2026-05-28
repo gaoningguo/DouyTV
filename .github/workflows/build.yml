@@ -185,6 +185,10 @@ jobs:
       - name: Initialize Android project
         run: pnpm tauri android init
 
+      # tauri android init 生成的是默认图标，需要用项目自定义图标覆盖
+      - name: Apply Android app icons
+        run: pnpm tauri icon src-tauri/icons/icon.png
+
       - name: Build Android APK (release, split-per-abi)
         run: pnpm tauri android build --apk --split-per-abi
 

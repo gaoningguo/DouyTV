@@ -240,7 +240,7 @@ function EpgSection() {
 /* ═══════════════════════════════════════════════════
    网络直播 Tab
    ═══════════════════════════════════════════════════ */
-type NetliveDialog = "add-sub" | "import-url" | "import-file" | "import-code" | undefined;
+type NetliveDialog = "add-sub" | "import-url" | "import-batch-url" | "import-file" | "import-code" | undefined;
 
 function NetliveTab() {
   const adultEnabled = useNetLiveStore((s) => s.adultEnabled);
@@ -251,6 +251,9 @@ function NetliveTab() {
   const removePlugin = useExternalPluginStore((s) => s.remove);
   const updateCode = useExternalPluginStore((s) => s.updateCode);
   const addPlugin = useExternalPluginStore((s) => s.add);
+  const batchEnable = useExternalPluginStore((s) => s.batchEnable);
+  const batchDisable = useExternalPluginStore((s) => s.batchDisable);
+  const batchRemove = useExternalPluginStore((s) => s.batchRemove);
   const subscriptions = usePluginSubscriptionStore((s) => s.subscriptions);
   const refreshing = usePluginSubscriptionStore((s) => s.refreshing);
   const addSub = usePluginSubscriptionStore((s) => s.add);
@@ -268,11 +271,32 @@ function NetliveTab() {
   const [netliveRefreshAllBusy, setNetliveRefreshAllBusy] = useState(false);
   const [netliveDoneMsg, setNetliveDoneMsg] = useState<string | undefined>();
 
+  // Batch selection
+  const [selected, setSelected] = useState<Set<string>>(new Set());
+  const batchMode = selected.size > 0;
+  const allSelected = plugins.length > 0 && selected.size === plugins.length;
+  const toggleSelect = useCallback((key: string) => {
+    setSelected((prev) => {
+      const next = new Set(prev);
+      if (next.has(key)) next.delete(key); else next.add(key);
+      return next;
+    });
+  }, []);
+  const toggleSelectAll = useCallback(() => {
+    if (allSelected) { setSelected(new Set()); }
+    else { setSelected(new Set(plugins.map((p) => p.key))); }
+  }, [allSelected, plugins]);
+  const clearSelection = useCallback(() => setSelected(new Set()), []);
+
   // Add subscription
   const [subUrl, setSubUrl] = useState("");
   const [subBusy, setSubBusy] = useState(false);
   // Import URL
   const [importUrl, setImportUrl] = useState("");
+  // Batch import URLs
+  const [batchUrls, setBatchUrls] = useState("");
+  const [batchImportBusy, setBatchImportBusy] = useState(false);
+  const [batchImportProgress, setBatchImportProgress] = useState("");
   // Import code
   const [importCode, setImportCode] = useState("");
   const fileRef = useRef<HTMLInputElement>(null);
@@ -339,7 +363,33 @@ function NetliveTab() {
     e.target.value = "";
   };
 
-  const openDialog = (d: NetliveDialog) => { setError(null); setDialog(d); };
+  const openDialog = (d: NetliveDialog) => { setError(null); setBatchImportProgress(""); setDialog(d); };
+
+  const onBatchImportUrls = async () => {
+    const lines = batchUrls.split(/\n/).map((l) => l.trim()).filter((l) => l && (l.startsWith("http://") || l.startsWith("https://")));
+    if (lines.length === 0) { setError("没有找到有效的 URL（每行一个，需以 http:// 或 https:// 开头）"); return; }
+    setError(null);
+    setBatchImportBusy(true);
+    let success = 0;
+    let fail = 0;
+    for (let i = 0; i < lines.length; i++) {
+      setBatchImportProgress(`${i + 1} / ${lines.length}`);
+      try {
+        const res = await fetch(lines[i]);
+        if (!res.ok) throw new Error(`HTTP ${res.status}`);
+        const code = await res.text();
+        if (tryAdd(code)) success++; else fail++;
+      } catch { fail++; }
+    }
+    setBatchImportBusy(false);
+    setBatchImportProgress("");
+    if (success > 0) {
+      setError(fail > 0 ? `成功 ${success} 个，失败 ${fail} 个` : null);
+      if (fail === 0) { setBatchUrls(""); setDialog(undefined); }
+    } else {
+      setError(`全部失败（${fail} 个）`);
+    }
+  };
 
   return (
     <div>
@@ -366,6 +416,7 @@ function NetliveTab() {
           )}
           <SmallBtn onClick={() => openDialog("add-sub")}>订阅</SmallBtn>
           <SmallBtn onClick={() => openDialog("import-url")}>URL</SmallBtn>
+          <SmallBtn onClick={() => openDialog("import-batch-url")}>批量URL</SmallBtn>
           <SmallBtn onClick={() => openDialog("import-file")}>文件</SmallBtn>
           <SmallBtn onClick={() => openDialog("import-code")}>代码</SmallBtn>
         </div>
@@ -384,7 +435,24 @@ function NetliveTab() {
       </div>
 
       {/* 已安装插件 */}
-      <SectionHeader title="已安装插件" />
+      <div className="flex items-center justify-between mb-3">
+        <SectionHeader title={`已安装插件${plugins.length > 0 ? ` (${plugins.length})` : ""}`} className="!mb-0" />
+        {plugins.length > 0 && (
+          <button type="button" onClick={toggleSelectAll} className="text-[9px] font-mono tap px-2 py-1 rounded" style={{ background: allSelected ? "var(--ember-soft)" : "var(--ink-3)", color: allSelected ? "var(--ember)" : "var(--cream-faint)" }}>
+            {allSelected ? "取消全选" : "全选"}
+          </button>
+        )}
+      </div>
+      {/* 批量操作栏 */}
+      {batchMode && (
+        <div className="flex items-center gap-2 p-2.5 rounded-lg mb-3" style={{ background: "rgba(255,107,53,0.06)", border: "1px solid rgba(255,107,53,0.25)" }}>
+          <p className="text-[10px] font-mono text-ember flex-1">已选 {selected.size} 个</p>
+          <button type="button" onClick={() => { batchEnable(Array.from(selected)); clearSelection(); }} className="px-2 py-1 rounded text-[9px] font-mono font-semibold tap" style={{ background: "var(--ember)", color: "var(--ink)" }}>批量启用</button>
+          <button type="button" onClick={() => { batchDisable(Array.from(selected)); clearSelection(); }} className="px-2 py-1 rounded text-[9px] font-mono tap text-cream" style={{ background: "var(--ink-3)", border: "1px solid var(--cream-line)" }}>批量禁用</button>
+          <button type="button" onClick={() => { if (confirm(`确认删除 ${selected.size} 个插件？`)) { batchRemove(Array.from(selected)); clearSelection(); } }} className="px-2 py-1 rounded text-[9px] font-mono tap" style={{ color: "#FF6B6B" }}>批量删除</button>
+          <button type="button" onClick={clearSelection} className="px-2 py-1 rounded text-[9px] font-mono tap text-cream-faint" style={{ background: "var(--ink-3)" }}>取消</button>
+        </div>
+      )}
       {plugins.length === 0 ? (
         <div className="p-4 rounded-lg text-center mb-6" style={{ background: "var(--ink-2)", border: "1px solid var(--cream-line)" }}>
           <p className="text-[11px] font-display text-cream-faint">还没有安装任何插件</p>
@@ -396,6 +464,8 @@ function NetliveTab() {
             <PluginCard
               key={p.key}
               plugin={p}
+              selected={selected.has(p.key)}
+              onToggleSelect={() => toggleSelect(p.key)}
               onEnable={() => enable(p.key)}
               onDisable={() => disable(p.key)}
               onRemove={() => { if (confirm(`删除「${p.name}」？`)) removePlugin(p.key); }}
@@ -446,6 +516,14 @@ function NetliveTab() {
           </div>
         </DialogSheet>
       )}
+      {dialog === "import-batch-url" && (
+        <DialogSheet onClose={() => setDialog(undefined)} title="批量 URL 导入" hint="每行一个插件 .js 文件的直链 URL，批量下载安装">
+          <textarea value={batchUrls} onChange={(e) => setBatchUrls(e.target.value)} placeholder={'https://example.com/plugin-a.js\nhttps://example.com/plugin-b.js\nhttps://example.com/plugin-c.js'} className="w-full h-40 p-2.5 rounded text-[11px] font-mono outline-none text-cream placeholder:text-cream-faint resize-none mb-2" style={{ background: "var(--ink-3)", border: "1px solid var(--cream-line)" }} />
+          {batchImportProgress && <p className="text-[10px] font-mono text-ember mb-2 animate-pulse">下载中 {batchImportProgress}</p>}
+          {error && <ErrorBox text={error} />}
+          <DialogActions onCancel={() => setDialog(undefined)} onConfirm={onBatchImportUrls} disabled={!batchUrls.trim() || batchImportBusy} confirmLabel={batchImportBusy ? "导入中…" : "批量导入"} />
+        </DialogSheet>
+      )}
       {dialog === "import-code" && (
         <DialogSheet onClose={() => setDialog(undefined)} title="粘贴插件代码" hint="必须 return { manifest: { id, label }, resolve: async (ctx, {roomId}) => ... }">
           <textarea value={importCode} onChange={(e) => setImportCode(e.target.value)} placeholder={'return {\n  manifest: { id: "my-platform", label: "我的平台" },\n  async resolve(ctx, { roomId }) { ... }\n}'} className="w-full h-40 p-2.5 rounded text-[11px] font-mono outline-none text-cream placeholder:text-cream-faint resize-none mb-2" style={{ background: "var(--ink-3)", border: "1px solid var(--cream-line)" }} />
@@ -479,8 +557,10 @@ function PluginSubCard({ sub, isRefreshing, onRefresh, onRemove }: { sub: Plugin
   );
 }
 
-function PluginCard({ plugin, onEnable, onDisable, onRemove, onUpdate }: {
+function PluginCard({ plugin, selected, onToggleSelect, onEnable, onDisable, onRemove, onUpdate }: {
   plugin: NetLivePluginDescriptor;
+  selected?: boolean;
+  onToggleSelect?: () => void;
   onEnable: () => void;
   onDisable: () => void;
   onRemove: () => void;
@@ -490,8 +570,9 @@ function PluginCard({ plugin, onEnable, onDisable, onRemove, onUpdate }: {
   const [code, setCode] = useState(plugin.code);
 
   return (
-    <div className="p-2.5 rounded-lg" style={{ background: "var(--ink-2)", border: `1px solid ${plugin.enabled ? "rgba(255,107,53,0.3)" : "var(--cream-line)"}`, opacity: plugin.enabled ? 1 : 0.6 }}>
+    <div className="p-2.5 rounded-lg" style={{ background: selected ? "rgba(255,107,53,0.06)" : "var(--ink-2)", border: `1px solid ${selected ? "rgba(255,107,53,0.4)" : plugin.enabled ? "rgba(255,107,53,0.3)" : "var(--cream-line)"}`, opacity: plugin.enabled ? 1 : 0.6 }}>
       <div className="flex items-center gap-2">
+        <input type="checkbox" checked={!!selected} onChange={onToggleSelect} className="accent-ember w-3.5 h-3.5 shrink-0 cursor-pointer" />
         <div className="flex-1 min-w-0">
           <p className="font-display font-semibold text-[11px] text-cream truncate">{plugin.name}</p>
           <p className="font-mono text-[8px] text-cream-faint truncate">

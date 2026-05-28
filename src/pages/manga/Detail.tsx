@@ -44,7 +44,8 @@ export default function MangaDetailPage() {
   const title = detail?.title || initial?.title || "未知";
 
   return (
-    <div className="min-h-screen bg-ink text-cream p-4">
+    <div className="flex-1 min-h-0 flex flex-col overflow-hidden bg-ink text-cream">
+      <div className="flex-1 min-h-0 overflow-y-auto p-4">
       <DetailHero
         cover={cover}
         title={title}
@@ -152,6 +153,7 @@ export default function MangaDetailPage() {
           </ul>
         </>
       ) : null}
+      </div>
     </div>
   );
 }

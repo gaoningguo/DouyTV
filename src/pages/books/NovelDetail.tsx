@@ -134,7 +134,7 @@ export default function NovelDetail() {
 
   if (!source) {
     return (
-      <div className="min-h-screen bg-ink text-cream p-4 flex items-center justify-center">
+      <div className="flex-1 min-h-0 flex items-center justify-center bg-ink text-cream p-4">
         <p className="text-cream-faint text-sm">书源不存在 · 已被删除</p>
       </div>
     );
@@ -158,7 +158,8 @@ export default function NovelDetail() {
   };
 
   return (
-    <div className="min-h-screen bg-ink text-cream p-4">
+    <div className="flex-1 min-h-0 flex flex-col overflow-hidden bg-ink text-cream">
+      <div className="flex-1 min-h-0 overflow-y-auto p-4">
       {loadingBook && !book && (
         <p className="text-cream-faint text-sm">读取详情中…</p>
       )}
@@ -317,6 +318,7 @@ export default function NovelDetail() {
           })}
         </ul>
       </section>
+      </div>
     </div>
   );
 }
