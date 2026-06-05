@@ -1,0 +1,24 @@
+{
+  "projectId": "3391305001861538506",
+  "requestedId": "b7fc787d04da4a3caebeb01d96b4594a",
+  "title": "视频详情 - 选集与多源切换 (优化)",
+  "stitchTitle": "视频详情 - 选集与多源切换 (优化)",
+  "resourceName": "projects/3391305001861538506/screens/b7fc787d04da4a3caebeb01d96b4594a",
+  "deviceType": "MOBILE",
+  "width": "780",
+  "height": "2068",
+  "files": {
+    "screenshot": {
+      "path": "stitch-export/screens/08-视频详情-选集与多源切换-优化/screenshot.png",
+      "mimeType": "image/png",
+      "bytes": 527079,
+      "resourceName": "projects/3391305001861538506/files/7e04acde989e44fdb93b8a47b9e9001c"
+    },
+    "code": {
+      "path": "stitch-export/screens/08-视频详情-选集与多源切换-优化/code.html",
+      "mimeType": "text/html",
+      "bytes": 18585,
+      "resourceName": "projects/3391305001861538506/files/1fde278a056447b0979181fbc63613c2"
+    }
+  }
+}

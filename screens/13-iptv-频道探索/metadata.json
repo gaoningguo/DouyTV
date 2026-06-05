@@ -1,0 +1,24 @@
+{
+  "projectId": "3391305001861538506",
+  "requestedId": "20674a9700bc4a439686650b1855ff5f",
+  "title": "IPTV 频道探索",
+  "stitchTitle": "IPTV 频道探索",
+  "resourceName": "projects/3391305001861538506/screens/20674a9700bc4a439686650b1855ff5f",
+  "deviceType": "MOBILE",
+  "width": "780",
+  "height": "1768",
+  "files": {
+    "screenshot": {
+      "path": "stitch-export/screens/13-iptv-频道探索/screenshot.jpg",
+      "mimeType": "image/jpeg",
+      "bytes": 49883,
+      "resourceName": "projects/3391305001861538506/files/6271572181429382888"
+    },
+    "code": {
+      "path": "stitch-export/screens/13-iptv-频道探索/code.html",
+      "mimeType": "text/html",
+      "bytes": 21794,
+      "resourceName": "projects/3391305001861538506/files/7795371274999680372"
+    }
+  }
+}

@@ -1,0 +1,24 @@
+{
+  "projectId": "3391305001861538506",
+  "requestedId": "b0c5df3e4a6040a2bf4fd096d295e354",
+  "title": "内容分类中心",
+  "stitchTitle": "内容分类中心",
+  "resourceName": "projects/3391305001861538506/screens/b0c5df3e4a6040a2bf4fd096d295e354",
+  "deviceType": "MOBILE",
+  "width": "780",
+  "height": "2320",
+  "files": {
+    "screenshot": {
+      "path": "stitch-export/screens/38-内容分类中心/screenshot.png",
+      "mimeType": "image/png",
+      "bytes": 1225165,
+      "resourceName": "projects/3391305001861538506/files/e19efb73696743839c548ca64b439d99"
+    },
+    "code": {
+      "path": "stitch-export/screens/38-内容分类中心/code.html",
+      "mimeType": "text/html",
+      "bytes": 17531,
+      "resourceName": "projects/3391305001861538506/files/909c21821961493688b32b4d21003ed3"
+    }
+  }
+}

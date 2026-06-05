@@ -1,0 +1,24 @@
+{
+  "projectId": "3391305001861538506",
+  "requestedId": "2e39b8959c56434fa23ce266a96d4214",
+  "title": "内置音乐源配置弹窗",
+  "stitchTitle": "内置音乐源配置弹窗",
+  "resourceName": "projects/3391305001861538506/screens/2e39b8959c56434fa23ce266a96d4214",
+  "deviceType": "MOBILE",
+  "width": "780",
+  "height": "1768",
+  "files": {
+    "screenshot": {
+      "path": "stitch-export/screens/51-内置音乐源配置弹窗/screenshot.png",
+      "mimeType": "image/png",
+      "bytes": 104639,
+      "resourceName": "projects/3391305001861538506/files/2991c8a6c00e40c388d623d528cc9649"
+    },
+    "code": {
+      "path": "stitch-export/screens/51-内置音乐源配置弹窗/code.html",
+      "mimeType": "text/html",
+      "bytes": 14311,
+      "resourceName": "projects/3391305001861538506/files/ac412bce277440df964ac50948e370d9"
+    }
+  }
+}

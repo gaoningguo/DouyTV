@@ -1,0 +1,24 @@
+{
+  "projectId": "3391305001861538506",
+  "requestedId": "bee072d53a78440faccd089356575dd8",
+  "title": "音乐源配置 - 综合管理版 (重构)",
+  "stitchTitle": "音乐源配置 - 综合管理版 (重构)",
+  "resourceName": "projects/3391305001861538506/screens/bee072d53a78440faccd089356575dd8",
+  "deviceType": "MOBILE",
+  "width": "780",
+  "height": "2972",
+  "files": {
+    "screenshot": {
+      "path": "stitch-export/screens/50-音乐源配置-综合管理版-重构/screenshot.png",
+      "mimeType": "image/png",
+      "bytes": 501817,
+      "resourceName": "projects/3391305001861538506/files/93af256017534c96aaa9798b12984997"
+    },
+    "code": {
+      "path": "stitch-export/screens/50-音乐源配置-综合管理版-重构/code.html",
+      "mimeType": "text/html",
+      "bytes": 17698,
+      "resourceName": "projects/3391305001861538506/files/e23f24e9a37048ef9a7016d29c4013ab"
+    }
+  }
+}

@@ -1,0 +1,24 @@
+{
+  "projectId": "3391305001861538506",
+  "requestedId": "83bfe4a5b873401a9de259f4f750a174",
+  "title": "直播间排行与热门 (全平台)",
+  "stitchTitle": "直播间排行与热门 (全平台)",
+  "resourceName": "projects/3391305001861538506/screens/83bfe4a5b873401a9de259f4f750a174",
+  "deviceType": "MOBILE",
+  "width": "780",
+  "height": "1768",
+  "files": {
+    "screenshot": {
+      "path": "stitch-export/screens/14-直播间排行与热门-全平台/screenshot.png",
+      "mimeType": "image/png",
+      "bytes": 183220,
+      "resourceName": "projects/3391305001861538506/files/285a93514543486095e5299f98fe7c71"
+    },
+    "code": {
+      "path": "stitch-export/screens/14-直播间排行与热门-全平台/code.html",
+      "mimeType": "text/html",
+      "bytes": 14975,
+      "resourceName": "projects/3391305001861538506/files/3f770d2feda048ad807fa34b6c479462"
+    }
+  }
+}

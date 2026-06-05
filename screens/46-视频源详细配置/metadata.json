@@ -1,0 +1,24 @@
+{
+  "projectId": "3391305001861538506",
+  "requestedId": "f5179908192849269878a732b7480f19",
+  "title": "视频源详细配置",
+  "stitchTitle": "视频源详细配置",
+  "resourceName": "projects/3391305001861538506/screens/f5179908192849269878a732b7480f19",
+  "deviceType": "MOBILE",
+  "width": "780",
+  "height": "2560",
+  "files": {
+    "screenshot": {
+      "path": "stitch-export/screens/46-视频源详细配置/screenshot.jpg",
+      "mimeType": "image/jpeg",
+      "bytes": 46735,
+      "resourceName": "projects/3391305001861538506/files/17086893542709290578"
+    },
+    "code": {
+      "path": "stitch-export/screens/46-视频源详细配置/code.html",
+      "mimeType": "text/html",
+      "bytes": 18550,
+      "resourceName": "projects/3391305001861538506/files/16645812672219525318"
+    }
+  }
+}

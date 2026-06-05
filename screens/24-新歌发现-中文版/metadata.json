@@ -1,0 +1,24 @@
+{
+  "projectId": "3391305001861538506",
+  "requestedId": "02bb79705a1740b6be59153b07237c1e",
+  "title": "新歌发现 (中文版)",
+  "stitchTitle": "新歌发现 (中文版)",
+  "resourceName": "projects/3391305001861538506/screens/02bb79705a1740b6be59153b07237c1e",
+  "deviceType": "MOBILE",
+  "width": "780",
+  "height": "2036",
+  "files": {
+    "screenshot": {
+      "path": "stitch-export/screens/24-新歌发现-中文版/screenshot.png",
+      "mimeType": "image/png",
+      "bytes": 691826,
+      "resourceName": "projects/3391305001861538506/files/3d33522b8eef40e188e3f058dfd52ee9"
+    },
+    "code": {
+      "path": "stitch-export/screens/24-新歌发现-中文版/code.html",
+      "mimeType": "text/html",
+      "bytes": 23892,
+      "resourceName": "projects/3391305001861538506/files/2226e7dfb2924036bb949b0433aed8c4"
+    }
+  }
+}

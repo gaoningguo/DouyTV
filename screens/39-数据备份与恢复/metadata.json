@@ -1,0 +1,24 @@
+{
+  "projectId": "3391305001861538506",
+  "requestedId": "09830881918f4aa6867839e964e82e1b",
+  "title": "数据备份与恢复",
+  "stitchTitle": "数据备份与恢复",
+  "resourceName": "projects/3391305001861538506/screens/09830881918f4aa6867839e964e82e1b",
+  "deviceType": "MOBILE",
+  "width": "780",
+  "height": "2642",
+  "files": {
+    "screenshot": {
+      "path": "stitch-export/screens/39-数据备份与恢复/screenshot.jpg",
+      "mimeType": "image/jpeg",
+      "bytes": 55783,
+      "resourceName": "projects/3391305001861538506/files/13111676557346908076"
+    },
+    "code": {
+      "path": "stitch-export/screens/39-数据备份与恢复/code.html",
+      "mimeType": "text/html",
+      "bytes": 16619,
+      "resourceName": "projects/3391305001861538506/files/4957093558400223001"
+    }
+  }
+}

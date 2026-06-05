@@ -1,0 +1,334 @@
+<!DOCTYPE html>
+
+<html class="dark" lang="zh-CN"><head>
+<meta charset="utf-8"/>
+<meta content="width=device-width, initial-scale=1.0" name="viewport"/>
+<title>Rankings - STREAM</title>
+<script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700;800&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<script id="tailwind-config">
+        tailwind.config = {
+            darkMode: "class",
+            theme: {
+                extend: {
+                    "colors": {
+                            "on-background": "#e5e2e1",
+                            "tertiary-fixed-dim": "#c6c6c7",
+                            "on-primary": "#003735",
+                            "error-container": "#93000a",
+                            "inverse-on-surface": "#313030",
+                            "surface-container-high": "#2a2a2a",
+                            "error": "#ffb4ab",
+                            "surface-bright": "#3a3939",
+                            "secondary-container": "#ff516a",
+                            "primary-fixed": "#29fcf3",
+                            "inverse-surface": "#e5e2e1",
+                            "tertiary-container": "#d9d9d9",
+                            "secondary-fixed-dim": "#ffb2b6",
+                            "on-primary-fixed": "#00201e",
+                            "on-surface-variant": "#b9cac8",
+                            "on-secondary-fixed": "#40000d",
+                            "on-surface": "#e5e2e1",
+                            "on-error": "#690005",
+                            "surface-container-low": "#1c1b1b",
+                            "primary": "#cffffb",
+                            "on-primary-container": "#006a66",
+                            "secondary-fixed": "#ffdadb",
+                            "on-primary-fixed-variant": "#00504d",
+                            "surface-tint": "#00ddd6",
+                            "secondary": "#ffb2b6",
+                            "surface-variant": "#353534",
+                            "surface-dim": "#131313",
+                            "surface-container-highest": "#353534",
+                            "primary-container": "#00f2ea",
+                            "on-secondary": "#67001b",
+                            "inverse-primary": "#006a66",
+                            "on-tertiary": "#2f3131",
+                            "surface": "#131313",
+                            "on-tertiary-fixed-variant": "#454747",
+                            "on-tertiary-fixed": "#1a1c1c",
+                            "on-secondary-fixed-variant": "#920029",
+                            "on-tertiary-container": "#5d5f5f",
+                            "surface-container-lowest": "#0e0e0e",
+                            "tertiary": "#f5f5f5",
+                            "on-secondary-container": "#5b0016",
+                            "outline-variant": "#3a4a48",
+                            "primary-fixed-dim": "#00ddd6",
+                            "background": "#131313",
+                            "tertiary-fixed": "#e2e2e2",
+                            "surface-container": "#201f1f",
+                            "outline": "#849492",
+                            "on-error-container": "#ffdad6"
+                    },
+                    "borderRadius": {
+                            "DEFAULT": "0.25rem",
+                            "lg": "0.5rem",
+                            "xl": "0.75rem",
+                            "full": "9999px"
+                    },
+                    "spacing": {
+                            "lg": "24px",
+                            "safe-area-inset": "max(16px, env(safe-area-inset-bottom))",
+                            "base": "4px",
+                            "xs": "4px",
+                            "xl": "32px",
+                            "sm": "8px",
+                            "md": "16px"
+                    },
+                    "fontFamily": {
+                            "title-md": ["Inter"],
+                            "body-sm": ["Inter"],
+                            "label-caps": ["Inter"],
+                            "headline-lg": ["Inter"],
+                            "display-lg": ["Inter"],
+                            "headline-lg-mobile": ["Inter"],
+                            "body-lg": ["Inter"]
+                    },
+                    "fontSize": {
+                            "title-md": ["20px", {"lineHeight": "28px", "fontWeight": "600"}],
+                            "body-sm": ["14px", {"lineHeight": "20px", "fontWeight": "400"}],
+                            "label-caps": ["12px", {"lineHeight": "16px", "letterSpacing": "0.05em", "fontWeight": "700"}],
+                            "headline-lg": ["32px", {"lineHeight": "40px", "letterSpacing": "-0.01em", "fontWeight": "700"}],
+                            "display-lg": ["48px", {"lineHeight": "52px", "letterSpacing": "-0.02em", "fontWeight": "800"}],
+                            "headline-lg-mobile": ["24px", {"lineHeight": "32px", "fontWeight": "700"}],
+                            "body-lg": ["16px", {"lineHeight": "24px", "fontWeight": "400"}]
+                    }
+                }
+            }
+        }
+    </script>
+<style>
+        body {
+            background-color: #131313;
+            color: #e5e2e1;
+            margin: 0;
+            padding: 0;
+            overflow-x: hidden;
+        }
+        
+        /* Hide scrollbar for category tabs */
+        .no-scrollbar::-webkit-scrollbar {
+            display: none;
+        }
+        .no-scrollbar {
+            -ms-overflow-style: none;
+            scrollbar-width: none;
+        }
+        
+        .glass-panel {
+            background: rgba(25, 25, 25, 0.6);
+            backdrop-filter: blur(20px);
+            -webkit-backdrop-filter: blur(20px);
+        }
+        
+        .neon-text-primary {
+            text-shadow: 0 0 10px rgba(41, 252, 243, 0.8), 0 0 20px rgba(41, 252, 243, 0.4);
+        }
+        
+        .neon-text-secondary {
+            text-shadow: 0 0 10px rgba(255, 81, 106, 0.8), 0 0 20px rgba(255, 81, 106, 0.4);
+        }
+        
+        /* Rank numbering typography */
+        .rank-number {
+            font-family: 'Inter', sans-serif;
+            font-weight: 800;
+            font-size: 48px;
+            line-height: 1;
+            letter-spacing: -0.05em;
+        }
+    </style>
+<style>
+    body {
+      min-height: max(884px, 100dvh);
+    }
+  </style>
+  </head>
+<body class="bg-background min-h-screen text-on-background pb-[100px] md:pb-0 pt-16 md:pt-0">
+<!-- TopAppBar Mobile (From JSON) -->
+<header class="fixed top-0 w-full z-50 bg-surface/80 backdrop-blur-xl dark:bg-surface/80 flex justify-between items-center px-md h-16 md:hidden">
+<button class="text-on-surface-variant hover:opacity-80 transition-opacity active:scale-95 transition-transform flex items-center justify-center">
+<span class="material-symbols-outlined">search</span>
+</button>
+<h1 class="font-display-lg text-primary dark:text-primary-fixed italic tracking-tighter text-[28px] leading-none">STREAM</h1>
+<button class="text-on-surface-variant hover:opacity-80 transition-opacity active:scale-95 transition-transform flex items-center justify-center">
+<span class="material-symbols-outlined">tune</span>
+</button>
+</header>
+<!-- TopAppBar Desktop (Nav Cluster) -->
+<header class="hidden md:flex fixed top-0 w-full z-50 bg-surface/80 backdrop-blur-xl h-20 items-center px-xl justify-between">
+<div class="flex items-center gap-xl">
+<h1 class="font-display-lg text-primary italic tracking-tighter text-[32px] leading-none">STREAM</h1>
+<nav class="flex gap-lg ml-xl">
+<a class="font-title-md text-title-md text-on-surface-variant opacity-60 hover:opacity-100 transition-opacity" href="#">首页</a>
+<a class="font-title-md text-title-md text-on-surface-variant opacity-60 hover:opacity-100 transition-opacity" href="#">分类</a>
+<a class="font-title-md text-title-md text-primary neon-text-primary" href="#">排行榜</a>
+<a class="font-title-md text-title-md text-on-surface-variant opacity-60 hover:opacity-100 transition-opacity" href="#">书架</a>
+</nav>
+</div>
+<div class="flex items-center gap-md">
+<button class="w-10 h-10 rounded-full bg-surface-container flex items-center justify-center text-on-surface-variant hover:bg-surface-container-high transition-colors">
+<span class="material-symbols-outlined">search</span>
+</button>
+<button class="w-10 h-10 rounded-full bg-surface-container flex items-center justify-center text-on-surface-variant hover:bg-surface-container-high transition-colors">
+<span class="material-symbols-outlined">person</span>
+</button>
+</div>
+</header>
+<main class="md:pt-28 md:px-xl max-w-[1400px] mx-auto w-full">
+<!-- Page Header -->
+<div class="px-md md:px-0 pt-md pb-sm flex justify-between items-end">
+<div>
+<h2 class="font-headline-lg-mobile text-headline-lg-mobile md:font-headline-lg md:text-headline-lg text-on-background">排行榜</h2>
+<p class="font-body-sm text-body-sm text-on-surface-variant mt-1">发现最受欢迎的作品</p>
+</div>
+<button class="flex items-center gap-xs px-sm py-xs rounded-full bg-surface-container-high text-on-surface-variant hover:text-primary transition-colors">
+<span class="material-symbols-outlined text-[18px]">filter_list</span>
+<span class="font-label-caps text-label-caps hidden md:inline">筛选</span>
+</button>
+</div>
+<!-- Categories Tabs -->
+<div class="w-full overflow-x-auto no-scrollbar px-md md:px-0 py-sm mb-md">
+<div class="flex gap-sm w-max">
+<button class="px-md py-sm rounded-full bg-primary/10 text-primary font-title-md text-title-md border border-primary/20">
+                    人气榜
+                </button>
+<button class="px-md py-sm rounded-full bg-surface-container text-on-surface-variant font-title-md text-title-md hover:bg-surface-container-high transition-colors">
+                    新书榜
+                </button>
+<button class="px-md py-sm rounded-full bg-surface-container text-on-surface-variant font-title-md text-title-md hover:bg-surface-container-high transition-colors">
+                    完结榜
+                </button>
+<button class="px-md py-sm rounded-full bg-surface-container text-on-surface-variant font-title-md text-title-md hover:bg-surface-container-high transition-colors">
+                    口碑榜
+                </button>
+</div>
+</div>
+<!-- Rankings List (Bento/Asymmetric Layout) -->
+<div class="px-md md:px-0 grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-md">
+<!-- Rank 01: Featured Large Card -->
+<div class="md:col-span-2 lg:col-span-2 relative rounded-xl overflow-hidden h-[300px] md:h-[400px] group cursor-pointer">
+<img alt="Cover" class="absolute inset-0 w-full h-full object-cover transition-transform duration-700 group-hover:scale-105" data-alt="A highly detailed cinematic illustration of a futuristic cyber-samurai standing in a neon-lit rain-soaked alleyway. The scene uses a deep black background contrasting with intense cyan and hot pink glowing neon lights, fitting a high-energy Gen-Z digital aesthetic. The style is hyper-realistic anime with a glassmorphism UI overlay implied by atmospheric fog." src="https://lh3.googleusercontent.com/aida-public/AB6AXuA5T3C8iToxi7cGqBhrj9NMpf8O0h9naCVzlWZhIXRvJxjPBtWXYq6h-dr7baf2Y211JqOg9KPUgIGNt2JUr1U4k3QA_TWLcd8HzD_6KO8WdCEPEdPN24bGQqpYumStQL3_mY3dOiIJKdToEj0peVB5zsjkvfgJexQc9wA3g1mq5rQOPoUv-607mYR4ZdBrKqnm9slHcbbgYgtDH5VV-RtbkksAnJ4YAMxvOvyCuoYUcHIWsnoA5ZDY7Za5p2uwlw2OMlSK4TNJFKI"/>
+<div class="absolute inset-0 bg-gradient-to-t from-black via-black/60 to-transparent"></div>
+<div class="absolute inset-0 bg-gradient-to-r from-black/80 via-transparent to-transparent"></div>
+<div class="absolute bottom-0 left-0 p-lg w-full flex justify-between items-end">
+<div class="flex gap-md items-end">
+<div class="rank-number text-primary neon-text-primary italic mr-sm drop-shadow-2xl">01</div>
+<div>
+<div class="flex items-center gap-xs mb-1">
+<span class="px-2 py-0.5 rounded bg-surface/60 backdrop-blur-md font-label-caps text-label-caps text-on-surface">科幻</span>
+<span class="px-2 py-0.5 rounded bg-surface/60 backdrop-blur-md font-label-caps text-label-caps text-on-surface">赛博朋克</span>
+</div>
+<h3 class="font-headline-lg-mobile text-headline-lg-mobile md:font-headline-lg md:text-headline-lg text-white mb-xs line-clamp-1">霓虹深渊：起源</h3>
+<p class="font-body-sm text-body-sm text-on-surface-variant line-clamp-1 max-w-[80%]">在失控的AI时代，寻找最后的人性碎片。一部跨越虚拟与现实的史诗巨作。</p>
+</div>
+</div>
+<div class="hidden md:flex flex-col items-end">
+<div class="flex items-center text-primary mb-xs">
+<span class="material-symbols-outlined text-[16px] mr-1">trending_up</span>
+<span class="font-title-md text-title-md">1.2M</span>
+</div>
+<span class="font-label-caps text-label-caps text-on-surface-variant">人气值</span>
+</div>
+</div>
+</div>
+<!-- Rank 02 -->
+<div class="relative rounded-xl overflow-hidden h-[180px] md:h-auto glass-panel border border-surface-container flex group cursor-pointer hover:border-surface-tint/30 transition-colors">
+<div class="w-[120px] md:w-[140px] shrink-0 relative overflow-hidden">
+<img alt="Cover" class="absolute inset-0 w-full h-full object-cover transition-transform duration-500 group-hover:scale-110" data-alt="A striking minimalist anime-style portrait of a magical girl with glowing white hair against a pitch-black void. Vibrant hot pink and cyan magical energy swirls around her hands. The composition is dynamic and modern, lit by high-contrast neon accents, perfectly suited for a dark-room digital platform UI." src="https://lh3.googleusercontent.com/aida-public/AB6AXuBw9ihS1KdLMNcgJUJ6rhLxITA6v8gI6coGxiYaa7JM8Hw5FZSe6C8-8DfQ94qtd32zxneZqP98v8T498TlrObQINDGrGsx_jC4_s7aDmkuc-o9qH001ho3dhwJ1R_jyuKH08RBLq8X9k12GGsz2RIsvJZSu8ZtbVEyEOai6NX6QXlRC384wobFVAb6QCss11tcK3dUI-TsFIYf_X1vuxW1C6llH30UHBUpB_TrRV1eddH2dR8TRZGrj7iB3LM7_p7X6K7ccBH4DWc"/>
+<div class="absolute inset-0 bg-gradient-to-t from-black/80 to-transparent"></div>
+<div class="absolute bottom-2 left-2 rank-number text-[32px] text-primary neon-text-primary italic">02</div>
+</div>
+<div class="p-sm flex flex-col justify-between flex-1">
+<div>
+<h3 class="font-title-md text-title-md text-on-background line-clamp-1 mb-1">星界魔法使</h3>
+<p class="font-body-sm text-body-sm text-on-surface-variant line-clamp-2">魔法与机械结合的世界中，少女踏上寻找真理的旅途。</p>
+</div>
+<div class="flex justify-between items-end mt-2">
+<div class="flex flex-wrap gap-1">
+<span class="px-1.5 py-0.5 rounded bg-surface-container-high font-label-caps text-[10px] text-tertiary-fixed-dim">奇幻</span>
+</div>
+<div class="flex items-center text-secondary">
+<span class="material-symbols-outlined text-[14px] mr-1">trending_up</span>
+<span class="font-label-caps text-label-caps">890K</span>
+</div>
+</div>
+</div>
+</div>
+<!-- Rank 03 -->
+<div class="relative rounded-xl overflow-hidden h-[180px] md:h-auto glass-panel border border-surface-container flex group cursor-pointer hover:border-surface-tint/30 transition-colors">
+<div class="w-[120px] md:w-[140px] shrink-0 relative overflow-hidden">
+<img alt="Cover" class="absolute inset-0 w-full h-full object-cover transition-transform duration-500 group-hover:scale-110" data-alt="A dramatic, high-contrast digital illustration of a dark fantasy landscape featuring a ruined gothic castle lit by a sickly green and deep purple bioluminescence. The scene is shrouded in deep shadows and mist, utilizing a deep black #050505 background to emphasize the glowing elements, fitting a modern manga aggregator aesthetic." src="https://lh3.googleusercontent.com/aida-public/AB6AXuAIsbEGItekj1S8mm66MJN7eU4UdtJIF9x9hLDOdHqMQ4l1Qf6IkDOo_poR2NJg3TpUElrp5AK8eWko2WnOXdaSWQw-pKygkqYEk1gdY72Zy5ylsj9KQtRQV0ZBKSZmHoiRPtmCWuu3EAWIvuk5ONwWrr9d7_9XnP53nTGPoJGAezER4uY3Y5KZn78-HcXYN5TO6P-1NObGIEjtVWvYFvxxiV6irvmprFTny8u2PXkii-Hkf0vkAyghpdgahWJGTVEtIQ_yXwPwN20"/>
+<div class="absolute inset-0 bg-gradient-to-t from-black/80 to-transparent"></div>
+<div class="absolute bottom-2 left-2 rank-number text-[32px] text-primary neon-text-primary italic">03</div>
+</div>
+<div class="p-sm flex flex-col justify-between flex-1">
+<div>
+<h3 class="font-title-md text-title-md text-on-background line-clamp-1 mb-1">深渊凝视者</h3>
+<p class="font-body-sm text-body-sm text-on-surface-variant line-clamp-2">当你在凝视深渊时，深渊也在凝视你。硬核克苏鲁神话。</p>
+</div>
+<div class="flex justify-between items-end mt-2">
+<div class="flex flex-wrap gap-1">
+<span class="px-1.5 py-0.5 rounded bg-surface-container-high font-label-caps text-[10px] text-tertiary-fixed-dim">悬疑</span>
+</div>
+<div class="flex items-center text-primary">
+<span class="material-symbols-outlined text-[14px] mr-1">trending_up</span>
+<span class="font-label-caps text-label-caps">750K</span>
+</div>
+</div>
+</div>
+</div>
+<!-- Additional Ranks (Standard List format but styled elegantly) -->
+<div class="md:col-span-2 lg:col-span-3 flex flex-col gap-sm mt-sm">
+<!-- Rank 04 -->
+<div class="flex items-center gap-md p-sm rounded-xl hover:bg-surface-container-high transition-colors cursor-pointer group">
+<div class="font-title-md text-title-md text-on-surface-variant w-8 text-center italic opacity-60">04</div>
+<div class="w-12 h-12 rounded bg-surface-container overflow-hidden shrink-0">
+<img alt="Thumb" class="w-full h-full object-cover opacity-80 group-hover:opacity-100 transition-opacity" data-alt="A stylized minimalist illustration of a blooming lotus flower depicted with glowing pink wireframe lines against a solid #121212 dark grey background. The digital art style is sleek, modern, and high-contrast, designed to look like a small vibrant app icon or thumbnail in a dark-mode UI." src="https://lh3.googleusercontent.com/aida-public/AB6AXuBXCdeBe2OXe-8XoD-ixRF4chMxE-w2kbxfiIEPjnZeLzajF4XjKOw5UYi_DW8LDmh8CIoROhKHAOIRxVzsUbbCSMTGyCHhoRRufpqxgw9oEqfzoDg7x3UTY-7aGuJgOPSSlCym2b9uGalKxgaFXYIq6ngiPgCh7cjRI5fYdoAw8Hn9tuqJtqYrJHiU6ctyzriDuHXnXLuFdlCIAS1YuFPNvS-5T4K5TGYRDuMxBar4sW17V41FY7EsIKUVn-Dj8VWYLTwru4n1TTE"/>
+</div>
+<div class="flex-1">
+<h4 class="font-title-md text-title-md text-on-background line-clamp-1">凡人修仙传：新篇</h4>
+<span class="font-label-caps text-label-caps text-tertiary-fixed-dim">仙侠 · 540K 人气</span>
+</div>
+<button class="w-8 h-8 flex items-center justify-center rounded-full bg-surface-container text-on-surface-variant group-hover:bg-primary/10 group-hover:text-primary transition-colors">
+<span class="material-symbols-outlined text-[18px]">add</span>
+</button>
+</div>
+<!-- Rank 05 -->
+<div class="flex items-center gap-md p-sm rounded-xl hover:bg-surface-container-high transition-colors cursor-pointer group">
+<div class="font-title-md text-title-md text-on-surface-variant w-8 text-center italic opacity-60">05</div>
+<div class="w-12 h-12 rounded bg-surface-container overflow-hidden shrink-0">
+<img alt="Thumb" class="w-full h-full object-cover opacity-80 group-hover:opacity-100 transition-opacity" data-alt="A macro shot of intricate geometric neon cyan circuits pulsating with light on a matte black surface. The texture is hyper-detailed and futuristic, relying on deep blacks to create infinite depth, matching a high-energy tech-focused digital platform aesthetic." src="https://lh3.googleusercontent.com/aida-public/AB6AXuBCSUWMxtZfZ-dYF06GDkA1hH8NvQwKXFoB7uT9j5rYVPMo8bXdYIF434_YAZL_1Z32muivCKkoNM2iuVwHF42AbCBkRGjwueeUTRT8HyYJG6rFZCPZ-yd9giRKTrInfmA2kanEgWKlJyz9ztVGFyepYHLraI_0_IXajbTnqTzDzr8oZUosO30to_oe-RdOpifVmy6C8-l4elhhLx8qgCqXjdPSF7cvSdWEpueO0aG-ElCt8AZ1CXg3H1BHNaZNj1L_-FfnjGu3nlY"/>
+</div>
+<div class="flex-1">
+<h4 class="font-title-md text-title-md text-on-background line-clamp-1">代码纪元</h4>
+<span class="font-label-caps text-label-caps text-tertiary-fixed-dim">科幻 · 420K 人气</span>
+</div>
+<button class="w-8 h-8 flex items-center justify-center rounded-full bg-surface-container text-on-surface-variant group-hover:bg-primary/10 group-hover:text-primary transition-colors">
+<span class="material-symbols-outlined text-[18px]">add</span>
+</button>
+</div>
+</div>
+</div>
+</main>
+<!-- BottomNavBar Mobile (From JSON) -->
+<nav class="fixed bottom-0 left-0 w-full z-50 flex justify-around items-center px-md pb-safe-area-inset h-20 bg-surface/90 backdrop-blur-2xl dark:bg-surface/90 rounded-t-xl md:hidden">
+<a class="flex flex-col items-center justify-center text-on-surface-variant opacity-60 hover:opacity-100 transition-opacity active:scale-90 transition-transform" href="#">
+<span class="material-symbols-outlined">movie</span>
+</a>
+<a class="flex flex-col items-center justify-center text-primary dark:text-primary-fixed-dim drop-shadow-[0_0_8px_rgba(41,252,243,0.5)] hover:opacity-100 transition-opacity active:scale-90 transition-transform" href="#">
+<span class="material-symbols-outlined" style="font-variation-settings: 'FILL' 1;">sensors</span>
+</a>
+<a class="flex flex-col items-center justify-center text-on-surface-variant opacity-60 hover:opacity-100 transition-opacity active:scale-90 transition-transform" href="#">
+<span class="material-symbols-outlined">music_note</span>
+</a>
+<a class="flex flex-col items-center justify-center text-on-surface-variant opacity-60 hover:opacity-100 transition-opacity active:scale-90 transition-transform" href="#">
+<span class="material-symbols-outlined">menu_book</span>
+</a>
+<a class="flex flex-col items-center justify-center text-on-surface-variant opacity-60 hover:opacity-100 transition-opacity active:scale-90 transition-transform" href="#">
+<span class="material-symbols-outlined">person</span>
+</a>
+</nav>
+</body></html>

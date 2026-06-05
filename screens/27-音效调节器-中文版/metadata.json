@@ -1,0 +1,24 @@
+{
+  "projectId": "3391305001861538506",
+  "requestedId": "aee1fc74e5a9429a8f5b5597641b54c3",
+  "title": "音效调节器 (中文版)",
+  "stitchTitle": "音效调节器 (中文版)",
+  "resourceName": "projects/3391305001861538506/screens/aee1fc74e5a9429a8f5b5597641b54c3",
+  "deviceType": "MOBILE",
+  "width": "780",
+  "height": "1836",
+  "files": {
+    "screenshot": {
+      "path": "stitch-export/screens/27-音效调节器-中文版/screenshot.png",
+      "mimeType": "image/png",
+      "bytes": 111148,
+      "resourceName": "projects/3391305001861538506/files/4fbbca81ae7d4f2b8aca5b974b8a6443"
+    },
+    "code": {
+      "path": "stitch-export/screens/27-音效调节器-中文版/code.html",
+      "mimeType": "text/html",
+      "bytes": 16703,
+      "resourceName": "projects/3391305001861538506/files/f73d267b11be4fa1ac5b6888b35425b9"
+    }
+  }
+}

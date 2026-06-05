@@ -1,0 +1,132 @@
+{
+  "designSystem": {
+    "displayName": "Immersive Aggregator System",
+    "styleGuidelines": "## Brand & Style\n\nThe brand personality is high-energy, immersive, and unapologetically digital. Designed for a Gen-Z and Alpha audience, the design system prioritizes content consumption above all else, using a \"dark-room\" philosophy where the UI recedes to let vibrant media shine. \n\nThe design style is a blend of **Glassmorphism** and **High-Contrast Modern**. It utilizes deep blacks to create infinite depth, allowing the neon primary accents to guide the eye toward interactive elements. Surfaces are treated as semi-transparent layers \"floating\" over content, ensuring that whether a user is reading manga or watching a 4K stream, the interface feels like a natural extension of the media itself.\n\n## Layout & Spacing\n\nThe layout philosophy is **Borderless & Fluid**. \n\n- **Edge-to-Edge:** Content (Video, Manga panels) must touch the edges of the screen.\n- **The 16px Rule:** All interactive UI elements (buttons, text margins) maintain a minimum 16px (`md`) distance from the screen edge.\n- **Vertical Rhythm:** A strict 4px base unit is used. Elements are stacked with 8px or 16px gaps.\n- **Aggregator Grid:** Music albums and Manga covers use a 2-column or 3-column fluid grid with minimal 4px gutters to emphasize the cover art over the background.\n- **Safe Areas:** Critical controls (Play/Pause, Navigation) must stay clear of the device notch and \"home indicator\" areas using the `safe-area-inset` variable.\n\n## Elevation & Depth\n\nThis design system avoids traditional drop shadows for depth, instead opting for **Tonal Stacking** and **Backdrop Blurs**.\n\n1.  **Level 0 (Background):** Pure Black (#050505).\n2.  **Level 1 (Cards/Sheets):** Dark Grey (#121212) or Glass (10% White + 20px Blur).\n3.  **Level 2 (Floating Controls):** Cyan or Pink accents with a subtle outer glow (neon effect) rather than a shadow.\n4.  **Z-Indexing:** Media stays at the bottom. Interaction layers (comments, shares) slide in from the bottom as 80% opacity glass sheets, allowing the video to remain partially visible behind the interface.\n\n## Components\n\n- **Primary Action Bar:** Situated on the right side for short video/live streaming. Icons are minimalist 2px stroke weight lines. Icons glow slightly when active (Cyan for tech, Pink for social).\n- **Glass Buttons:** Secondary actions use a \"Frosted\" background with a 1px white border at 20% opacity.\n- **Progress Bars:** Ultra-thin (2px) Cyan lines. On hover/interaction, they expand to 6px for easier seeking.\n- **Content Chips:** Used for Manga genres or Music tags. Semi-transparent dark backgrounds with white text; no borders.\n- **Immersive Inputs:** Search bars use a 12% white fill with no border, becoming 20% white when focused.\n- **Novel Reader:** High-contrast toggle. In \"Deep Night\" mode, text is mid-grey (#888) on black (#050505) to eliminate glare.\n- **Live Indicators:** A pulsing Hot Pink dot next to \"LIVE\" labels using the `label-caps` typography style.",
+    "theme": {
+      "bodyFont": "INTER",
+      "bodyFontFamily": "Inter",
+      "colorMode": "DARK",
+      "colorVariant": "FIDELITY",
+      "customColor": "#00f2ea",
+      "designMd": "---\nname: Immersive Aggregator System\ncolors:\n  surface: '#131313'\n  surface-dim: '#131313'\n  surface-bright: '#3a3939'\n  surface-container-lowest: '#0e0e0e'\n  surface-container-low: '#1c1b1b'\n  surface-container: '#201f1f'\n  surface-container-high: '#2a2a2a'\n  surface-container-highest: '#353534'\n  on-surface: '#e5e2e1'\n  on-surface-variant: '#b9cac8'\n  inverse-surface: '#e5e2e1'\n  inverse-on-surface: '#313030'\n  outline: '#849492'\n  outline-variant: '#3a4a48'\n  surface-tint: '#00ddd6'\n  primary: '#cffffb'\n  on-primary: '#003735'\n  primary-container: '#00f2ea'\n  on-primary-container: '#006a66'\n  inverse-primary: '#006a66'\n  secondary: '#ffb2b6'\n  on-secondary: '#67001b'\n  secondary-container: '#ff516a'\n  on-secondary-container: '#5b0016'\n  tertiary: '#f5f5f5'\n  on-tertiary: '#2f3131'\n  tertiary-container: '#d9d9d9'\n  on-tertiary-container: '#5d5f5f'\n  error: '#ffb4ab'\n  on-error: '#690005'\n  error-container: '#93000a'\n  on-error-container: '#ffdad6'\n  primary-fixed: '#29fcf3'\n  primary-fixed-dim: '#00ddd6'\n  on-primary-fixed: '#00201e'\n  on-primary-fixed-variant: '#00504d'\n  secondary-fixed: '#ffdadb'\n  secondary-fixed-dim: '#ffb2b6'\n  on-secondary-fixed: '#40000d'\n  on-secondary-fixed-variant: '#920029'\n  tertiary-fixed: '#e2e2e2'\n  tertiary-fixed-dim: '#c6c6c7'\n  on-tertiary-fixed: '#1a1c1c'\n  on-tertiary-fixed-variant: '#454747'\n  background: '#131313'\n  on-background: '#e5e2e1'\n  surface-variant: '#353534'\ntypography:\n  display-lg:\n    fontFamily: Inter\n    fontSize: 48px\n    fontWeight: '800'\n    lineHeight: 52px\n    letterSpacing: -0.02em\n  headline-lg:\n    fontFamily: Inter\n    fontSize: 32px\n    fontWeight: '700'\n    lineHeight: 40px\n    letterSpacing: -0.01em\n  headline-lg-mobile:\n    fontFamily: Inter\n    fontSize: 24px\n    fontWeight: '700'\n    lineHeight: 32px\n  title-md:\n    fontFamily: Inter\n    fontSize: 20px\n    fontWeight: '600'\n    lineHeight: 28px\n  body-lg:\n    fontFamily: Inter\n    fontSize: 16px\n    fontWeight: '400'\n    lineHeight: 24px\n  body-sm:\n    fontFamily: Inter\n    fontSize: 14px\n    fontWeight: '400'\n    lineHeight: 20px\n  label-caps:\n    fontFamily: Inter\n    fontSize: 12px\n    fontWeight: '700'\n    lineHeight: 16px\n    letterSpacing: 0.05em\nrounded:\n  sm: 0.25rem\n  DEFAULT: 0.5rem\n  md: 0.75rem\n  lg: 1rem\n  xl: 1.5rem\n  full: 9999px\nspacing:\n  base: 4px\n  xs: 4px\n  sm: 8px\n  md: 16px\n  lg: 24px\n  xl: 32px\n  safe-area-inset: max(16px, env(safe-area-inset-bottom))\n---\n\n## Brand & Style\n\nThe brand personality is high-energy, immersive, and unapologetically digital. Designed for a Gen-Z and Alpha audience, the design system prioritizes content consumption above all else, using a \"dark-room\" philosophy where the UI recedes to let vibrant media shine. \n\nThe design style is a blend of **Glassmorphism** and **High-Contrast Modern**. It utilizes deep blacks to create infinite depth, allowing the neon primary accents to guide the eye toward interactive elements. Surfaces are treated as semi-transparent layers \"floating\" over content, ensuring that whether a user is reading manga or watching a 4K stream, the interface feels like a natural extension of the media itself.\n\n## Colors\n\nThe palette is anchored by **True Black (#050505)** to maximize the contrast of OLED screens and ensure \"borderless\" video integration. \n\n- **Vibrant Cyan (#00f2ea):** Used for primary actions, progress bars, and active states in technical contexts (Video/Live).\n- **Hot Pink (#ff004f):** Used for expressive actions, notifications, \"Like\" states, and accents in creative contexts (Music/Manga).\n- **Text/Icons:** Pure white is used for maximum legibility against dark backgrounds, often with subtle drop shadows when appearing over media.\n- **Glass Effects:** Overlays use a semi-transparent white with high background blur (20px+) to maintain readability without obscuring the content underneath.\n\n## Typography\n\nThis design system utilizes **Inter** for its neutral, systematic clarity and excellent legibility at small sizes. \n\n- **Headlines:** Use heavy weights (Bold/ExtraBold) with tight letter spacing to create a high-impact, editorial feel similar to luxury streetwear branding.\n- **Content Overlay:** Any text appearing directly over video must use a subtle `0px 2px 4px rgba(0,0,0,0.5)` drop shadow to ensure accessibility.\n- **Reading Experience:** For Novels and Manga descriptions, `body-lg` is prioritized with increased line height (1.6) to reduce eye strain during long-form consumption.\n\n## Layout & Spacing\n\nThe layout philosophy is **Borderless & Fluid**. \n\n- **Edge-to-Edge:** Content (Video, Manga panels) must touch the edges of the screen.\n- **The 16px Rule:** All interactive UI elements (buttons, text margins) maintain a minimum 16px (`md`) distance from the screen edge.\n- **Vertical Rhythm:** A strict 4px base unit is used. Elements are stacked with 8px or 16px gaps.\n- **Aggregator Grid:** Music albums and Manga covers use a 2-column or 3-column fluid grid with minimal 4px gutters to emphasize the cover art over the background.\n- **Safe Areas:** Critical controls (Play/Pause, Navigation) must stay clear of the device notch and \"home indicator\" areas using the `safe-area-inset` variable.\n\n## Elevation & Depth\n\nThis design system avoids traditional drop shadows for depth, instead opting for **Tonal Stacking** and **Backdrop Blurs**.\n\n1.  **Level 0 (Background):** Pure Black (#050505).\n2.  **Level 1 (Cards/Sheets):** Dark Grey (#121212) or Glass (10% White + 20px Blur).\n3.  **Level 2 (Floating Controls):** Cyan or Pink accents with a subtle outer glow (neon effect) rather than a shadow.\n4.  **Z-Indexing:** Media stays at the bottom. Interaction layers (comments, shares) slide in from the bottom as 80% opacity glass sheets, allowing the video to remain partially visible behind the interface.\n\n## Shapes\n\nThe shape language is **Modern and Friendly**, using significant rounding to offset the aggressive color palette.\n\n- **Standard Elements:** Buttons and input fields use a 0.5rem (8px) radius.\n- **Media Containers:** Manga thumbnails and Music cards use `rounded-lg` (1rem) to create a premium, \"app-within-an-app\" feel.\n- **Avatars/Action Icons:** Circular (pill-shaped) icons are used for profile pictures and the \"right-hand-side\" action bar (Like, Comment, Share) to match the circular motion of thumb interactions.\n\n## Components\n\n- **Primary Action Bar:** Situated on the right side for short video/live streaming. Icons are minimalist 2px stroke weight lines. Icons glow slightly when active (Cyan for tech, Pink for social).\n- **Glass Buttons:** Secondary actions use a \"Frosted\" background with a 1px white border at 20% opacity.\n- **Progress Bars:** Ultra-thin (2px) Cyan lines. On hover/interaction, they expand to 6px for easier seeking.\n- **Content Chips:** Used for Manga genres or Music tags. Semi-transparent dark backgrounds with white text; no borders.\n- **Immersive Inputs:** Search bars use a 12% white fill with no border, becoming 20% white when focused.\n- **Novel Reader:** High-contrast toggle. In \"Deep Night\" mode, text is mid-grey (#888) on black (#050505) to eliminate glare.\n- **Live Indicators:** A pulsing Hot Pink dot next to \"LIVE\" labels using the `label-caps` typography style.",
+      "font": "INTER",
+      "headlineFont": "INTER",
+      "headlineFontFamily": "Inter",
+      "labelFont": "INTER",
+      "labelFontFamily": "Inter",
+      "namedColors": {
+        "background": "#131313",
+        "error": "#ffb4ab",
+        "error_container": "#93000a",
+        "inverse_on_surface": "#313030",
+        "inverse_primary": "#006a66",
+        "inverse_surface": "#e5e2e1",
+        "on_background": "#e5e2e1",
+        "on_error": "#690005",
+        "on_error_container": "#ffdad6",
+        "on_primary": "#003735",
+        "on_primary_container": "#006a66",
+        "on_primary_fixed": "#00201e",
+        "on_primary_fixed_variant": "#00504d",
+        "on_secondary": "#67001b",
+        "on_secondary_container": "#5b0016",
+        "on_secondary_fixed": "#40000d",
+        "on_secondary_fixed_variant": "#920029",
+        "on_surface": "#e5e2e1",
+        "on_surface_variant": "#b9cac8",
+        "on_tertiary": "#2f3131",
+        "on_tertiary_container": "#5d5f5f",
+        "on_tertiary_fixed": "#1a1c1c",
+        "on_tertiary_fixed_variant": "#454747",
+        "outline": "#849492",
+        "outline_variant": "#3a4a48",
+        "primary": "#cffffb",
+        "primary_container": "#00f2ea",
+        "primary_fixed": "#29fcf3",
+        "primary_fixed_dim": "#00ddd6",
+        "secondary": "#ffb2b6",
+        "secondary_container": "#ff516a",
+        "secondary_fixed": "#ffdadb",
+        "secondary_fixed_dim": "#ffb2b6",
+        "surface": "#131313",
+        "surface_bright": "#3a3939",
+        "surface_container": "#201f1f",
+        "surface_container_high": "#2a2a2a",
+        "surface_container_highest": "#353534",
+        "surface_container_low": "#1c1b1b",
+        "surface_container_lowest": "#0e0e0e",
+        "surface_dim": "#131313",
+        "surface_tint": "#00ddd6",
+        "surface_variant": "#353534",
+        "tertiary": "#f5f5f5",
+        "tertiary_container": "#d9d9d9",
+        "tertiary_fixed": "#e2e2e2",
+        "tertiary_fixed_dim": "#c6c6c7"
+      },
+      "overrideNeutralColor": "#050505",
+      "overridePrimaryColor": "#00f2ea",
+      "overrideSecondaryColor": "#ff004f",
+      "overrideTertiaryColor": "#ffffff",
+      "roundness": "ROUND_EIGHT",
+      "spacing": {
+        "base": "4px",
+        "lg": "24px",
+        "md": "16px",
+        "safe-area-inset": "max(16px, env(safe-area-inset-bottom))",
+        "sm": "8px",
+        "xl": "32px",
+        "xs": "4px"
+      },
+      "spacingScale": 2,
+      "typography": {
+        "body-lg": {
+          "fontFamily": "Inter",
+          "fontSize": "16px",
+          "fontWeight": "400",
+          "lineHeight": "24px"
+        },
+        "body-sm": {
+          "fontFamily": "Inter",
+          "fontSize": "14px",
+          "fontWeight": "400",
+          "lineHeight": "20px"
+        },
+        "display-lg": {
+          "fontFamily": "Inter",
+          "fontSize": "48px",
+          "fontWeight": "800",
+          "letterSpacing": "-0.02em",
+          "lineHeight": "52px"
+        },
+        "headline-lg": {
+          "fontFamily": "Inter",
+          "fontSize": "32px",
+          "fontWeight": "700",
+          "letterSpacing": "-0.01em",
+          "lineHeight": "40px"
+        },
+        "headline-lg-mobile": {
+          "fontFamily": "Inter",
+          "fontSize": "24px",
+          "fontWeight": "700",
+          "lineHeight": "32px"
+        },
+        "label-caps": {
+          "fontFamily": "Inter",
+          "fontSize": "12px",
+          "fontWeight": "700",
+          "letterSpacing": "0.05em",
+          "lineHeight": "16px"
+        },
+        "title-md": {
+          "fontFamily": "Inter",
+          "fontSize": "20px",
+          "fontWeight": "600",
+          "lineHeight": "28px"
+        }
+      }
+    }
+  },
+  "name": "assets/f2bd14efffbf4e8289864548c7a77b3c",
+  "version": "1"
+}

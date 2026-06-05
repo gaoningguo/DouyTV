@@ -1,0 +1,24 @@
+{
+  "projectId": "3391305001861538506",
+  "requestedId": "1e0e76f5c27a4808970b7d63ede88fd7",
+  "title": "Suwayomi 扩展管理详情",
+  "stitchTitle": "Suwayomi 扩展管理详情",
+  "resourceName": "projects/3391305001861538506/screens/1e0e76f5c27a4808970b7d63ede88fd7",
+  "deviceType": "MOBILE",
+  "width": "780",
+  "height": "1768",
+  "files": {
+    "screenshot": {
+      "path": "stitch-export/screens/61-suwayomi-扩展管理详情/screenshot.png",
+      "mimeType": "image/png",
+      "bytes": 171967,
+      "resourceName": "projects/3391305001861538506/files/d34b05f11b8741da8178bf5ca364471c"
+    },
+    "code": {
+      "path": "stitch-export/screens/61-suwayomi-扩展管理详情/code.html",
+      "mimeType": "text/html",
+      "bytes": 13430,
+      "resourceName": "projects/3391305001861538506/files/528f5e19c4ec46abb5e222a3b134e74d"
+    }
+  }
+}

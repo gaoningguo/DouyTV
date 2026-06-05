@@ -1,0 +1,326 @@
+<!DOCTYPE html>
+
+<html class="dark" lang="zh"><head>
+<meta charset="utf-8"/>
+<meta content="width=device-width, initial-scale=1.0" name="viewport"/>
+<title>NEON_AGGR - 新歌发现</title>
+<script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700;800&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<script id="tailwind-config">
+        tailwind.config = {
+            darkMode: "class",
+            theme: {
+                extend: {
+                    colors: {
+                        "inverse-primary": "#006a66",
+                        "on-tertiary-fixed-variant": "#454747",
+                        "on-secondary-fixed-variant": "#920029",
+                        "surface": "#131313",
+                        "on-primary-container": "#006a66",
+                        "surface-tint": "#00ddd6",
+                        "surface-container-highest": "#353534",
+                        "error": "#ffb4ab",
+                        "outline-variant": "#3a4a48",
+                        "on-tertiary": "#2f3131",
+                        "tertiary": "#f5f5f5",
+                        "background": "#050505", /* Adjusted to deep black for dark-room philosophy */
+                        "outline": "#849492",
+                        "surface-container": "#201f1f",
+                        "on-surface": "#e5e2e1",
+                        "surface-dim": "#131313",
+                        "error-container": "#93000a",
+                        "tertiary-container": "#d9d9d9",
+                        "on-secondary-fixed": "#40000d",
+                        "secondary-fixed": "#ffdadb",
+                        "on-tertiary-fixed": "#1a1c1c",
+                        "inverse-on-surface": "#313030",
+                        "surface-container-low": "#1c1b1b",
+                        "on-background": "#e5e2e1",
+                        "surface-container-high": "#2a2a2a",
+                        "on-primary-fixed-variant": "#00504d",
+                        "on-error-container": "#ffdad6",
+                        "surface-container-lowest": "#0e0e0e",
+                        "primary-container": "#00f2ea",
+                        "primary-fixed": "#29fcf3",
+                        "primary": "#cffffb",
+                        "on-tertiary-container": "#5d5f5f",
+                        "on-primary-fixed": "#00201e",
+                        "on-secondary-container": "#5b0016",
+                        "tertiary-fixed-dim": "#c6c6c7",
+                        "secondary-fixed-dim": "#ffb2b6",
+                        "primary-fixed-dim": "#00ddd6",
+                        "inverse-surface": "#e5e2e1",
+                        "surface-variant": "#353534",
+                        "surface-bright": "#3a3939",
+                        "secondary": "#ffb2b6",
+                        "tertiary-fixed": "#e2e2e2",
+                        "secondary-container": "#ff516a",
+                        "on-error": "#690005",
+                        "on-primary": "#003735",
+                        "on-surface-variant": "#b9cac8",
+                        "on-secondary": "#67001b"
+                    },
+                    borderRadius: {
+                        "DEFAULT": "0.25rem",
+                        "lg": "0.5rem",
+                        "xl": "0.75rem",
+                        "full": "9999px"
+                    },
+                    spacing: {
+                        "safe-area-inset": "max(16px, env(safe-area-inset-bottom))",
+                        "xl": "32px",
+                        "sm": "8px",
+                        "lg": "24px",
+                        "md": "16px",
+                        "base": "4px",
+                        "xs": "4px"
+                    },
+                    fontFamily: {
+                        "headline-lg": ["Inter"],
+                        "body-lg": ["Inter"],
+                        "label-caps": ["Inter"],
+                        "title-md": ["Inter"],
+                        "display-lg": ["Inter"],
+                        "body-sm": ["Inter"],
+                        "headline-lg-mobile": ["Inter"]
+                    },
+                    fontSize: {
+                        "headline-lg": ["32px", { "lineHeight": "40px", "letterSpacing": "-0.01em", "fontWeight": "700" }],
+                        "body-lg": ["16px", { "lineHeight": "24px", "fontWeight": "400" }],
+                        "label-caps": ["12px", { "lineHeight": "16px", "letterSpacing": "0.05em", "fontWeight": "700" }],
+                        "title-md": ["20px", { "lineHeight": "28px", "fontWeight": "600" }],
+                        "display-lg": ["48px", { "lineHeight": "52px", "letterSpacing": "-0.02em", "fontWeight": "800" }],
+                        "body-sm": ["14px", { "lineHeight": "20px", "fontWeight": "400" }],
+                        "headline-lg-mobile": ["24px", { "lineHeight": "32px", "fontWeight": "700" }]
+                    }
+                }
+            }
+        }
+    </script>
+<style>
+        /* Cyberpunk Grid Texture */
+        .cyber-grid {
+            background-image: 
+                linear-gradient(to right, rgba(0, 221, 214, 0.05) 1px, transparent 1px),
+                linear-gradient(to bottom, rgba(0, 221, 214, 0.05) 1px, transparent 1px);
+            background-size: 24px 24px;
+        }
+        
+        /* Hide scrollbar for horizontal sections */
+        .scrollbar-hide::-webkit-scrollbar {
+            display: none;
+        }
+        .scrollbar-hide {
+            -ms-overflow-style: none;
+            scrollbar-width: none;
+        }
+
+        /* Neon Glow Utility */
+        .neon-glow {
+            box-shadow: 0 0 15px rgba(0, 221, 214, 0.4);
+        }
+    </style>
+<style>
+    body {
+      min-height: max(884px, 100dvh);
+    }
+  </style>
+  </head>
+<body class="bg-background text-on-background min-h-screen font-body-lg antialiased selection:bg-primary-fixed-dim selection:text-on-primary-fixed cyber-grid relative">
+<!-- Ambient Background Glow -->
+<div class="fixed inset-0 pointer-events-none z-0">
+<div class="absolute top-[-10%] left-[-10%] w-[50%] h-[50%] bg-primary-container/5 rounded-full blur-[120px]"></div>
+<div class="absolute bottom-[20%] right-[-10%] w-[40%] h-[40%] bg-secondary-container/5 rounded-full blur-[100px]"></div>
+</div>
+<!-- TopAppBar -->
+<header class="fixed top-0 w-full z-50 bg-surface/10 dark:bg-surface/10 backdrop-blur-xl border-b border-white/10 shadow-[0_0_15px_rgba(0,221,214,0.1)] flex items-center justify-between px-md h-16 w-full">
+<button class="text-on-surface-variant hover:bg-white/5 transition-colors active:scale-95 duration-200 p-sm rounded-full flex items-center justify-center">
+<span class="material-symbols-outlined text-[24px]">search</span>
+</button>
+<h1 class="font-headline-lg-mobile text-headline-lg-mobile font-extrabold text-primary-fixed-dim tracking-tighter">NEON_AGGR</h1>
+<button class="text-on-surface-variant hover:bg-white/5 transition-colors active:scale-95 duration-200 p-sm rounded-full flex items-center justify-center">
+<span class="material-symbols-outlined text-[24px]">more_vert</span>
+</button>
+</header>
+<!-- Main Content Canvas -->
+<main class="pt-[80px] pb-[100px] relative z-10 w-full overflow-x-hidden">
+<!-- Page Title & Control -->
+<div class="px-md flex justify-between items-end mb-lg">
+<div>
+<h2 class="font-headline-lg-mobile text-headline-lg-mobile text-on-surface font-extrabold tracking-tight drop-shadow-[0_0_8px_rgba(255,255,255,0.2)]">新歌发现</h2>
+<p class="font-body-sm text-body-sm text-on-surface-variant mt-base">Cyber_Beat_Sync / 2049</p>
+</div>
+<button class="bg-surface-container border border-outline-variant/30 text-primary-fixed-dim rounded-full px-4 py-2 font-label-caps text-label-caps flex items-center gap-2 hover:bg-white/5 transition-colors active:scale-95">
+<span class="material-symbols-outlined text-[16px]" style="font-variation-settings: 'FILL' 1;">play_arrow</span>
+                播放全部
+            </button>
+</div>
+<!-- New Albums Section (Horizontal Scroll) -->
+<section class="mb-xl">
+<h3 class="px-md font-title-md text-title-md text-on-surface mb-md flex items-center gap-sm">
+<span class="w-1 h-4 bg-primary-fixed-dim rounded-full neon-glow"></span>
+                首发专辑
+            </h3>
+<div class="flex gap-md overflow-x-auto px-md snap-x snap-mandatory scrollbar-hide pb-sm">
+<!-- Album Card 1 -->
+<div class="snap-start shrink-0 w-[240px] group cursor-pointer relative">
+<div class="aspect-square w-full rounded-xl overflow-hidden relative mb-sm shadow-[0_8px_30px_rgba(0,0,0,0.8)] border border-white/5">
+<img alt="Neon Nights Album" class="w-full h-full object-cover transition-transform duration-500 group-hover:scale-105" data-alt="A highly detailed cyberpunk album cover art. The image features a futuristic neon cityscape at night, with towering skyscrapers draped in glowing cyan and pink holographic advertisements. The scene is illuminated by harsh, high-contrast lighting typical of a dark-room aesthetic, emphasizing the deep blacks of the night sky and the vibrant, piercing neon colors. Rain slicked streets reflect the artificial light, creating an immersive, high-energy digital atmosphere." src="https://lh3.googleusercontent.com/aida-public/AB6AXuC9ZV6kt0wuMvtSeX--4qnr7WjOgWFnXo3tmov5x5wN1rhq37hAKnEqnonDZ_97dYzSVntbAgcCSHHqWEW_NYAS1p_tRCrdi03Cb3RrrlK9ePa7xnhcB35HeZ5tYo8Iv_8yYCFx09tKXC3tTW4zRoHbbBOO-jYXF5kTCLPjv8cDI8iFfNQbyoLIzzhv3LY4OjV_qMsTqVr8oXD5U2LC_dhL4ZKeJp5H_Kzd5BCl0RJ-ZPEj6NF2c7INCgMmBirqg-PhlJAw89YWeb0"/>
+<!-- Overlay Play Button -->
+<div class="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 transition-opacity duration-300 flex items-center justify-center backdrop-blur-[2px]">
+<button class="bg-primary-fixed-dim/20 border border-primary-fixed-dim text-primary-fixed-dim rounded-full p-3 backdrop-blur-md active:scale-90 transition-transform neon-glow">
+<span class="material-symbols-outlined text-[32px]" style="font-variation-settings: 'FILL' 1;">play_arrow</span>
+</button>
+</div>
+</div>
+<h4 class="font-title-md text-[16px] leading-tight text-on-surface truncate">霓虹幻影 (Neon Phantom)</h4>
+<p class="font-body-sm text-body-sm text-on-surface-variant truncate mt-base">A/Kira Project</p>
+</div>
+<!-- Album Card 2 -->
+<div class="snap-start shrink-0 w-[240px] group cursor-pointer relative">
+<div class="aspect-square w-full rounded-xl overflow-hidden relative mb-sm shadow-[0_8px_30px_rgba(0,0,0,0.8)] border border-white/5">
+<img alt="Glitch Core Album" class="w-full h-full object-cover transition-transform duration-500 group-hover:scale-105" data-alt="A striking digital music album cover with a glitch art aesthetic. The central subject is a fragmented, digitized human silhouette breaking apart into pixels and sharp geometric shapes. The color palette relies on deep black backgrounds (#050505) contrasted sharply with intense neon pink and cyan disruptions. The lighting is artificial and erratic, suggesting a corrupted data stream or virtual reality breakdown, fitting perfectly within a modern cyberpunk UI." src="https://lh3.googleusercontent.com/aida-public/AB6AXuBeLO3Ce-y5hGUddbFatSuJoeEwrUMtnTPEJmCFR2rqtRHy-9aLMW79wb0GhoVg_ysyLvenAa8FEjyHMeJ7moFlnhafKYDStyumd6E2ib33CqKLbdUuHtdhg9ChA4WTg-o75VgiIWIwj_RL0AFEIxoyhi4j5VKOys-b2w-kqvcKYfkiUwTWceWlJTMKWfMohqcjfCdANHLogjujRHcj8Bd3R8S22ZjTmaYtXwvbMlUwx1PAphvKkY4UOY_8NJwNFdlhEBCw4lg-7Lg"/>
+<div class="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 transition-opacity duration-300 flex items-center justify-center backdrop-blur-[2px]">
+<button class="bg-primary-fixed-dim/20 border border-primary-fixed-dim text-primary-fixed-dim rounded-full p-3 backdrop-blur-md active:scale-90 transition-transform neon-glow">
+<span class="material-symbols-outlined text-[32px]" style="font-variation-settings: 'FILL' 1;">play_arrow</span>
+</button>
+</div>
+</div>
+<h4 class="font-title-md text-[16px] leading-tight text-on-surface truncate">数据核心_ERR</h4>
+<p class="font-body-sm text-body-sm text-on-surface-variant truncate mt-base">V01D</p>
+</div>
+<!-- Album Card 3 -->
+<div class="snap-start shrink-0 w-[240px] group cursor-pointer relative">
+<div class="aspect-square w-full rounded-xl overflow-hidden relative mb-sm shadow-[0_8px_30px_rgba(0,0,0,0.8)] border border-white/5">
+<img alt="Synth Wave Album" class="w-full h-full object-cover transition-transform duration-500 group-hover:scale-105" data-alt="A minimalist cyberpunk album cover focusing on sleek technology. The image shows a close-up of a highly polished, futuristic synthesizer console glowing softly in a dark environment. The lighting is low-key, utilizing subtle edge-lighting in bright white and faint cyan to highlight the complex dials and sliders. The overall aesthetic is clean, immersive, and high-tech, reflecting a premium digital music experience." src="https://lh3.googleusercontent.com/aida-public/AB6AXuDKvEShb8nMPmN5RqP_GW6lgn0mnyj8zyeYkX6Uvyii-T4bWfiXmFZTJuevvUaeVihs7PkuXz2KLBucojqLqFUkhB0pjo7bysTygPAE65Nz3yOvcMWPpY2myF5_aW3utLXCqmUXQILB473s38FOYo_W9SIuVCpTNQbdvTTOFTG2B6rstip-OeFbK_uPJmeLBtD90G5Dx0-V8PBuu_PNm8qpNCuH9tXaUu6wZOFZh3qQG7q4BmCobPYbe0bub2syeZUvDKva182NyM0"/>
+<div class="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 transition-opacity duration-300 flex items-center justify-center backdrop-blur-[2px]">
+<button class="bg-primary-fixed-dim/20 border border-primary-fixed-dim text-primary-fixed-dim rounded-full p-3 backdrop-blur-md active:scale-90 transition-transform neon-glow">
+<span class="material-symbols-outlined text-[32px]" style="font-variation-settings: 'FILL' 1;">play_arrow</span>
+</button>
+</div>
+</div>
+<h4 class="font-title-md text-[16px] leading-tight text-on-surface truncate">量子波动 (Quantum Waves)</h4>
+<p class="font-body-sm text-body-sm text-on-surface-variant truncate mt-base">Dr. Synth</p>
+</div>
+</div>
+</section>
+<!-- Latest Singles Section (Vertical List) -->
+<section class="px-md">
+<h3 class="font-title-md text-title-md text-on-surface mb-md flex items-center gap-sm">
+<span class="w-1 h-4 bg-secondary-container rounded-full drop-shadow-[0_0_8px_rgba(255,81,106,0.8)]"></span>
+                热门单曲
+            </h3>
+<div class="flex flex-col gap-sm">
+<!-- Track Item 1 (Playing State) -->
+<div class="flex items-center gap-md p-sm bg-surface-container/40 rounded-lg hover:bg-surface-container/80 transition-colors border border-transparent hover:border-white/5 group">
+<div class="relative w-12 h-12 rounded-md overflow-hidden shrink-0">
+<img alt="Track Cover" class="w-full h-full object-cover" data-alt="A small thumbnail image for a music track in a cyberpunk UI. It features a close-up of a cybernetic eye with a glowing cyan iris against dark, synthetic skin. The style is hyper-detailed and dark, utilizing deep black shadows to make the neon cyan pop intensely, matching a high-contrast modern design system." src="https://lh3.googleusercontent.com/aida-public/AB6AXuD6xq1OMPAPbavWwBqC1UHb4RjXs1Ro7a-tkrjWFHWvF5knFx-OS0EIaa1KasygiLxG9C3lCDUadqnSzeXORhyaV16nQIBSvotLaUiR2UlEJOOZXKW0CBspSvKofaLB_v0Tw9NqbL8zOtYPkFAQCny_4k3ZOY3sQuUMG7J9iVYVp9n08bmyBEovUwEjImcUO8W1Y8gI7raEgSfqHUhjGsxzFyPtuyuz0Dfd-IakmL5k9XjSGxJOjRcwHLZp6dzg4Pca49L9SCGVDL8"/>
+<!-- Playing indicator overlay -->
+<div class="absolute inset-0 bg-black/60 flex items-center justify-center gap-[2px]">
+<div class="w-1 h-3 bg-primary-fixed-dim animate-[pulse_1s_ease-in-out_infinite]"></div>
+<div class="w-1 h-4 bg-primary-fixed-dim animate-[pulse_1.2s_ease-in-out_infinite_0.2s]"></div>
+<div class="w-1 h-2 bg-primary-fixed-dim animate-[pulse_0.8s_ease-in-out_infinite_0.4s]"></div>
+</div>
+</div>
+<div class="flex-1 min-w-0">
+<h4 class="font-title-md text-[14px] leading-snug text-primary-fixed-dim truncate">Night City Pulse</h4>
+<p class="font-body-sm text-[12px] text-on-surface-variant truncate mt-[2px]">Cyber Samurais</p>
+</div>
+<button class="text-primary-fixed-dim p-2 active:scale-90 transition-transform">
+<span class="material-symbols-outlined" style="font-variation-settings: 'FILL' 1;">pause</span>
+</button>
+<button class="text-on-surface-variant group-hover:text-on-surface p-2 active:scale-90 transition-colors">
+<span class="material-symbols-outlined">more_horiz</span>
+</button>
+</div>
+<!-- Track Item 2 -->
+<div class="flex items-center gap-md p-sm rounded-lg hover:bg-surface-container/40 transition-colors border border-transparent group">
+<div class="relative w-12 h-12 rounded-md overflow-hidden shrink-0">
+<img alt="Track Cover" class="w-full h-full object-cover" data-alt="A small thumbnail image for a music track. The art depicts a sprawling, glowing pink data matrix or neural network graphic fading into complete darkness. The aesthetic is clean, dark-room styled glassmorphism, designed to sit subtly within a complex digital interface." src="https://lh3.googleusercontent.com/aida-public/AB6AXuDDQExK0ZKPh8tHbown8vBWmZaX7HO_d-479wn0XCYjupj5PG8RegPE01hhWXUukTvbWVTFmXJZJFdjFR2i6ZM4QPcqkYq7cR7vqEHG--ia1SNOhnhQNvFjP9pUrKUvOJCxaQt9-BDR4h408dBfjjiKSulZ-MS0Qc7svHGC6fp-y8glgMcN0pHbbIF3I2ESfPacJkCC2gu-moCvxa5U5RdLkE0B5lLUymv3j-Up-fUv7chK8ZXSWOzORSz4kFOUORfcZCOpkgsWkIU"/>
+<!-- Hover Play Overlay -->
+<div class="absolute inset-0 bg-black/60 opacity-0 group-hover:opacity-100 flex items-center justify-center transition-opacity">
+<span class="material-symbols-outlined text-white text-[20px]" style="font-variation-settings: 'FILL' 1;">play_arrow</span>
+</div>
+</div>
+<div class="flex-1 min-w-0">
+<h4 class="font-body-lg text-[14px] leading-snug text-on-surface font-semibold truncate">Neural Link (Acoustic)</h4>
+<p class="font-body-sm text-[12px] text-on-surface-variant truncate mt-[2px]">NetRunner feat. EVE</p>
+</div>
+<button class="text-on-surface-variant group-hover:text-primary-fixed-dim p-2 active:scale-90 transition-colors">
+<span class="material-symbols-outlined">play_arrow</span>
+</button>
+<button class="text-on-surface-variant group-hover:text-on-surface p-2 active:scale-90 transition-colors">
+<span class="material-symbols-outlined">more_horiz</span>
+</button>
+</div>
+<!-- Track Item 3 -->
+<div class="flex items-center gap-md p-sm rounded-lg hover:bg-surface-container/40 transition-colors border border-transparent group">
+<div class="relative w-12 h-12 rounded-md overflow-hidden shrink-0">
+<img alt="Track Cover" class="w-full h-full object-cover" data-alt="A small thumbnail image for a music track. It displays an abstract geometric shape resembling a shattered glass shard reflecting harsh white light against a pitch-black background. The style is sharp, modern, and immersive, lacking any traditional borders or frames." src="https://lh3.googleusercontent.com/aida-public/AB6AXuDrKyBfu-SOXa3rDFCg0roPbmviwsGjDr-zyAR6bZNPAKyiXRdB1_9TtLtT9RNEjwplyRxVXH4W0MIioA56AXwgMhh1et3Bf3A4-V3vmjIunYhQ_9eKJK_xBjj1zNIz4MMkFm_urtnxYm2jGZknr8Z9UvYdxdF7Av-jHxsF-Ef_o4S_ibPEb_JqGHo47SxKQqTRuKA2M1cV-uNosYq_VmYU_kTuYQD3rKDUVEaOcGO6jsX_X2_vNERIFpf-htC_3YJ8IFiyMAhMREk"/>
+<!-- Hover Play Overlay -->
+<div class="absolute inset-0 bg-black/60 opacity-0 group-hover:opacity-100 flex items-center justify-center transition-opacity">
+<span class="material-symbols-outlined text-white text-[20px]" style="font-variation-settings: 'FILL' 1;">play_arrow</span>
+</div>
+</div>
+<div class="flex-1 min-w-0">
+<h4 class="font-body-lg text-[14px] leading-snug text-on-surface font-semibold truncate">Chrome Tears</h4>
+<p class="font-body-sm text-[12px] text-on-surface-variant truncate mt-[2px]">Synthetic Souls</p>
+</div>
+<button class="text-on-surface-variant group-hover:text-primary-fixed-dim p-2 active:scale-90 transition-colors">
+<span class="material-symbols-outlined">play_arrow</span>
+</button>
+<button class="text-on-surface-variant group-hover:text-on-surface p-2 active:scale-90 transition-colors">
+<span class="material-symbols-outlined">more_horiz</span>
+</button>
+</div>
+<!-- Track Item 4 -->
+<div class="flex items-center gap-md p-sm rounded-lg hover:bg-surface-container/40 transition-colors border border-transparent group">
+<div class="relative w-12 h-12 rounded-md overflow-hidden shrink-0">
+<img alt="Track Cover" class="w-full h-full object-cover" data-alt="A small thumbnail image for a music track. The artwork is a minimalist neon cyan line drawing of a sound wave intersecting with a digital cityscape skyline on a pure black (#050505) canvas. It perfectly embodies the high-contrast modern design philosophy." src="https://lh3.googleusercontent.com/aida-public/AB6AXuCGaadaphhV0Rg7Ym1U9VL7FXIMKnCL1JjVc2civ4mAf8a7vvXLeKdrPYDlJ8T5n9AKSTtYJkSTyw9iTcWvld8O1XpjEjbH12KitQBGHYGyg7fWzhm0nTJiMhkLACu1iO7kjHKEIZ8sMmp1vfpP3-P0sAzAIi3U7aRzWM17AI_EHbJsnmVdGY7_9Om6dIId1E6LbsXEi5CSf6va0VzN1FPqBeLea6gYTVcsoQd0tzhfr39IszmLEHNIgFmzHK3wWwO8uop3krqhQKo"/>
+<div class="absolute inset-0 bg-black/60 opacity-0 group-hover:opacity-100 flex items-center justify-center transition-opacity">
+<span class="material-symbols-outlined text-white text-[20px]" style="font-variation-settings: 'FILL' 1;">play_arrow</span>
+</div>
+</div>
+<div class="flex-1 min-w-0">
+<h4 class="font-body-lg text-[14px] leading-snug text-on-surface font-semibold truncate">System Override [Remix]</h4>
+<p class="font-body-sm text-[12px] text-on-surface-variant truncate mt-[2px]">DJ Glitch</p>
+</div>
+<button class="text-on-surface-variant group-hover:text-primary-fixed-dim p-2 active:scale-90 transition-colors">
+<span class="material-symbols-outlined">play_arrow</span>
+</button>
+<button class="text-on-surface-variant group-hover:text-on-surface p-2 active:scale-90 transition-colors">
+<span class="material-symbols-outlined">more_horiz</span>
+</button>
+</div>
+</div>
+<button class="w-full mt-md py-sm rounded-lg bg-surface/20 border border-white/5 text-on-surface-variant font-label-caps text-label-caps hover:bg-surface/40 hover:text-on-surface transition-colors">
+                加载更多数据...
+            </button>
+</section>
+</main>
+<!-- BottomNavBar -->
+<nav class="fixed bottom-0 w-full z-50 bg-surface/10 dark:bg-surface/10 backdrop-blur-xl border-t border-white/10 shadow-[0_-4px_20px_rgba(0,0,0,0.5)] flex justify-around items-center px-md pb-safe-area-inset h-20 w-full">
+<!-- Inactive -->
+<button class="flex flex-col items-center justify-center text-on-surface-variant/60 hover:text-primary-fixed-dim transition-all active:scale-90 duration-200">
+<span class="material-symbols-outlined text-[24px]">more_time</span>
+</button>
+<!-- Inactive -->
+<button class="flex flex-col items-center justify-center text-on-surface-variant/60 hover:text-primary-fixed-dim transition-all active:scale-90 duration-200">
+<span class="material-symbols-outlined text-[24px]">live_tv</span>
+</button>
+<!-- ACTIVE STATE: User is on Music / New Releases -->
+<button class="flex flex-col items-center justify-center text-primary-fixed-dim drop-shadow-[0_0_8px_rgba(0,221,214,0.8)] hover:text-primary-fixed-dim transition-all active:scale-90 duration-200">
+<span class="material-symbols-outlined text-[24px]" style="font-variation-settings: 'FILL' 1;">music_note</span>
+</button>
+<!-- Inactive -->
+<button class="flex flex-col items-center justify-center text-on-surface-variant/60 hover:text-primary-fixed-dim transition-all active:scale-90 duration-200">
+<span class="material-symbols-outlined text-[24px]">auto_stories</span>
+</button>
+<!-- Inactive -->
+<button class="flex flex-col items-center justify-center text-on-surface-variant/60 hover:text-primary-fixed-dim transition-all active:scale-90 duration-200">
+<span class="material-symbols-outlined text-[24px]">person</span>
+</button>
+</nav>
+</body></html>

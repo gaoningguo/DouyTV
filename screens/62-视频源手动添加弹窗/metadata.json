@@ -1,0 +1,24 @@
+{
+  "projectId": "3391305001861538506",
+  "requestedId": "c154298d84c74a619d5f1ddc6978e20e",
+  "title": "视频源手动添加弹窗",
+  "stitchTitle": "视频源手动添加弹窗",
+  "resourceName": "projects/3391305001861538506/screens/c154298d84c74a619d5f1ddc6978e20e",
+  "deviceType": "MOBILE",
+  "width": "780",
+  "height": "1768",
+  "files": {
+    "screenshot": {
+      "path": "stitch-export/screens/62-视频源手动添加弹窗/screenshot.png",
+      "mimeType": "image/png",
+      "bytes": 124099,
+      "resourceName": "projects/3391305001861538506/files/d633840f5dde448894ed146c92224764"
+    },
+    "code": {
+      "path": "stitch-export/screens/62-视频源手动添加弹窗/code.html",
+      "mimeType": "text/html",
+      "bytes": 11062,
+      "resourceName": "projects/3391305001861538506/files/84bbb64ea1c84e7ea7e0edcfde6f27e5"
+    }
+  }
+}

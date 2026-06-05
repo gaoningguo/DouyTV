@@ -1,0 +1,24 @@
+{
+  "projectId": "3391305001861538506",
+  "requestedId": "299c11dfd6f04b1cb65e6b025dd8099c",
+  "title": "IPTV M3U与EPG配置弹窗",
+  "stitchTitle": "IPTV M3U与EPG配置弹窗",
+  "resourceName": "projects/3391305001861538506/screens/299c11dfd6f04b1cb65e6b025dd8099c",
+  "deviceType": "MOBILE",
+  "width": "780",
+  "height": "1768",
+  "files": {
+    "screenshot": {
+      "path": "stitch-export/screens/49-iptv-m3u与epg配置弹窗/screenshot.png",
+      "mimeType": "image/png",
+      "bytes": 105427,
+      "resourceName": "projects/3391305001861538506/files/4a888b21ebbd4623ad6d6578c171c0b9"
+    },
+    "code": {
+      "path": "stitch-export/screens/49-iptv-m3u与epg配置弹窗/code.html",
+      "mimeType": "text/html",
+      "bytes": 12415,
+      "resourceName": "projects/3391305001861538506/files/488e5e0d9f314f33a8ff5383b464db92"
+    }
+  }
+}

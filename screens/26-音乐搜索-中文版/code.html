@@ -1,0 +1,262 @@
+<!DOCTYPE html>
+
+<html class="dark" lang="en"><head>
+<meta charset="utf-8"/>
+<meta content="width=device-width, initial-scale=1.0" name="viewport"/>
+<title>Music Search - Aggregator</title>
+<script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700;800&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<script id="tailwind-config">
+        tailwind.config = {
+            darkMode: "class",
+            theme: {
+                extend: {
+                    "colors": {
+                        "surface-variant": "#353534",
+                        "outline": "#849492",
+                        "on-tertiary-container": "#5d5f5f",
+                        "tertiary": "#f5f5f5",
+                        "on-error-container": "#ffdad6",
+                        "primary-fixed-dim": "#00ddd6",
+                        "on-tertiary-fixed": "#1a1c1c",
+                        "primary-container": "#00f2ea",
+                        "tertiary-container": "#d9d9d9",
+                        "on-primary-fixed": "#00201e",
+                        "on-primary": "#003735",
+                        "surface-container-low": "#1c1b1b",
+                        "background": "#131313",
+                        "surface-container-lowest": "#0e0e0e",
+                        "secondary-fixed-dim": "#ffb2b6",
+                        "inverse-surface": "#e5e2e1",
+                        "secondary": "#ffb2b6",
+                        "on-surface": "#e5e2e1",
+                        "error-container": "#93000a",
+                        "primary-fixed": "#29fcf3",
+                        "inverse-on-surface": "#313030",
+                        "on-secondary": "#67001b",
+                        "secondary-container": "#ff516a",
+                        "on-secondary-fixed": "#40000d",
+                        "on-error": "#690005",
+                        "on-tertiary": "#2f3131",
+                        "on-surface-variant": "#b9cac8",
+                        "on-primary-container": "#006a66",
+                        "secondary-fixed": "#ffdadb",
+                        "tertiary-fixed": "#e2e2e2",
+                        "surface-container": "#201f1f",
+                        "on-secondary-fixed-variant": "#920029",
+                        "error": "#ffb4ab",
+                        "outline-variant": "#3a4a48",
+                        "surface-tint": "#00ddd6",
+                        "primary": "#cffffb",
+                        "on-secondary-container": "#5b0016",
+                        "on-primary-fixed-variant": "#00504d",
+                        "tertiary-fixed-dim": "#c6c6c7",
+                        "surface-dim": "#131313",
+                        "surface-container-highest": "#353534",
+                        "surface-bright": "#3a3939",
+                        "surface": "#131313",
+                        "surface-container-high": "#2a2a2a",
+                        "on-tertiary-fixed-variant": "#454747",
+                        "inverse-primary": "#006a66",
+                        "on-background": "#e5e2e1"
+                    },
+                    "borderRadius": {
+                        "DEFAULT": "0.25rem",
+                        "lg": "0.5rem",
+                        "xl": "0.75rem",
+                        "full": "9999px"
+                    },
+                    "spacing": {
+                        "xl": "32px",
+                        "xs": "4px",
+                        "md": "16px",
+                        "lg": "24px",
+                        "safe-area-inset": "max(16px, env(safe-area-inset-bottom))",
+                        "base": "4px",
+                        "sm": "8px"
+                    },
+                    "fontFamily": {
+                        "body-lg": ["Inter"],
+                        "label-caps": ["Inter"],
+                        "headline-lg-mobile": ["Inter"],
+                        "headline-lg": ["Inter"],
+                        "title-md": ["Inter"],
+                        "display-lg": ["Inter"],
+                        "body-sm": ["Inter"]
+                    },
+                    "fontSize": {
+                        "body-lg": ["16px", { "lineHeight": "24px", "fontWeight": "400" }],
+                        "label-caps": ["12px", { "lineHeight": "16px", "letterSpacing": "0.05em", "fontWeight": "700" }],
+                        "headline-lg-mobile": ["24px", { "lineHeight": "32px", "fontWeight": "700" }],
+                        "headline-lg": ["32px", { "lineHeight": "40px", "letterSpacing": "-0.01em", "fontWeight": "700" }],
+                        "title-md": ["20px", { "lineHeight": "28px", "fontWeight": "600" }],
+                        "display-lg": ["48px", { "lineHeight": "52px", "letterSpacing": "-0.02em", "fontWeight": "800" }],
+                        "body-sm": ["14px", { "lineHeight": "20px", "fontWeight": "400" }]
+                    }
+                }
+            }
+        }
+    </script>
+<style>
+        body { background-color: #050505; color: #e5e2e1; }
+        .neon-border { box-shadow: 0 0 10px rgba(0, 221, 214, 0.3), inset 0 0 5px rgba(0, 221, 214, 0.2); border-color: rgba(0, 221, 214, 0.5); }
+        .neon-border:focus-within { box-shadow: 0 0 15px rgba(0, 221, 214, 0.6), inset 0 0 8px rgba(0, 221, 214, 0.3); border-color: #00ddd6; }
+        .neon-text { text-shadow: 0 0 8px rgba(0, 221, 214, 0.8); }
+        .neon-text-pink { text-shadow: 0 0 8px rgba(255, 81, 106, 0.8); }
+        .glass-panel { background: rgba(18, 18, 18, 0.6); backdrop-filter: blur(20px); -webkit-backdrop-filter: blur(20px); border: 1px solid rgba(255, 255, 255, 0.05); }
+        
+        /* Custom Scrollbar for horizontal lists */
+        .hide-scrollbar::-webkit-scrollbar { display: none; }
+        .hide-scrollbar { -ms-overflow-style: none; scrollbar-width: none; }
+    </style>
+<style>
+    body {
+      min-height: max(884px, 100dvh);
+    }
+  </style>
+  </head>
+<body class="antialiased min-h-screen flex flex-col pb-[80px]">
+<!-- TopAppBar -->
+<header class="fixed top-0 w-full z-50 bg-gradient-to-b from-black/80 to-transparent">
+<div class="flex justify-between items-center px-md py-sm w-full">
+<button class="text-primary-fixed-dim active:scale-95 transition-transform hover:text-primary duration-200">
+<span class="material-symbols-outlined" style="font-size: 28px;">arrow_back</span>
+</button>
+<div class="flex-1 px-sm">
+<div class="relative flex items-center w-full bg-surface-container-low rounded-full neon-border transition-all duration-300">
+<span class="material-symbols-outlined absolute left-3 text-primary-fixed-dim" style="font-size: 20px;">search</span>
+<input autofocus="" class="w-full bg-transparent border-none text-on-surface font-body-sm pl-10 pr-4 py-2 focus:ring-0 placeholder:text-outline-variant" placeholder="Search music, artists, albums" type="text"/>
+</div>
+</div>
+<button class="text-primary-fixed-dim active:scale-95 transition-transform hover:text-primary duration-200">
+<span class="material-symbols-outlined" style="font-size: 28px;">mic</span>
+</button>
+</div>
+</header>
+<!-- Main Content Canvas -->
+<main class="flex-1 pt-[80px] px-md flex flex-col gap-xl">
+<!-- Search History -->
+<section class="flex flex-col gap-sm">
+<div class="flex justify-between items-center">
+<h2 class="font-title-md text-title-md text-on-surface">Search History</h2>
+<button class="text-outline-variant hover:text-primary-fixed-dim transition-colors text-sm flex items-center">
+<span class="material-symbols-outlined" style="font-size: 18px;">delete</span>
+</button>
+</div>
+<div class="flex flex-wrap gap-sm">
+<span class="glass-panel px-3 py-1.5 rounded-full font-body-sm text-body-sm text-on-surface-variant flex items-center gap-1 cursor-pointer hover:bg-surface-container-high transition-colors">
+                    Cyberpunk Edgerunners OST <span class="material-symbols-outlined text-[14px] opacity-50">close</span>
+</span>
+<span class="glass-panel px-3 py-1.5 rounded-full font-body-sm text-body-sm text-on-surface-variant flex items-center gap-1 cursor-pointer hover:bg-surface-container-high transition-colors">
+                    Synthwave Mix 2024 <span class="material-symbols-outlined text-[14px] opacity-50">close</span>
+</span>
+<span class="glass-panel px-3 py-1.5 rounded-full font-body-sm text-body-sm text-on-surface-variant flex items-center gap-1 cursor-pointer hover:bg-surface-container-high transition-colors">
+                    The Midnight <span class="material-symbols-outlined text-[14px] opacity-50">close</span>
+</span>
+</div>
+</section>
+<!-- Hot Searches -->
+<section class="flex flex-col gap-md">
+<h2 class="font-title-md text-title-md text-on-surface flex items-center gap-2">
+<span class="material-symbols-outlined text-secondary-container neon-text-pink" style="font-variation-settings: 'FILL' 1;">local_fire_department</span>
+                Trending Now
+            </h2>
+<div class="grid grid-cols-1 md:grid-cols-2 gap-x-lg gap-y-sm">
+<!-- Top 3 with glow -->
+<div class="flex items-center gap-sm p-2 rounded-lg hover:bg-surface-container-low cursor-pointer transition-colors group">
+<span class="font-label-caps text-label-caps text-secondary-container neon-text-pink w-6 text-center">1</span>
+<span class="font-body-lg text-body-lg text-on-surface flex-1 group-hover:text-primary-fixed-dim transition-colors">Neon Genesis Vibes</span>
+<span class="material-symbols-outlined text-outline-variant text-[16px]">trending_up</span>
+</div>
+<div class="flex items-center gap-sm p-2 rounded-lg hover:bg-surface-container-low cursor-pointer transition-colors group">
+<span class="font-label-caps text-label-caps text-primary-fixed-dim neon-text w-6 text-center">2</span>
+<span class="font-body-lg text-body-lg text-on-surface flex-1 group-hover:text-primary-fixed-dim transition-colors">Lo-Fi Beats to Hack to</span>
+<span class="material-symbols-outlined text-outline-variant text-[16px]">trending_up</span>
+</div>
+<div class="flex items-center gap-sm p-2 rounded-lg hover:bg-surface-container-low cursor-pointer transition-colors group">
+<span class="font-label-caps text-label-caps text-primary-fixed-dim neon-text w-6 text-center">3</span>
+<span class="font-body-lg text-body-lg text-on-surface flex-1 group-hover:text-primary-fixed-dim transition-colors">Nightcity Radio</span>
+<span class="material-symbols-outlined text-outline-variant text-[16px]">remove</span>
+</div>
+<!-- Rest -->
+<div class="flex items-center gap-sm p-2 rounded-lg hover:bg-surface-container-low cursor-pointer transition-colors group">
+<span class="font-label-caps text-label-caps text-outline-variant w-6 text-center">4</span>
+<span class="font-body-lg text-body-lg text-on-surface flex-1 group-hover:text-primary-fixed-dim transition-colors">Dark Synth</span>
+</div>
+<div class="flex items-center gap-sm p-2 rounded-lg hover:bg-surface-container-low cursor-pointer transition-colors group">
+<span class="font-label-caps text-label-caps text-outline-variant w-6 text-center">5</span>
+<span class="font-body-lg text-body-lg text-on-surface flex-1 group-hover:text-primary-fixed-dim transition-colors">Tokyo Drift OST</span>
+</div>
+<div class="flex items-center gap-sm p-2 rounded-lg hover:bg-surface-container-low cursor-pointer transition-colors group">
+<span class="font-label-caps text-label-caps text-outline-variant w-6 text-center">6</span>
+<span class="font-body-lg text-body-lg text-on-surface flex-1 group-hover:text-primary-fixed-dim transition-colors">Retrograde</span>
+</div>
+</div>
+</section>
+<!-- Discover by Category -->
+<section class="flex flex-col gap-md">
+<h2 class="font-title-md text-title-md text-on-surface">Discover Genres</h2>
+<div class="grid grid-cols-2 md:grid-cols-4 gap-sm">
+<!-- Genre Cards -->
+<div class="relative h-24 rounded-lg overflow-hidden cursor-pointer group">
+<div class="absolute inset-0 bg-gradient-to-br from-purple-900/80 to-black/90 z-10"></div>
+<img alt="" class="absolute inset-0 w-full h-full object-cover group-hover:scale-110 transition-transform duration-500 opacity-50" data-alt="A macro shot of a glowing neon purple and cyan equalizer display reflecting on a glossy black surface. High-contrast cyberpunk lighting, moody atmosphere, sharp focus on the led bars." src="https://lh3.googleusercontent.com/aida-public/AB6AXuB3-AzC-xC9M8z3YFBmiu6OSHIiiTX0EGuh8YQx_REgEqvKF_iukrMKPvMFESwgiesiNoWKIY9uVybItG5FlEA_9ZP-tHT13TaKTg9cKc4B0IplErB_i8sFpAVxSNcPMaMZjnFu_pQKzfMe00q0KjASOuhSriDrqVnwyNOsLZ3nAkLTP54JqUKQNd2tkxcB6lKrSZ3F71KDsK2dNcpr1Wr29NigM4zS0cxnAdbLCj8i4EJP4kMjjAiIXiEkcQjZtGwszinZ7GNScV0"/>
+<div class="absolute inset-0 z-20 p-sm flex items-end">
+<span class="font-label-caps text-label-caps text-on-surface group-hover:text-primary-fixed-dim transition-colors">Electronic</span>
+</div>
+</div>
+<div class="relative h-24 rounded-lg overflow-hidden cursor-pointer group">
+<div class="absolute inset-0 bg-gradient-to-br from-pink-900/80 to-black/90 z-10"></div>
+<img alt="" class="absolute inset-0 w-full h-full object-cover group-hover:scale-110 transition-transform duration-500 opacity-50" data-alt="Abstract retro synthwave grid disappearing into a distant glowing pink sun on a dark background. Vector-style 80s aesthetic, vibrant neon colors, dark tech mood." src="https://lh3.googleusercontent.com/aida-public/AB6AXuDzzm7ViVKXU5a1yVj__5WN62Ax7R37qRU7oHChVRi1T6l5QclLLzqS41veRtFiUpSbnseYtjfqk4xzPtbeihNXsjeEOWXaqXsW_e38pyyWWA2nuK0DNoLWuHf4v6lfmEixtLgygzYwpYP2ySqXLcs8dmMQrvnZMAxN6midoFh1mATOSD2DWj_J066Q5CqqMvAZjk4MhFNNNQVPBuTOp3zDBYDlHmzD3DzNfQi1du1Puu7Fxr6rNUt18oQzg9ED7290Y7PMK1KKx7Y"/>
+<div class="absolute inset-0 z-20 p-sm flex items-end">
+<span class="font-label-caps text-label-caps text-on-surface group-hover:text-secondary-container transition-colors">Synthwave</span>
+</div>
+</div>
+<div class="relative h-24 rounded-lg overflow-hidden cursor-pointer group">
+<div class="absolute inset-0 bg-gradient-to-br from-blue-900/80 to-black/90 z-10"></div>
+<img alt="" class="absolute inset-0 w-full h-full object-cover group-hover:scale-110 transition-transform duration-500 opacity-50" data-alt="An electric guitar neck seen from an extreme angle with dramatic blue spotlighting against a pitch black background. High contrast, gritty texture, rock and roll energy." src="https://lh3.googleusercontent.com/aida-public/AB6AXuDXL797vlq43BCb71YS6hAlffHsVPExuP3KhXSHfjdvoRnyRWfTR6nqLbePLbhjvc-HT8vKiTe9U5kUTY6wfcUGHZjJhWVdhwxs9eVbPwZ4Ynb5unmA6AWygSCfawBArMZ5cOlNvd-lYes9KahkxqMWpqeYC605e8or_04-GmGxbx84wAfHCR4JCpqENunf6Gs73ItjnKOETWWszPNH3PcbeS2RkvQWQ-JFz-DFsjgjWZKALFsc2732V4xrOGjR6KKo8coIxAfB49M"/>
+<div class="absolute inset-0 z-20 p-sm flex items-end">
+<span class="font-label-caps text-label-caps text-on-surface group-hover:text-primary-fixed-dim transition-colors">Rock</span>
+</div>
+</div>
+<div class="relative h-24 rounded-lg overflow-hidden cursor-pointer group">
+<div class="absolute inset-0 bg-gradient-to-br from-teal-900/80 to-black/90 z-10"></div>
+<img alt="" class="absolute inset-0 w-full h-full object-cover group-hover:scale-110 transition-transform duration-500 opacity-50" data-alt="A futuristic DJ setup in a dark club illuminated by piercing teal laser beams. The atmosphere is dense with artificial fog, highly cinematic lighting, deep blacks." src="https://lh3.googleusercontent.com/aida-public/AB6AXuDenqXZbADtTcm5iPmY_AwA0zv0uvIZ4OUOm82fliz6GILILnqcbQafUtvCCWkmvjLJks79jcogvABHvADGkbVQdHMzyNkx6fqdoDQZFWr3a-dcxO9-vlkqyat4ICArqSz8CURG6KEy_m6V5NeDD6hHemzbhcL20HSZN3EdyCmQ9kWhewvCh3ynujbeLI-FITGePi0jd0097RJjtqTwYaWktI6haJnF-9zBCw29qcFXkRjwPX9NL3OZ6tBqjr1aehxDTSNaqig74fc"/>
+<div class="absolute inset-0 z-20 p-sm flex items-end">
+<span class="font-label-caps text-label-caps text-on-surface group-hover:text-primary-fixed-dim transition-colors">Pop</span>
+</div>
+</div>
+</div>
+</section>
+</main>
+<!-- BottomNavBar -->
+<nav class="fixed bottom-0 w-full z-50 backdrop-blur-xl bg-black/80 border-t border-white/10 md:hidden">
+<div class="flex justify-around items-center h-16 px-md pb-safe-area-inset">
+<button class="flex flex-col items-center justify-center text-on-surface-variant hover:text-primary transition-all active:scale-90 duration-150">
+<span class="material-symbols-outlined">movie</span>
+</button>
+<button class="flex flex-col items-center justify-center text-on-surface-variant hover:text-primary transition-all active:scale-90 duration-150">
+<span class="material-symbols-outlined">live_tv</span>
+</button>
+<button class="flex flex-col items-center justify-center text-primary-fixed-dim drop-shadow-[0_0_5px_rgba(0,221,214,0.8)] hover:text-primary transition-all active:scale-90 duration-150">
+<span class="material-symbols-outlined" style="font-variation-settings: 'FILL' 1;">music_note</span>
+</button>
+<button class="flex flex-col items-center justify-center text-on-surface-variant hover:text-primary transition-all active:scale-90 duration-150">
+<span class="material-symbols-outlined">auto_stories</span>
+</button>
+<button class="flex flex-col items-center justify-center text-on-surface-variant hover:text-primary transition-all active:scale-90 duration-150">
+<span class="material-symbols-outlined">person</span>
+</button>
+</div>
+</nav>
+<script>
+        // Simple script to handle clear history click
+        document.querySelector('.material-symbols-outlined.text-sm').parentElement.addEventListener('click', function() {
+            const tags = document.querySelectorAll('.glass-panel');
+            tags.forEach(tag => tag.style.display = 'none');
+            this.style.display = 'none';
+        });
+    </script>
+</body></html>

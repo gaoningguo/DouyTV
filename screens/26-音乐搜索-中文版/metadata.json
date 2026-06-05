@@ -1,0 +1,24 @@
+{
+  "projectId": "3391305001861538506",
+  "requestedId": "798eebc96f7c4db5b2b51f2d1e9f7f32",
+  "title": "音乐搜索 (中文版)",
+  "stitchTitle": "音乐搜索 (中文版)",
+  "resourceName": "projects/3391305001861538506/screens/798eebc96f7c4db5b2b51f2d1e9f7f32",
+  "deviceType": "MOBILE",
+  "width": "780",
+  "height": "1808",
+  "files": {
+    "screenshot": {
+      "path": "stitch-export/screens/26-音乐搜索-中文版/screenshot.png",
+      "mimeType": "image/png",
+      "bytes": 299898,
+      "resourceName": "projects/3391305001861538506/files/9d094dc6fbc546b394783f4cbae4ee6f"
+    },
+    "code": {
+      "path": "stitch-export/screens/26-音乐搜索-中文版/code.html",
+      "mimeType": "text/html",
+      "bytes": 17859,
+      "resourceName": "projects/3391305001861538506/files/6b78d7682f864f009f81049af649d79f"
+    }
+  }
+}

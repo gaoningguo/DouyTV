@@ -1,0 +1,24 @@
+{
+  "projectId": "3391305001861538506",
+  "requestedId": "305d4f3e159348be9061590538da4702",
+  "title": "直播与 IPTV 源管理 - 专业版",
+  "stitchTitle": "直播与 IPTV 源管理 - 专业版",
+  "resourceName": "projects/3391305001861538506/screens/305d4f3e159348be9061590538da4702",
+  "deviceType": "MOBILE",
+  "width": "940",
+  "height": "1768",
+  "files": {
+    "screenshot": {
+      "path": "stitch-export/screens/45-直播与-iptv-源管理-专业版/screenshot.png",
+      "mimeType": "image/png",
+      "bytes": 143763,
+      "resourceName": "projects/3391305001861538506/files/5d38c924a49542cb8f222346556004f7"
+    },
+    "code": {
+      "path": "stitch-export/screens/45-直播与-iptv-源管理-专业版/code.html",
+      "mimeType": "text/html",
+      "bytes": 25209,
+      "resourceName": "projects/3391305001861538506/files/19fe61d542ea4ed19b90b0522cca2108"
+    }
+  }
+}

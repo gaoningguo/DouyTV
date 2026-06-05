@@ -1,0 +1,284 @@
+<!DOCTYPE html>
+
+<html class="dark" lang="zh-CN"><head>
+<meta charset="utf-8"/>
+<meta content="width=device-width, initial-scale=1.0" name="viewport"/>
+<title>Audio Equalizer</title>
+<!-- Material Symbols -->
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@100..900&amp;display=swap" rel="stylesheet"/>
+<!-- Tailwind CSS -->
+<script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
+<!-- Tailwind Config from Guidelines -->
+<script id="tailwind-config">
+      tailwind.config = {
+        darkMode: "class",
+        theme: {
+          extend: {
+            "colors": {
+                    "inverse-primary": "#006a66",
+                    "on-tertiary-fixed-variant": "#454747",
+                    "on-secondary-fixed-variant": "#920029",
+                    "surface": "#131313",
+                    "on-primary-container": "#006a66",
+                    "surface-tint": "#00ddd6",
+                    "surface-container-highest": "#353534",
+                    "error": "#ffb4ab",
+                    "outline-variant": "#3a4a48",
+                    "on-tertiary": "#2f3131",
+                    "tertiary": "#f5f5f5",
+                    "background": "#131313",
+                    "outline": "#849492",
+                    "surface-container": "#201f1f",
+                    "on-surface": "#e5e2e1",
+                    "surface-dim": "#131313",
+                    "error-container": "#93000a",
+                    "tertiary-container": "#d9d9d9",
+                    "on-secondary-fixed": "#40000d",
+                    "secondary-fixed": "#ffdadb",
+                    "on-tertiary-fixed": "#1a1c1c",
+                    "inverse-on-surface": "#313030",
+                    "surface-container-low": "#1c1b1b",
+                    "on-background": "#e5e2e1",
+                    "surface-container-high": "#2a2a2a",
+                    "on-primary-fixed-variant": "#00504d",
+                    "on-error-container": "#ffdad6",
+                    "surface-container-lowest": "#0e0e0e",
+                    "primary-container": "#00f2ea",
+                    "primary-fixed": "#29fcf3",
+                    "primary": "#cffffb",
+                    "on-tertiary-container": "#5d5f5f",
+                    "on-primary-fixed": "#00201e",
+                    "on-secondary-container": "#5b0016",
+                    "tertiary-fixed-dim": "#c6c6c7",
+                    "secondary-fixed-dim": "#ffb2b6",
+                    "primary-fixed-dim": "#00ddd6",
+                    "inverse-surface": "#e5e2e1",
+                    "surface-variant": "#353534",
+                    "surface-bright": "#3a3939",
+                    "secondary": "#ffb2b6",
+                    "tertiary-fixed": "#e2e2e2",
+                    "secondary-container": "#ff516a",
+                    "on-error": "#690005",
+                    "on-primary": "#003735",
+                    "on-surface-variant": "#b9cac8",
+                    "on-secondary": "#67001b"
+            },
+            "borderRadius": {
+                    "DEFAULT": "0.25rem",
+                    "lg": "0.5rem",
+                    "xl": "0.75rem",
+                    "full": "9999px"
+            },
+            "spacing": {
+                    "safe-area-inset": "max(16px, env(safe-area-inset-bottom))",
+                    "xl": "32px",
+                    "sm": "8px",
+                    "lg": "24px",
+                    "md": "16px",
+                    "base": "4px",
+                    "xs": "4px"
+            },
+            "fontFamily": {
+                    "headline-lg": ["Inter"],
+                    "body-lg": ["Inter"],
+                    "label-caps": ["Inter"],
+                    "title-md": ["Inter"],
+                    "display-lg": ["Inter"],
+                    "body-sm": ["Inter"],
+                    "headline-lg-mobile": ["Inter"]
+            },
+            "fontSize": {
+                    "headline-lg": ["32px", {"lineHeight": "40px", "letterSpacing": "-0.01em", "fontWeight": "700"}],
+                    "body-lg": ["16px", {"lineHeight": "24px", "fontWeight": "400"}],
+                    "label-caps": ["12px", {"lineHeight": "16px", "letterSpacing": "0.05em", "fontWeight": "700"}],
+                    "title-md": ["20px", {"lineHeight": "28px", "fontWeight": "600"}],
+                    "display-lg": ["48px", {"lineHeight": "52px", "letterSpacing": "-0.02em", "fontWeight": "800"}],
+                    "body-sm": ["14px", {"lineHeight": "20px", "fontWeight": "400"}],
+                    "headline-lg-mobile": ["24px", {"lineHeight": "32px", "fontWeight": "700"}]
+            }
+          }
+        }
+      }
+    </script>
+<style>
+        /* Custom scrollbar hiding */
+        .hide-scrollbar::-webkit-scrollbar {
+            display: none;
+        }
+        .hide-scrollbar {
+            -ms-overflow-style: none;
+            scrollbar-width: none;
+        }
+        
+        /* Spectrum Bar Animation */
+        @keyframes eq-pulse {
+            0% { transform: scaleY(0.2); }
+            50% { transform: scaleY(1); }
+            100% { transform: scaleY(0.2); }
+        }
+        .spectrum-bar {
+            transform-origin: bottom;
+            animation: eq-pulse 1s infinite alternate ease-in-out;
+        }
+    </style>
+<style>
+    body {
+      min-height: max(884px, 100dvh);
+    }
+  </style>
+  </head>
+<body class="bg-background text-on-background font-body-lg text-body-lg min-h-screen overflow-x-hidden selection:bg-primary-fixed-dim/30">
+<!-- TopAppBar -->
+<header class="fixed top-0 w-full z-50 bg-surface/10 dark:bg-surface/10 backdrop-blur-xl border-b border-white/10 shadow-[0_0_15px_rgba(0,221,214,0.1)] flex items-center justify-between px-md h-16">
+<button class="text-on-surface-variant hover:bg-white/5 transition-colors active:scale-95 duration-200 p-2 rounded-full flex items-center justify-center">
+<span class="material-symbols-outlined">search</span>
+</button>
+<h1 class="font-headline-lg-mobile text-headline-lg-mobile font-extrabold text-primary-fixed-dim tracking-tighter">NEON_AGGR</h1>
+<button class="text-on-surface-variant hover:bg-white/5 transition-colors active:scale-95 duration-200 p-2 rounded-full flex items-center justify-center">
+<span class="material-symbols-outlined">more_vert</span>
+</button>
+</header>
+<!-- Main Content Canvas -->
+<main class="pt-24 pb-32 px-md flex flex-col gap-lg">
+<!-- Header & Live Indicator -->
+<div class="flex items-center justify-between">
+<h2 class="font-headline-lg-mobile text-headline-lg-mobile text-on-surface">音效调节器</h2>
+<div class="flex items-center gap-2 bg-surface-container/50 px-3 py-1 rounded-full border border-white/5">
+<span class="w-2 h-2 rounded-full bg-primary-fixed-dim shadow-[0_0_8px_#00ddd6] animate-pulse"></span>
+<span class="font-label-caps text-label-caps text-primary-fixed-dim">LIVE 频段</span>
+</div>
+</div>
+<!-- Real-time Spectrum Visualization -->
+<div class="bg-surface-container/30 backdrop-blur-xl rounded-xl border border-white/5 p-4 h-40 flex flex-col justify-end relative overflow-hidden group">
+<!-- Neon Background Glow -->
+<div class="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-3/4 h-1/2 bg-primary-fixed-dim/10 blur-3xl rounded-full transition-all duration-500 group-hover:bg-primary-fixed-dim/20"></div>
+<div class="w-full h-full flex items-end justify-between gap-[2px] z-10" id="spectrum-container">
+<!-- Bars injected via JS -->
+</div>
+</div>
+<!-- Presets -->
+<div>
+<h3 class="font-label-caps text-label-caps text-on-surface-variant mb-4 tracking-widest">预设模式 PRESETS</h3>
+<div class="flex gap-4 overflow-x-auto pb-2 hide-scrollbar">
+<!-- Active Preset -->
+<button class="whitespace-nowrap px-6 py-3 rounded-full bg-primary-fixed-dim/20 text-primary-fixed-dim border border-primary-fixed-dim/50 font-title-md text-title-md shadow-[0_0_15px_rgba(0,221,214,0.3)] backdrop-blur-md transition-all active:scale-95">
+                    低音增强
+                </button>
+<!-- Inactive Presets -->
+<button class="whitespace-nowrap px-6 py-3 rounded-full bg-surface-container/50 text-on-surface-variant border border-white/10 font-title-md text-title-md hover:bg-white/10 hover:text-on-surface transition-all active:scale-95 backdrop-blur-md">
+                    赛博流行
+                </button>
+<button class="whitespace-nowrap px-6 py-3 rounded-full bg-surface-container/50 text-on-surface-variant border border-white/10 font-title-md text-title-md hover:bg-white/10 hover:text-on-surface transition-all active:scale-95 backdrop-blur-md">
+                    电子
+                </button>
+<button class="whitespace-nowrap px-6 py-3 rounded-full bg-surface-container/50 text-on-surface-variant border border-white/10 font-title-md text-title-md hover:bg-white/10 hover:text-on-surface transition-all active:scale-95 backdrop-blur-md">
+                    人声
+                </button>
+</div>
+</div>
+<!-- Equalizer Sliders -->
+<div class="bg-surface-container/40 backdrop-blur-xl rounded-2xl border border-white/5 p-6 flex justify-between items-stretch h-80 relative mt-4 shadow-2xl">
+<!-- Glass Overlay Highlights -->
+<div class="absolute inset-0 bg-gradient-to-b from-white/5 to-transparent rounded-2xl pointer-events-none"></div>
+<!-- Band 1: 60Hz -->
+<div class="flex flex-col items-center justify-between z-10 w-8">
+<span class="font-label-caps text-label-caps text-primary-fixed-dim">+8</span>
+<div class="relative w-1.5 h-48 bg-surface-container-highest rounded-full overflow-hidden group cursor-pointer">
+<div class="absolute bottom-0 w-full bg-primary-fixed-dim shadow-[0_0_12px_#00ddd6] transition-all duration-300 group-hover:bg-primary" style="height: 75%;"></div>
+<!-- Thumb Indicator -->
+<div class="absolute w-5 h-5 bg-surface border-2 border-primary-fixed-dim rounded-full left-1/2 -translate-x-1/2 shadow-[0_0_10px_rgba(0,221,214,0.8)] z-20 transition-transform group-hover:scale-110" style="bottom: 75%; transform: translate(-50%, 50%);"></div>
+</div>
+<span class="font-label-caps text-label-caps text-on-surface-variant">60Hz</span>
+</div>
+<!-- Band 2: 230Hz -->
+<div class="flex flex-col items-center justify-between z-10 w-8">
+<span class="font-label-caps text-label-caps text-on-surface-variant">0</span>
+<div class="relative w-1.5 h-48 bg-surface-container-highest rounded-full overflow-hidden group cursor-pointer">
+<div class="absolute bottom-0 w-full bg-on-surface-variant transition-all duration-300 group-hover:bg-primary-fixed-dim group-hover:shadow-[0_0_12px_#00ddd6]" style="height: 50%;"></div>
+<div class="absolute w-4 h-4 bg-surface border-2 border-on-surface-variant rounded-full left-1/2 -translate-x-1/2 z-20 group-hover:border-primary-fixed-dim group-hover:shadow-[0_0_10px_rgba(0,221,214,0.8)] transition-all" style="bottom: 50%; transform: translate(-50%, 50%);"></div>
+</div>
+<span class="font-label-caps text-label-caps text-on-surface-variant">230Hz</span>
+</div>
+<!-- Band 3: 910Hz -->
+<div class="flex flex-col items-center justify-between z-10 w-8">
+<span class="font-label-caps text-label-caps text-on-surface-variant">-4</span>
+<div class="relative w-1.5 h-48 bg-surface-container-highest rounded-full overflow-hidden group cursor-pointer">
+<div class="absolute bottom-0 w-full bg-on-surface-variant transition-all duration-300 group-hover:bg-primary-fixed-dim group-hover:shadow-[0_0_12px_#00ddd6]" style="height: 30%;"></div>
+<div class="absolute w-4 h-4 bg-surface border-2 border-on-surface-variant rounded-full left-1/2 -translate-x-1/2 z-20 group-hover:border-primary-fixed-dim group-hover:shadow-[0_0_10px_rgba(0,221,214,0.8)] transition-all" style="bottom: 30%; transform: translate(-50%, 50%);"></div>
+</div>
+<span class="font-label-caps text-label-caps text-on-surface-variant">910Hz</span>
+</div>
+<!-- Band 4: 3.6kHz -->
+<div class="flex flex-col items-center justify-between z-10 w-8">
+<span class="font-label-caps text-label-caps text-primary-fixed-dim">+5</span>
+<div class="relative w-1.5 h-48 bg-surface-container-highest rounded-full overflow-hidden group cursor-pointer">
+<div class="absolute bottom-0 w-full bg-primary-fixed-dim shadow-[0_0_12px_#00ddd6] transition-all duration-300 group-hover:bg-primary" style="height: 65%;"></div>
+<div class="absolute w-5 h-5 bg-surface border-2 border-primary-fixed-dim rounded-full left-1/2 -translate-x-1/2 shadow-[0_0_10px_rgba(0,221,214,0.8)] z-20 transition-transform group-hover:scale-110" style="bottom: 65%; transform: translate(-50%, 50%);"></div>
+</div>
+<span class="font-label-caps text-label-caps text-on-surface-variant">3.6k</span>
+</div>
+<!-- Band 5: 14kHz -->
+<div class="flex flex-col items-center justify-between z-10 w-8">
+<span class="font-label-caps text-label-caps text-primary-fixed-dim">+10</span>
+<div class="relative w-1.5 h-48 bg-surface-container-highest rounded-full overflow-hidden group cursor-pointer">
+<div class="absolute bottom-0 w-full bg-primary-fixed-dim shadow-[0_0_12px_#00ddd6] transition-all duration-300 group-hover:bg-primary" style="height: 85%;"></div>
+<div class="absolute w-5 h-5 bg-surface border-2 border-primary-fixed-dim rounded-full left-1/2 -translate-x-1/2 shadow-[0_0_10px_rgba(0,221,214,0.8)] z-20 transition-transform group-hover:scale-110" style="bottom: 85%; transform: translate(-50%, 50%);"></div>
+</div>
+<span class="font-label-caps text-label-caps text-on-surface-variant">14k</span>
+</div>
+</div>
+</main>
+<!-- BottomNavBar -->
+<nav class="fixed bottom-0 w-full z-50 bg-surface/10 dark:bg-surface/10 backdrop-blur-xl border-t border-white/10 shadow-[0_-4px_20px_rgba(0,0,0,0.5)] flex justify-around items-center px-md pb-safe-area-inset h-20 md:hidden">
+<a class="flex flex-col items-center justify-center text-on-surface-variant/60 hover:text-primary-fixed-dim transition-all active:scale-90 duration-200" href="#">
+<span class="material-symbols-outlined text-[28px]">more_time</span>
+</a>
+<a class="flex flex-col items-center justify-center text-on-surface-variant/60 hover:text-primary-fixed-dim transition-all active:scale-90 duration-200" href="#">
+<span class="material-symbols-outlined text-[28px]">live_tv</span>
+</a>
+<!-- Active Tab: Music -->
+<a class="flex flex-col items-center justify-center text-primary-fixed-dim drop-shadow-[0_0_8px_rgba(0,221,214,0.8)] hover:text-primary-fixed-dim transition-all active:scale-90 duration-200 relative" href="#">
+<div class="absolute -top-4 w-12 h-1 bg-primary-fixed-dim rounded-full shadow-[0_0_10px_#00ddd6]"></div>
+<span class="material-symbols-outlined text-[28px]" style="font-variation-settings: 'FILL' 1;">music_note</span>
+</a>
+<a class="flex flex-col items-center justify-center text-on-surface-variant/60 hover:text-primary-fixed-dim transition-all active:scale-90 duration-200" href="#">
+<span class="material-symbols-outlined text-[28px]">auto_stories</span>
+</a>
+<a class="flex flex-col items-center justify-center text-on-surface-variant/60 hover:text-primary-fixed-dim transition-all active:scale-90 duration-200" href="#">
+<span class="material-symbols-outlined text-[28px]">person</span>
+</a>
+</nav>
+<!-- Inline Script for Spectrum Visualization -->
+<script>
+        document.addEventListener('DOMContentLoaded', () => {
+            const container = document.getElementById('spectrum-container');
+            const numBars = 40;
+            
+            for (let i = 0; i < numBars; i++) {
+                const bar = document.createElement('div');
+                // Base styling for bar
+                bar.className = 'w-full bg-primary-fixed-dim spectrum-bar rounded-t-sm opacity-80';
+                
+                // Randomize animation duration and delay to make it look organic
+                const duration = 0.4 + Math.random() * 0.8;
+                const delay = Math.random() * -2;
+                
+                // Higher bars in middle, lower on edges generally
+                const heightPercentage = 20 + Math.random() * 80;
+                
+                bar.style.height = `${heightPercentage}%`;
+                bar.style.animationDuration = `${duration}s`;
+                bar.style.animationDelay = `${delay}s`;
+                
+                // Add a subtle color shift for variety
+                if (Math.random() > 0.8) {
+                    bar.classList.replace('bg-primary-fixed-dim', 'bg-primary');
+                }
+                
+                container.appendChild(bar);
+            }
+        });
+    </script>
+</body></html>

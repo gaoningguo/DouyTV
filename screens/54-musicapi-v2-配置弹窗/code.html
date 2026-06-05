@@ -1,0 +1,189 @@
+<!DOCTYPE html>
+
+<html class="dark" lang="en"><head>
+<meta charset="utf-8"/>
+<meta content="width=device-width, initial-scale=1.0" name="viewport"/>
+<title>MusicApi-V2 Configuration</title>
+<script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700;800&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<script id="tailwind-config">
+      tailwind.config = {
+        darkMode: "class",
+        theme: {
+          extend: {
+            "colors": {
+                    "surface-container-lowest": "#0e0e0e",
+                    "on-secondary-fixed": "#40000d",
+                    "surface-container-low": "#1c1b1b",
+                    "primary": "#cffffb",
+                    "primary-fixed": "#29fcf3",
+                    "secondary": "#ffb2b6",
+                    "surface-container-highest": "#353534",
+                    "on-surface": "#e5e2e1",
+                    "tertiary-fixed-dim": "#c6c6c7",
+                    "surface-tint": "#00ddd6",
+                    "surface-container-high": "#2a2a2a",
+                    "tertiary-fixed": "#e2e2e2",
+                    "on-secondary": "#67001b",
+                    "surface-bright": "#3a3939",
+                    "on-tertiary-fixed": "#1a1c1c",
+                    "outline-variant": "#3a4a48",
+                    "on-tertiary": "#2f3131",
+                    "on-primary-fixed-variant": "#00504d",
+                    "on-error": "#690005",
+                    "outline": "#849492",
+                    "inverse-surface": "#e5e2e1",
+                    "on-tertiary-fixed-variant": "#454747",
+                    "on-primary": "#003735",
+                    "surface-container": "#201f1f",
+                    "on-primary-fixed": "#00201e",
+                    "error-container": "#93000a",
+                    "inverse-primary": "#006a66",
+                    "secondary-fixed-dim": "#ffb2b6",
+                    "on-tertiary-container": "#5d5f5f",
+                    "on-error-container": "#ffdad6",
+                    "inverse-on-surface": "#313030",
+                    "tertiary": "#f5f5f5",
+                    "surface": "#131313",
+                    "on-secondary-fixed-variant": "#920029",
+                    "surface-dim": "#131313",
+                    "primary-container": "#00f2ea",
+                    "error": "#ffb4ab",
+                    "secondary-fixed": "#ffdadb",
+                    "primary-fixed-dim": "#00ddd6",
+                    "on-primary-container": "#006a66",
+                    "background": "#131313",
+                    "secondary-container": "#ff516a",
+                    "on-surface-variant": "#b9cac8",
+                    "surface-variant": "#353534",
+                    "on-secondary-container": "#5b0016",
+                    "tertiary-container": "#d9d9d9",
+                    "on-background": "#e5e2e1"
+            },
+            "borderRadius": {
+                    "DEFAULT": "0.25rem",
+                    "lg": "0.5rem",
+                    "xl": "0.75rem",
+                    "full": "9999px"
+            },
+            "spacing": {
+                    "sm": "8px",
+                    "lg": "24px",
+                    "base": "4px",
+                    "xs": "4px",
+                    "xl": "32px",
+                    "safe-area-inset": "max(16px, env(safe-area-inset-bottom))",
+                    "md": "16px"
+            },
+            "fontFamily": {
+                    "display-lg": ["Inter"],
+                    "headline-lg-mobile": ["Inter"],
+                    "body-sm": ["Inter"],
+                    "title-md": ["Inter"],
+                    "body-lg": ["Inter"],
+                    "label-caps": ["Inter"],
+                    "headline-lg": ["Inter"]
+            },
+            "fontSize": {
+                    "display-lg": ["48px", {"lineHeight": "52px", "letterSpacing": "-0.02em", "fontWeight": "800"}],
+                    "headline-lg-mobile": ["24px", {"lineHeight": "32px", "fontWeight": "700"}],
+                    "body-sm": ["14px", {"lineHeight": "20px", "fontWeight": "400"}],
+                    "title-md": ["20px", {"lineHeight": "28px", "fontWeight": "600"}],
+                    "body-lg": ["16px", {"lineHeight": "24px", "fontWeight": "400"}],
+                    "label-caps": ["12px", {"lineHeight": "16px", "letterSpacing": "0.05em", "fontWeight": "700"}],
+                    "headline-lg": ["32px", {"lineHeight": "40px", "letterSpacing": "-0.01em", "fontWeight": "700"}]
+            },
+            "animation": {
+                "pulse-glow": "pulse-glow 2s cubic-bezier(0.4, 0, 0.6, 1) infinite",
+            },
+            "keyframes": {
+                "pulse-glow": {
+                    "0%, 100%": { opacity: "1", boxShadow: "0 0 10px 0px rgba(0, 242, 234, 0.5)" },
+                    "50%": { opacity: ".8", boxShadow: "0 0 20px 5px rgba(0, 242, 234, 0.8)" }
+                }
+            }
+          }
+        }
+      }
+    </script>
+<style>
+        body {
+            background-color: #050505; /* Deep black root background */
+        }
+    </style>
+<style>
+    body {
+      min-height: max(884px, 100dvh);
+    }
+  </style>
+  </head>
+<body class="font-body-lg text-on-background antialiased flex items-center justify-center min-h-screen relative overflow-hidden">
+<!-- Background Ambient Content (Mock) -->
+<div class="absolute inset-0 z-0">
+<div class="w-full h-full bg-[url('https://images.unsplash.com/photo-1614149162883-504ce4d13909?ixlib=rb-4.0.3&amp;auto=format&amp;fit=crop&amp;w=2000&amp;q=80')] bg-cover bg-center opacity-30 blur-sm" data-alt="A moody, cyberpunk-inspired digital landscape with neon streaks of cyan and hot pink cutting through deep space darkness. The aesthetic is high-contrast, immersive, and heavily influenced by retro-futuristic dark-room design principles. Minimalist geometric patterns emerge from the blackness."></div>
+<div class="absolute inset-0 bg-gradient-to-t from-[#050505] via-[#050505]/80 to-transparent"></div>
+</div>
+<!-- Overlay Background (Glass Sheet) -->
+<div class="fixed inset-0 bg-black/60 backdrop-blur-md z-40 flex items-center justify-center p-md">
+<!-- Modal Container -->
+<div class="relative bg-surface/90 border border-white/10 rounded-xl shadow-2xl w-full max-w-lg overflow-hidden flex flex-col z-50">
+<!-- Decorative Top Edge Glow -->
+<div class="absolute top-0 left-0 right-0 h-[2px] bg-gradient-to-r from-transparent via-primary-container to-transparent opacity-70"></div>
+<!-- Header -->
+<div class="flex items-center justify-between px-lg py-md border-b border-white/5">
+<div class="flex items-center gap-sm">
+<span class="material-symbols-outlined text-primary-fixed-dim" style="font-variation-settings: 'FILL' 1;">api</span>
+<h2 class="font-title-md text-title-md text-on-surface tracking-wide">MusicApi-V2</h2>
+</div>
+<button class="text-on-surface-variant hover:text-primary-container transition-colors rounded-full p-xs">
+<span class="material-symbols-outlined">close</span>
+</button>
+</div>
+<!-- Content Area -->
+<div class="p-lg flex flex-col gap-lg">
+<!-- Input Group: Endpoint -->
+<div class="flex flex-col gap-xs">
+<label class="font-label-caps text-label-caps text-on-surface-variant uppercase tracking-wider">API Endpoint URL</label>
+<div class="relative">
+<span class="material-symbols-outlined absolute left-sm top-1/2 -translate-y-1/2 text-on-surface-variant opacity-70" style="font-size: 20px;">link</span>
+<input class="w-full bg-white/[0.12] focus:bg-white/[0.20] border-none text-on-surface font-body-lg text-body-lg rounded-DEFAULT py-sm pl-xl pr-sm placeholder-on-surface-variant/50 focus:ring-1 focus:ring-primary-container transition-all" placeholder="Enter endpoint URL" type="url" value="https://api.v2.music-net.io/v1/stream"/>
+</div>
+</div>
+<!-- Input Group: Token -->
+<div class="flex flex-col gap-xs">
+<label class="font-label-caps text-label-caps text-on-surface-variant uppercase tracking-wider">Access Token</label>
+<div class="relative">
+<span class="material-symbols-outlined absolute left-sm top-1/2 -translate-y-1/2 text-on-surface-variant opacity-70" style="font-size: 20px;">key</span>
+<input class="w-full bg-white/[0.12] focus:bg-white/[0.20] border-none text-on-surface font-body-lg text-body-lg rounded-DEFAULT py-sm pl-xl pr-sm placeholder-on-surface-variant/50 focus:ring-1 focus:ring-primary-container transition-all" placeholder="Enter API token" type="password" value="************************"/>
+</div>
+</div>
+<!-- Input Group: Sync Interval & Test Button -->
+<div class="flex flex-col md:flex-row gap-md items-end">
+<div class="flex flex-col gap-xs w-full md:w-1/3">
+<label class="font-label-caps text-label-caps text-on-surface-variant uppercase tracking-wider">Sync Interval (mins)</label>
+<div class="relative">
+<span class="material-symbols-outlined absolute left-sm top-1/2 -translate-y-1/2 text-on-surface-variant opacity-70" style="font-size: 20px;">timer</span>
+<input class="w-full bg-white/[0.12] focus:bg-white/[0.20] border-none text-on-surface font-body-lg text-body-lg rounded-DEFAULT py-sm pl-xl pr-sm placeholder-on-surface-variant/50 focus:ring-1 focus:ring-primary-container transition-all" min="1" type="number" value="15"/>
+</div>
+</div>
+<button class="w-full md:w-2/3 bg-transparent border border-primary-container text-primary-container font-label-caps text-label-caps uppercase rounded-DEFAULT py-[10px] px-md flex items-center justify-center gap-sm hover:bg-primary-container/10 transition-all active:scale-95 group relative overflow-hidden">
+<div class="absolute inset-0 bg-primary-container/20 opacity-0 group-hover:opacity-100 animate-pulse-glow transition-opacity"></div>
+<span class="material-symbols-outlined relative z-10" style="font-size: 18px;">bolt</span>
+<span class="relative z-10 tracking-widest">Test Connection</span>
+</button>
+</div>
+</div>
+<!-- Footer Actions -->
+<div class="flex items-center justify-end gap-sm px-lg py-md bg-surface-container-high/50 border-t border-white/5">
+<button class="bg-white/10 hover:bg-white/20 border border-white/20 text-on-surface font-label-caps text-label-caps uppercase tracking-wider py-sm px-lg rounded-DEFAULT transition-all">
+                    Discard
+                </button>
+<button class="bg-primary-container text-on-primary-container hover:bg-primary-fixed font-label-caps text-label-caps uppercase tracking-wider py-sm px-lg rounded-DEFAULT shadow-[0_0_15px_rgba(0,242,234,0.3)] hover:shadow-[0_0_20px_rgba(0,242,234,0.6)] transition-all">
+                    Apply Changes
+                </button>
+</div>
+</div>
+</div>
+</body></html>

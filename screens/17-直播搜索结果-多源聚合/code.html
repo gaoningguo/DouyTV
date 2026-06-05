@@ -1,0 +1,269 @@
+<!DOCTYPE html>
+
+<html class="dark" lang="en"><head>
+<meta charset="utf-8"/>
+<meta content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" name="viewport"/>
+<title>Live Search Results</title>
+<script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700;800&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<style>
+        .no-scrollbar::-webkit-scrollbar {
+            display: none;
+        }
+        .no-scrollbar {
+            -ms-overflow-style: none;
+            scrollbar-width: none;
+        }
+    </style>
+<script id="tailwind-config">
+        tailwind.config = {
+            darkMode: "class",
+            theme: {
+                extend: {
+                    "colors": {
+                        "inverse-on-surface": "#313030",
+                        "surface": "#131313",
+                        "error": "#ffb4ab",
+                        "on-primary-fixed": "#00201e",
+                        "surface-dim": "#131313",
+                        "on-secondary-fixed-variant": "#920029",
+                        "surface-container-low": "#1c1b1b",
+                        "primary-container": "#00f2ea",
+                        "secondary": "#ffb2b6",
+                        "secondary-container": "#ff516a",
+                        "outline": "#849492",
+                        "primary-fixed-dim": "#00ddd6",
+                        "primary-fixed": "#29fcf3",
+                        "on-surface": "#e5e2e1",
+                        "background": "#131313",
+                        "secondary-fixed": "#ffdadb",
+                        "on-error": "#690005",
+                        "on-primary": "#003735",
+                        "on-tertiary-fixed": "#1a1c1c",
+                        "on-primary-container": "#006a66",
+                        "surface-bright": "#3a3939",
+                        "on-primary-fixed-variant": "#00504d",
+                        "secondary-fixed-dim": "#ffb2b6",
+                        "on-error-container": "#ffdad6",
+                        "surface-container-high": "#2a2a2a",
+                        "surface-container-highest": "#353534",
+                        "surface-container-lowest": "#0e0e0e",
+                        "inverse-surface": "#e5e2e1",
+                        "on-secondary-fixed": "#40000d",
+                        "on-secondary-container": "#5b0016",
+                        "on-background": "#e5e2e1",
+                        "outline-variant": "#3a4a48",
+                        "on-tertiary-fixed-variant": "#454747",
+                        "error-container": "#93000a",
+                        "on-tertiary": "#2f3131",
+                        "surface-container": "#201f1f",
+                        "on-tertiary-container": "#5d5f5f",
+                        "on-surface-variant": "#b9cac8",
+                        "tertiary-container": "#d9d9d9",
+                        "tertiary": "#f5f5f5",
+                        "surface-variant": "#353534",
+                        "tertiary-fixed-dim": "#c6c6c7",
+                        "tertiary-fixed": "#e2e2e2",
+                        "inverse-primary": "#006a66",
+                        "surface-tint": "#00ddd6",
+                        "primary": "#cffffb",
+                        "on-secondary": "#67001b"
+                    },
+                    "borderRadius": {
+                        "DEFAULT": "0.25rem",
+                        "lg": "0.5rem",
+                        "xl": "0.75rem",
+                        "full": "9999px"
+                    },
+                    "spacing": {
+                        "xl": "32px",
+                        "sm": "8px",
+                        "safe-area-inset": "max(16px, env(safe-area-inset-bottom))",
+                        "lg": "24px",
+                        "md": "16px",
+                        "base": "4px",
+                        "xs": "4px"
+                    },
+                    "fontFamily": {
+                        "headline-lg-mobile": ["Inter"],
+                        "body-sm": ["Inter"],
+                        "label-caps": ["Inter"],
+                        "body-lg": ["Inter"],
+                        "headline-lg": ["Inter"],
+                        "title-md": ["Inter"],
+                        "display-lg": ["Inter"]
+                    },
+                    "fontSize": {
+                        "headline-lg-mobile": ["24px", { "lineHeight": "32px", "fontWeight": "700" }],
+                        "body-sm": ["14px", { "lineHeight": "20px", "fontWeight": "400" }],
+                        "label-caps": ["12px", { "lineHeight": "16px", "letterSpacing": "0.05em", "fontWeight": "700" }],
+                        "body-lg": ["16px", { "lineHeight": "24px", "fontWeight": "400" }],
+                        "headline-lg": ["32px", { "lineHeight": "40px", "letterSpacing": "-0.01em", "fontWeight": "700" }],
+                        "title-md": ["20px", { "lineHeight": "28px", "fontWeight": "600" }],
+                        "display-lg": ["48px", { "lineHeight": "52px", "letterSpacing": "-0.02em", "fontWeight": "800" }]
+                    }
+                }
+            }
+        }
+    </script>
+<style>
+    body {
+      min-height: max(884px, 100dvh);
+    }
+  </style>
+  </head>
+<body class="bg-[#050505] text-on-surface antialiased min-h-screen selection:bg-primary-fixed/30 selection:text-primary-fixed">
+<!-- TopAppBar -->
+<header class="fixed top-0 w-full z-50 bg-gradient-to-b from-black/80 to-transparent flex justify-between items-center px-md py-sm">
+<button aria-label="Search" class="active:scale-95 transition-transform text-primary-fixed-dim hover:text-primary duration-200">
+<span class="material-symbols-outlined" style="font-variation-settings: 'FILL' 0;">search</span>
+</button>
+<h1 class="font-headline-lg-mobile text-headline-lg-mobile uppercase tracking-tighter text-primary-fixed-dim drop-shadow-[0_0_8px_rgba(0,221,214,0.6)]">AGGREGATOR</h1>
+<button aria-label="More options" class="active:scale-95 transition-transform text-primary-fixed-dim hover:text-primary duration-200">
+<span class="material-symbols-outlined" style="font-variation-settings: 'FILL' 0;">more_vert</span>
+</button>
+</header>
+<!-- Main Content Area -->
+<main class="pt-[80px] pb-[100px]">
+<!-- Search Immersive Input & Chips -->
+<div class="px-md mb-md">
+<div class="bg-white/10 rounded-full px-md py-sm flex items-center gap-sm backdrop-blur-md ring-1 ring-white/5 focus-within:bg-white/20 focus-within:ring-primary/50 transition-all shadow-[0_4px_24px_rgba(0,0,0,0.4)]">
+<span class="material-symbols-outlined text-primary-fixed-dim text-[20px]">search</span>
+<input class="bg-transparent border-none outline-none text-body-lg font-body-lg text-on-surface w-full placeholder-on-surface-variant focus:ring-0 p-0" type="text" value="Cyberpunk"/>
+<button class="text-on-surface-variant bg-surface-bright/50 rounded-full p-1 active:scale-90 transition-transform hover:text-white">
+<span class="material-symbols-outlined text-[16px]">close</span>
+</button>
+</div>
+<div class="flex gap-sm mt-md overflow-x-auto no-scrollbar pb-xs">
+<button class="bg-primary-fixed-dim/20 text-primary-fixed px-4 py-1.5 rounded-full font-label-caps text-label-caps whitespace-nowrap ring-1 ring-primary-fixed/50 shadow-[0_0_10px_rgba(0,221,214,0.2)]">ALL LIVE</button>
+<button class="bg-surface-container/80 text-on-surface-variant hover:text-on-surface px-4 py-1.5 rounded-full font-label-caps text-label-caps whitespace-nowrap transition-colors border border-white/5">TWITCH</button>
+<button class="bg-surface-container/80 text-on-surface-variant hover:text-on-surface px-4 py-1.5 rounded-full font-label-caps text-label-caps whitespace-nowrap transition-colors border border-white/5">BILIBILI</button>
+<button class="bg-surface-container/80 text-on-surface-variant hover:text-on-surface px-4 py-1.5 rounded-full font-label-caps text-label-caps whitespace-nowrap transition-colors border border-white/5">DOUYU</button>
+</div>
+</div>
+<!-- Grid Results -->
+<div class="px-md grid grid-cols-2 gap-xs">
+<!-- Card 1 -->
+<article class="relative aspect-[3/4] rounded-xl overflow-hidden group bg-surface-container border border-white/5 cursor-pointer active:scale-[0.98] transition-transform">
+<div class="absolute inset-0 bg-cover bg-center transition-transform duration-700 group-hover:scale-105" data-alt="A highly detailed digital illustration of a futuristic, neon-lit cyberpunk city street at night. Rain slicks the asphalt, reflecting vibrant cyan, hot pink, and deep purple lights from holographic billboards. The lighting is moody, high-contrast, and cinematic, emphasizing deep, pure blacks against intense neon glows. The aesthetic perfectly matches a Gen-Z high-energy streaming UI." style="background-image: url('https://lh3.googleusercontent.com/aida-public/AB6AXuB4wHmlOwiJ_KyrbaHbDKYzf8NKvAw-qO4Ny6Fn-21dvoMhGGfI8o5kkFMc49L02f-2b5l6Gw4UmoX-glITVBcxwuHGPz235WPaca3hs47zijoJudALIoHMbHL6fCVwki8VrM4vY4I8qp8cPtZHyg7AFLXrvDEUZnd_rFXLlp0hocAZLqXJLA-_6g9VARYiLAKPjTTLNIRytMPipJUiB2Ol99uPveBUbuBvrmcfgbKd_h90stjWUQ4_GXGP3fu5XyUPmLdzZAz91VU');">
+</div>
+<div class="absolute inset-0 bg-gradient-to-t from-[#050505] via-[#050505]/60 to-transparent opacity-90"></div>
+<div class="absolute top-sm left-sm">
+<div class="bg-black/80 backdrop-blur-md border border-primary-fixed/40 rounded-sm px-1.5 py-0.5 flex items-center gap-1 shadow-[0_0_12px_rgba(0,221,214,0.3)]">
+<div class="w-1.5 h-1.5 rounded-full bg-primary-fixed shadow-[0_0_8px_rgba(41,252,243,1)] animate-pulse"></div>
+<span class="font-label-caps text-[10px] text-primary-fixed tracking-wider">LIVE</span>
+</div>
+</div>
+<div class="absolute top-sm right-sm bg-black/60 backdrop-blur-md border border-white/10 rounded-sm px-1.5 py-0.5">
+<span class="font-label-caps text-[10px] text-on-surface">24.5K</span>
+</div>
+<div class="absolute bottom-sm left-sm right-sm flex flex-col gap-xs z-10">
+<h3 class="font-title-md text-[14px] leading-snug text-on-surface line-clamp-2 drop-shadow-lg">Night City MaxTac High Threat Runs - No Hit Challenge</h3>
+<div class="flex items-center gap-xs mt-1">
+<div class="w-5 h-5 rounded-full bg-surface-bright overflow-hidden border border-white/10">
+<div class="w-full h-full bg-cover bg-center" data-alt="A striking portrait of a young digital creator illuminated by a harsh, glowing pink and cyan neon rim light. The background is pure black, creating infinite depth. The person has an intense, focused expression, fitting the high-energy, Gen-Z cyberpunk aesthetic of a professional streamer." style="background-image: url('https://lh3.googleusercontent.com/aida-public/AB6AXuAiQ1v4Mhm5g5RZJ-ihjmSboL2FIiBrrgiBfvDOMkMWed-YvMt19Rww3HHhSxD7mUaaE3ylJuuJHi_M0qqEgxQbQRCmDjokCvMd5nug9sqgdIg43hQuEbKKytl57qxMl_tEL4lf74KOUQd5DEFBBr0uw0rjxqM0rDQNRUqK4cNRBQDggRh-rasKF-Ox3PtsCX9XKwcDohAiUYDZNntShjMUHD8xubLb_3H4ie1e1lBsgZaLyXwx988_T6bXYePd9DFYd2KOumYfiaE');"></div>
+</div>
+<span class="font-body-sm text-[12px] text-on-surface-variant truncate">NetRunner_V</span>
+<span class="ml-auto bg-[#00a1d6]/20 text-[#00a1d6] border border-[#00a1d6]/30 text-[9px] px-1 py-0.5 rounded-sm font-label-caps">BILIBILI</span>
+</div>
+</div>
+</article>
+<!-- Card 2 -->
+<article class="relative aspect-[3/4] rounded-xl overflow-hidden group bg-surface-container border border-white/5 cursor-pointer active:scale-[0.98] transition-transform">
+<div class="absolute inset-0 bg-cover bg-center transition-transform duration-700 group-hover:scale-105" data-alt="An atmospheric macro shot of glowing computer hardware components, bathed in intense, saturated magenta and cyan LED lighting. The sharp focus on technical details contrasts heavily with deep, crushing black shadows in the background. The mood is immersive and unapologetically digital, echoing a high-end PC building stream environment." style="background-image: url('https://lh3.googleusercontent.com/aida-public/AB6AXuCjcL2p1tt8FuC6_WzL2RsTdkDWcyUZ67OSfTmXuy6u6s0j6o1aBniuyA_1w3cx4fS_pAkYJ9YqXAeRX2sdTS3EqyopUdZP89u6JC3Z0V64LTqQfsHQegppZW4hQ8zeNfTo5pb777nIgh6_uh_G5aX_p52AX8NphXuZ0j-k1HjsALK4sZTnsBleV88gXJkwwrpB35lCzi6OzJMBRX1E34Q8XHzAgBPH54O6X3y1deililmop2aEzjeRnGfkLgv-3V8xAlTMOuPgkFs');">
+</div>
+<div class="absolute inset-0 bg-gradient-to-t from-[#050505] via-[#050505]/60 to-transparent opacity-90"></div>
+<div class="absolute top-sm left-sm">
+<div class="bg-black/80 backdrop-blur-md border border-primary-fixed/40 rounded-sm px-1.5 py-0.5 flex items-center gap-1 shadow-[0_0_12px_rgba(0,221,214,0.3)]">
+<div class="w-1.5 h-1.5 rounded-full bg-primary-fixed shadow-[0_0_8px_rgba(41,252,243,1)] animate-pulse"></div>
+<span class="font-label-caps text-[10px] text-primary-fixed tracking-wider">LIVE</span>
+</div>
+</div>
+<div class="absolute top-sm right-sm bg-black/60 backdrop-blur-md border border-white/10 rounded-sm px-1.5 py-0.5">
+<span class="font-label-caps text-[10px] text-on-surface">12.1K</span>
+</div>
+<div class="absolute bottom-sm left-sm right-sm flex flex-col gap-xs z-10">
+<h3 class="font-title-md text-[14px] leading-snug text-on-surface line-clamp-2 drop-shadow-lg">Modding the Ultimate Edgerunner UI Setup</h3>
+<div class="flex items-center gap-xs mt-1">
+<div class="w-5 h-5 rounded-full bg-surface-bright overflow-hidden border border-white/10">
+<div class="w-full h-full bg-cover bg-center" data-alt="A moody, high-contrast portrait of a male tech enthusiast wearing stylized augmented reality glasses reflecting cyan code. The lighting is primarily dark room with stark, directional neon accents defining his jawline. The aesthetic is heavily digital, aligning perfectly with a cyberpunk modding community vibe." style="background-image: url('https://lh3.googleusercontent.com/aida-public/AB6AXuBWdSmEFLce1LSP7uqFigS0-qZ8PwiJ_u9_RlKDdJqIpvWa4enlvlFfneMQrgPaiqyvjAannBetgII3unC91PB6r2kV2tKcV3naG2fOvUSbKh2LUp5aD8dFinCY6PPY3C0krrZn01aWFA6vxRk2gSrmgGMq6QPySFgIf5zwsX2eOKUBQkIzlnHlh4Uk6gNXDqC3z2S16QktXkejLTJ9YAHSPtRRk-ZBfVRvzV5ONVB4xvQ22lqlcnz5k47yLtDqC-zObl7uPGpy3Tc');"></div>
+</div>
+<span class="font-body-sm text-[12px] text-on-surface-variant truncate">ChromeJunkie</span>
+<span class="ml-auto bg-[#9146FF]/20 text-[#bf94ff] border border-[#9146FF]/30 text-[9px] px-1 py-0.5 rounded-sm font-label-caps">TWITCH</span>
+</div>
+</div>
+</article>
+<!-- Card 3 -->
+<article class="relative aspect-[3/4] rounded-xl overflow-hidden group bg-surface-container border border-white/5 cursor-pointer active:scale-[0.98] transition-transform">
+<div class="absolute inset-0 bg-cover bg-center transition-transform duration-700 group-hover:scale-105" data-alt="A vibrant, stylized digital illustration of a retro-futuristic synthwave landscape grid extending towards a glowing, low-poly sunset. The color palette is dominated by intense neon pinks, deep purples, and absolute blacks. The visual style is highly energetic and designed for a dark-room, media-heavy viewing experience typical of electronic music streams." style="background-image: url('https://lh3.googleusercontent.com/aida-public/AB6AXuB4ytnZhNm-dEXQpyBcVSt_Z-bGxB_HLrjU4vYkvOgkXuQPEJPGT0M0AjaNva1R5WmoaOLDSE8WfrSXttVVTCNejqT2n1Y9r4LzDvSgddpoQWd90lNrlCdo7f_TUe-I1OXeECBERLh9fM7a7rCdPMqPzW9iBW6PhmkoxIiZaJRYyUbLV5G2iMQarBDPZ6Wrk3sGpLg-aX0TMIbSHZ0sgsxdHR05yPe6RmH_LJliEH5I0kX9me_ZEwH-y3-b93CK1vs6gTGU0hS6_h0');">
+</div>
+<div class="absolute inset-0 bg-gradient-to-t from-[#050505] via-[#050505]/60 to-transparent opacity-90"></div>
+<div class="absolute top-sm left-sm">
+<div class="bg-black/80 backdrop-blur-md border border-primary-fixed/40 rounded-sm px-1.5 py-0.5 flex items-center gap-1 shadow-[0_0_12px_rgba(0,221,214,0.3)]">
+<div class="w-1.5 h-1.5 rounded-full bg-primary-fixed shadow-[0_0_8px_rgba(41,252,243,1)] animate-pulse"></div>
+<span class="font-label-caps text-[10px] text-primary-fixed tracking-wider">LIVE</span>
+</div>
+</div>
+<div class="absolute top-sm right-sm bg-black/60 backdrop-blur-md border border-white/10 rounded-sm px-1.5 py-0.5">
+<span class="font-label-caps text-[10px] text-on-surface">8.4K</span>
+</div>
+<div class="absolute bottom-sm left-sm right-sm flex flex-col gap-xs z-10">
+<h3 class="font-title-md text-[14px] leading-snug text-on-surface line-clamp-2 drop-shadow-lg">Dark Synthwave / Cyberpunk Radio 24/7</h3>
+<div class="flex items-center gap-xs mt-1">
+<div class="w-5 h-5 rounded-full bg-surface-bright overflow-hidden border border-white/10">
+<div class="w-full h-full bg-cover bg-center" data-alt="Abstract fluid art macro shot acting as an avatar, featuring swirling mixtures of deep black ink and luminescent cyan and pink dyes. The image is highly abstract, conveying a sense of chaotic, high-energy digital fluidity suitable for an electronic music channel profile." style="background-image: url('https://lh3.googleusercontent.com/aida-public/AB6AXuCEJO7vqZVkmtPs1t0SzV7siEiSoSQ8rbaHzFQFhHSzk3tXhk92uGY8cmdBH7LVQCJlpX5B8XkXnS760HFjimfIP-VKbl7WsHrYeucNYmmCRqgl6ERwvnnfdtIp-X-nLJ7CAywEUKk0UoQM7NvYntoyMg00nAhHRdzGRMHeiS_WEjAAH79NoP7EgmbtPImrbkFASqYHF68V1xnp_fh2JjZKD_mnb3x53cN2XUxjUgcqdaoD9epQxNGZr0P1HNTn8EXRST89nBswFuc');"></div>
+</div>
+<span class="font-body-sm text-[12px] text-on-surface-variant truncate">NeonBeats</span>
+<span class="ml-auto bg-[#ff5f00]/20 text-[#ff8a4c] border border-[#ff5f00]/30 text-[9px] px-1 py-0.5 rounded-sm font-label-caps">DOUYU</span>
+</div>
+</div>
+</article>
+<!-- Card 4 -->
+<article class="relative aspect-[3/4] rounded-xl overflow-hidden group bg-surface-container border border-white/5 cursor-pointer active:scale-[0.98] transition-transform">
+<div class="absolute inset-0 bg-cover bg-center transition-transform duration-700 group-hover:scale-105" data-alt="A tight, close-up photograph of complex lines of glowing green and cyan code reflecting off the lens of a person's eye in a completely pitch-black room. The image conveys intense focus, deep hacking lore, and digital immersion. The stark contrast between the bright data and pure black negative space perfectly aligns with the required modern UI style." style="background-image: url('https://lh3.googleusercontent.com/aida-public/AB6AXuCF5RTzdjUcFdStGMGNQo_Z7BKoDzka96IGp_p1-o54RX7auPpYk08zq7Efy6oW8LfsajPMnhm031e1NqhWraql0GKPXcAPbDfUzGHFU7hJsD4VLPChSUkDf-wrBkxWI6nRirlTZOphdVmo6Y4fmheLKWtn1-7OSKnyl-rR3rumTvI9auJDhZ4v7KVy96fzplqtn_umIt-8CI1PPFJt5C1TAz1v_SBadm6pKrxrJTfAEcixIQvzNE_d9Mn8ExTDUThlvCxz6QwQULw');">
+</div>
+<div class="absolute inset-0 bg-gradient-to-t from-[#050505] via-[#050505]/60 to-transparent opacity-90"></div>
+<div class="absolute top-sm left-sm">
+<div class="bg-black/80 backdrop-blur-md border border-primary-fixed/40 rounded-sm px-1.5 py-0.5 flex items-center gap-1 shadow-[0_0_12px_rgba(0,221,214,0.3)]">
+<div class="w-1.5 h-1.5 rounded-full bg-primary-fixed shadow-[0_0_8px_rgba(41,252,243,1)] animate-pulse"></div>
+<span class="font-label-caps text-[10px] text-primary-fixed tracking-wider">LIVE</span>
+</div>
+</div>
+<div class="absolute top-sm right-sm bg-black/60 backdrop-blur-md border border-white/10 rounded-sm px-1.5 py-0.5">
+<span class="font-label-caps text-[10px] text-on-surface">3.2K</span>
+</div>
+<div class="absolute bottom-sm left-sm right-sm flex flex-col gap-xs z-10">
+<h3 class="font-title-md text-[14px] leading-snug text-on-surface line-clamp-2 drop-shadow-lg">Deep Lore Dive: Corporate Wars Explained</h3>
+<div class="flex items-center gap-xs mt-1">
+<div class="w-5 h-5 rounded-full bg-surface-bright overflow-hidden border border-white/10">
+<div class="w-full h-full bg-cover bg-center" data-alt="A portrait of a woman bathed entirely in deep violet and cyan shadows against a black void. Her expression is enigmatic, and the lighting highlights futuristic textures on her dark clothing. The aesthetic is heavily shadowed and highly saturated, fitting for a cyberpunk lore storyteller." style="background-image: url('https://lh3.googleusercontent.com/aida-public/AB6AXuC32FOXQjs5YEFz0a3eoSFld8B1mWE7IPZR1h-HjPF8AWykQ2jm7i-6NZVyHrA5NICGlxMFi7E168djmRiZtB7urQpG0ArwhSH7G-d1Rk7TWwNBS-A15LxM556S60WVHLNfRBpTzaf93aiTCxg_f04pdJh17a4mXm_juj4UQ44Msf69TKS19vzER8gdwMxMUTT1m_QCwDyd5h_XEuPK1vSPTKLwdkPfYYqYxUfFzynvsvtTMz2dhCXLCwLxFll6HW6OLCcrfvP4jYM');"></div>
+</div>
+<span class="font-body-sm text-[12px] text-on-surface-variant truncate">LoreWeaver</span>
+<span class="ml-auto bg-[#9146FF]/20 text-[#bf94ff] border border-[#9146FF]/30 text-[9px] px-1 py-0.5 rounded-sm font-label-caps">TWITCH</span>
+</div>
+</div>
+</article>
+</div>
+</main>
+<!-- BottomNavBar -->
+<nav class="fixed bottom-0 w-full z-50 backdrop-blur-xl bg-black/80 border-t border-white/10 flex justify-around items-center h-16 px-md pb-safe-area-inset">
+<button aria-label="Movies" class="flex flex-col items-center justify-center text-on-surface-variant hover:text-primary transition-all active:scale-90 duration-150">
+<span class="material-symbols-outlined" style="font-variation-settings: 'FILL' 0;">movie</span>
+</button>
+<!-- Active Nav Item -->
+<button aria-label="Live TV" class="flex flex-col items-center justify-center text-primary-fixed-dim drop-shadow-[0_0_5px_rgba(0,221,214,0.8)] hover:text-primary transition-all active:scale-90 duration-150">
+<span class="material-symbols-outlined" style="font-variation-settings: 'FILL' 1;">live_tv</span>
+</button>
+<button aria-label="Music" class="flex flex-col items-center justify-center text-on-surface-variant hover:text-primary transition-all active:scale-90 duration-150">
+<span class="material-symbols-outlined" style="font-variation-settings: 'FILL' 0;">music_note</span>
+</button>
+<button aria-label="Stories" class="flex flex-col items-center justify-center text-on-surface-variant hover:text-primary transition-all active:scale-90 duration-150">
+<span class="material-symbols-outlined" style="font-variation-settings: 'FILL' 0;">auto_stories</span>
+</button>
+<button aria-label="Profile" class="flex flex-col items-center justify-center text-on-surface-variant hover:text-primary transition-all active:scale-90 duration-150">
+<span class="material-symbols-outlined" style="font-variation-settings: 'FILL' 0;">person</span>
+</button>
+</nav>
+</body></html>

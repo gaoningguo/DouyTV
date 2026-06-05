@@ -1,0 +1,338 @@
+<!DOCTYPE html><html class="dark" lang="zh-CN"><head>
+<meta charset="utf-8">
+<meta content="width=device-width, initial-scale=1.0, viewport-fit=cover" name="viewport">
+<title>IPTV 频道选择</title>
+<script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700;800&amp;display=swap" rel="stylesheet">
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet">
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet">
+<script id="tailwind-config">
+        tailwind.config = {
+            darkMode: "class",
+            theme: {
+                extend: {
+                    "colors": {
+                        "surface-container-high": "#2a2a2a",
+                        "on-tertiary-container": "#5d5f5f",
+                        "on-error-container": "#ffdad6",
+                        "primary-fixed-dim": "#00ddd6",
+                        "surface-container": "#201f1f",
+                        "on-tertiary-fixed": "#1a1c1c",
+                        "tertiary": "#f5f5f5",
+                        "primary": "#cffffb",
+                        "on-primary-fixed-variant": "#00504d",
+                        "on-secondary": "#67001b",
+                        "surface-container-highest": "#353534",
+                        "surface-tint": "#00ddd6",
+                        "outline": "#849492",
+                        "error": "#ffb4ab",
+                        "surface-container-lowest": "#0e0e0e",
+                        "inverse-on-surface": "#313030",
+                        "surface-variant": "#353534",
+                        "background": "#131313",
+                        "tertiary-fixed": "#e2e2e2",
+                        "on-error": "#690005",
+                        "on-background": "#e5e2e1",
+                        "secondary": "#ffb2b6",
+                        "secondary-fixed": "#ffdadb",
+                        "primary-container": "#00f2ea",
+                        "on-secondary-fixed": "#40000d",
+                        "on-tertiary": "#2f3131",
+                        "secondary-container": "#ff516a",
+                        "primary-fixed": "#29fcf3",
+                        "secondary-fixed-dim": "#ffb2b6",
+                        "tertiary-fixed-dim": "#c6c6c7",
+                        "on-tertiary-fixed-variant": "#454747",
+                        "on-primary-fixed": "#00201e",
+                        "on-surface-variant": "#b9cac8",
+                        "surface-container-low": "#1c1b1b",
+                        "on-secondary-container": "#5b0016",
+                        "outline-variant": "#3a4a48",
+                        "tertiary-container": "#d9d9d9",
+                        "surface-dim": "#131313",
+                        "surface-bright": "#3a3939",
+                        "surface": "#131313",
+                        "error-container": "#93000a",
+                        "on-secondary-fixed-variant": "#920029",
+                        "on-primary-container": "#006a66",
+                        "inverse-surface": "#e5e2e1",
+                        "on-primary": "#003735",
+                        "on-surface": "#e5e2e1",
+                        "inverse-primary": "#006a66"
+                    },
+                    "borderRadius": {
+                        "DEFAULT": "0.25rem",
+                        "lg": "0.5rem",
+                        "xl": "0.75rem",
+                        "full": "9999px"
+                    },
+                    "spacing": {
+                        "safe-area-inset": "max(16px, env(safe-area-inset-bottom))",
+                        "md": "16px",
+                        "xs": "4px",
+                        "sm": "8px",
+                        "lg": "24px",
+                        "xl": "32px",
+                        "base": "4px"
+                    },
+                    "fontFamily": {
+                        "headline-lg": ["Inter"],
+                        "display-lg": ["Inter"],
+                        "body-sm": ["Inter"],
+                        "body-lg": ["Inter"],
+                        "label-caps": ["Inter"],
+                        "title-md": ["Inter"],
+                        "headline-lg-mobile": ["Inter"]
+                    },
+                    "fontSize": {
+                        "headline-lg": ["32px", {"lineHeight": "40px", "letterSpacing": "-0.01em", "fontWeight": "700"}],
+                        "display-lg": ["48px", {"lineHeight": "52px", "letterSpacing": "-0.02em", "fontWeight": "800"}],
+                        "body-sm": ["14px", {"lineHeight": "20px", "fontWeight": "400"}],
+                        "body-lg": ["16px", {"lineHeight": "24px", "fontWeight": "400"}],
+                        "label-caps": ["12px", {"lineHeight": "16px", "letterSpacing": "0.05em", "fontWeight": "700"}],
+                        "title-md": ["20px", {"lineHeight": "28px", "fontWeight": "600"}],
+                        "headline-lg-mobile": ["24px", {"lineHeight": "32px", "fontWeight": "700"}]
+                    }
+                }
+            }
+        }
+    </script>
+<style>
+        body {
+            background-color: #050505;
+            color: #e5e2e1;
+            -webkit-tap-highlight-color: transparent;
+        }
+        .glass-panel {
+            background: rgba(255, 255, 255, 0.05);
+            backdrop-filter: blur(20px);
+            border: 1px solid rgba(255, 255, 255, 0.1);
+        }
+        .neon-glow {
+            text-shadow: 0 0 8px rgba(0, 221, 214, 0.5);
+        }
+        .active-glow {
+            box-shadow: 0 0 15px rgba(0, 242, 234, 0.3);
+        }
+        .hide-scrollbar::-webkit-scrollbar {
+            display: none;
+        }
+        .hide-scrollbar {
+            -ms-overflow-style: none;
+            scrollbar-width: none;
+        }
+    </style>
+<style>
+    body {
+      min-height: max(884px, 100dvh);
+    }
+  </style>
+  </head>
+<body class="font-body-lg overflow-hidden">
+<!-- TopAppBar -->
+
+<!-- Top Segmented Control (Sticky below Header) -->
+
+<!-- Main Content Area -->
+<main class="pb-[72px] h-screen flex pt-[80px]"><div class="fixed top-0 left-0 w-full z-50 bg-background/80 backdrop-blur-xl border-b border-white/5 px-md py-md"><div class="max-w-md mx-auto flex bg-surface-container-lowest rounded-full p-1 border border-outline-variant/20"><button class="flex-1 py-2 text-on-surface-variant font-label-caps text-label-caps transition-all duration-200">网络直播</button><button class="flex-1 py-2 bg-primary-container text-on-primary-container rounded-full font-label-caps text-label-caps active:scale-95 duration-200 shadow-[0_0_15px_rgba(0,242,234,0.3)]">IPTV</button></div></div>
+<!-- Left Sidebar: Categories -->
+<aside class="w-[100px] md:w-[140px] h-full flex flex-col border-r border-outline-variant/20 bg-surface-container-lowest/30 overflow-y-auto hide-scrollbar">
+<nav class="flex flex-col py-sm">
+<a class="px-md py-lg flex flex-col items-center gap-xs text-primary border-r-2 border-primary-container bg-primary/5" href="#">
+<span class="material-symbols-outlined" data-icon="stars" style="font-variation-settings: &quot;FILL&quot; 1;">stars</span>
+<span class="text-label-caps font-label-caps">我的收藏</span>
+</a>
+<a class="px-md py-lg flex flex-col items-center gap-xs text-on-surface-variant hover:text-primary transition-colors" href="#">
+<span class="material-symbols-outlined" data-icon="apps">apps</span>
+<span class="text-label-caps font-label-caps text-center">全部频道</span>
+</a>
+<a class="px-md py-lg flex flex-col items-center gap-xs text-on-surface-variant hover:text-primary transition-colors" href="#">
+<span class="material-symbols-outlined" data-icon="live_tv">live_tv</span>
+<span class="text-label-caps font-label-caps text-center">央视频道</span>
+</a>
+<a class="px-md py-lg flex flex-col items-center gap-xs text-on-surface-variant hover:text-primary transition-colors" href="#">
+<span class="material-symbols-outlined" data-icon="tv_gen">tv_gen</span>
+<span class="text-label-caps font-label-caps text-center">卫视频道</span>
+</a>
+<a class="px-md py-lg flex flex-col items-center gap-xs text-on-surface-variant hover:text-primary transition-colors" href="#">
+<span class="material-symbols-outlined" data-icon="sports_soccer">sports_soccer</span>
+<span class="text-label-caps font-label-caps text-center">体育频道</span>
+</a>
+<a class="px-md py-lg flex flex-col items-center gap-xs text-on-surface-variant hover:text-primary transition-colors" href="#">
+<span class="material-symbols-outlined" data-icon="movie">movie</span>
+<span class="text-label-caps font-label-caps text-center">电影频道</span>
+</a>
+<a class="px-md py-lg flex flex-col items-center gap-xs text-on-surface-variant hover:text-primary transition-colors" href="#">
+<span class="material-symbols-outlined" data-icon="menu_book">menu_book</span>
+<span class="text-label-caps font-label-caps text-center">纪录片</span>
+</a>
+</nav>
+</aside>
+<!-- Right Content: Channel Grid -->
+<section class="flex-1 h-full overflow-y-auto px-md py-md hide-scrollbar">
+<div class="grid grid-cols-1 md:grid-cols-2 gap-md">
+<!-- Channel Item 1 -->
+<div class="glass-panel rounded-xl overflow-hidden active:scale-95 transition-all duration-200 active-glow group">
+<div class="relative aspect-video w-full bg-surface-container-high">
+<img class="w-full h-full object-cover opacity-60 group-hover:opacity-90 transition-opacity" data-alt="A high-definition broadcast still of a soccer match in a massive futuristic stadium, with vibrant neon cyan and pink lighting effects on the player silhouettes. The mood is high-energy and immersive, capturing a peak cinematic sports moment for a digital aggregator UI. The style is modern with high contrast and deep blacks." src="https://lh3.googleusercontent.com/aida-public/AB6AXuD-aHsUzumrFAzRMQVmrMQofAAngd8MZaxYxugYSw2u-DMYDibTPZnPh5C53SbSR-9MA2TUdaU7EVQtYiKrwNO6K2XN40OEaVn2LCTnDuKpgDYTq9eh4eiJZ5ULuoJZGMVo30zbbUEsY76EuP_WYwVnFdyB98IEYOew0oMvnm0e5suuTYD5gReMArB2ieFRDMyMKtFpl16sHRUvx25gI0o15xJz8e4Duz-TD0APyEDqnS54ELPT36YZy8_YcKl1zF_pKMT0Upmfl5o">
+<div class="absolute inset-0 bg-gradient-to-t from-black via-transparent to-transparent"></div>
+<div class="absolute top-sm right-sm flex items-center gap-xs bg-secondary-container/90 px-2 py-0.5 rounded-full">
+<div class="w-1.5 h-1.5 bg-white rounded-full animate-pulse"></div>
+<span class="text-[10px] font-label-caps text-on-secondary-container">LIVE</span>
+</div>
+<div class="absolute bottom-sm left-sm flex items-center gap-sm">
+<div class="w-10 h-10 bg-white/10 backdrop-blur-md rounded-lg border border-white/20 flex items-center justify-center p-1">
+<span class="material-symbols-outlined text-primary text-[24px]" data-icon="sports_score">sports_score</span>
+</div>
+<div>
+<p class="font-title-md text-body-sm text-white">CCTV-5 体育</p>
+<p class="text-[11px] text-on-surface-variant flex items-center gap-xs">
+<span class="w-1 h-1 bg-primary rounded-full"></span>
+                                    正在播放：体育新闻
+                                </p>
+</div>
+</div>
+</div>
+</div>
+<!-- Channel Item 2 -->
+<div class="glass-panel rounded-xl overflow-hidden active:scale-95 transition-all duration-200 group">
+<div class="relative aspect-video w-full bg-surface-container-high">
+<img class="w-full h-full object-cover opacity-60 group-hover:opacity-90 transition-opacity" data-alt="A cinematic documentary still of a lush neon-lit jungle at night, featuring bioluminescent plants and exotic wildlife in shades of glowing cyan and deep violet. The composition is artistic and immersive, designed for a high-end digital media interface. The atmosphere is mysterious and technologically advanced with a dark-room philosophy." src="https://lh3.googleusercontent.com/aida-public/AB6AXuCP3Lb-wTDMnNkBfbgmoC5Sq5R_B7oT8IyREFI7jGquLp28_BRO1KpVA4fLo4vUKicolC--X3QPfHImdSCwBukAj7Ya5s2ShqZu30jOWMmz2AnLpuAYPZX-zBZDMt00SUB1252rkeyB15rYU3YhQJpoE2apwETYqcRJS3aEu7YpB9kKffpVF4wEKHPWO45DdCMsY82q6ODEk_0__pUuxVsAw6imoCHoJIC68wUmXQG57jLhlGJSZySLTZXmcIMJX5_Ks8XONon7LUw">
+<div class="absolute inset-0 bg-gradient-to-t from-black via-transparent to-transparent"></div>
+<div class="absolute bottom-sm left-sm flex items-center gap-sm">
+<div class="w-10 h-10 bg-white/10 backdrop-blur-md rounded-lg border border-white/20 flex items-center justify-center p-1">
+<span class="material-symbols-outlined text-primary text-[24px]" data-icon="public">public</span>
+</div>
+<div>
+<p class="font-title-md text-body-sm text-white">CCTV-1 综合</p>
+<p class="text-[11px] text-on-surface-variant flex items-center gap-xs">
+<span class="w-1 h-1 bg-primary rounded-full"></span>
+                                    正在播放：焦点访谈
+                                </p>
+</div>
+</div>
+</div>
+</div>
+<!-- Channel Item 3 -->
+<div class="glass-panel rounded-xl overflow-hidden active:scale-95 transition-all duration-200 group">
+<div class="relative aspect-video w-full bg-surface-container-high">
+<img class="w-full h-full object-cover opacity-60 group-hover:opacity-90 transition-opacity" data-alt="A high-energy electronic music concert with laser beams in cyan and pink cutting through a dark, foggy arena. The crowd silhouettes are seen in the foreground against the intense lighting. The style is unapologetically digital and immersive, perfect for a Gen-Z focused media application. Colors are rich with high contrast against pure blacks." src="https://lh3.googleusercontent.com/aida-public/AB6AXuBx9ERIlRR87-oKfFIi0gOywRCyje95OrXCpkkYJwa4lDmJi0pGQQo0o7MZ0J4hHLR5JFY8qgPbeBQLW2B6NmIu4N3gAn6dW7SP-Xs9SZo3P5UCFHoKH4ThZYNZ51LE2BGfvtB1TyBWzllFaIPPZTdsr-8bk_vao-l4eyoI9y_AjsfeNqK_122FZo3YiUadMSwi3dAGSoaX8nHlkRhnYLHJVT_G_-p-0UKLlreFz3YAF_0lGihX8n0whOQ3Z06R1G_Rs8Prp6B7Nt4">
+<div class="absolute inset-0 bg-gradient-to-t from-black via-transparent to-transparent"></div>
+<div class="absolute bottom-sm left-sm flex items-center gap-sm">
+<div class="w-10 h-10 bg-white/10 backdrop-blur-md rounded-lg border border-white/20 flex items-center justify-center p-1">
+<span class="material-symbols-outlined text-primary text-[24px]" data-icon="music_note">music_note</span>
+</div>
+<div>
+<p class="font-title-md text-body-sm text-white">湖南卫视 HD</p>
+<p class="text-[11px] text-on-surface-variant flex items-center gap-xs">
+<span class="w-1 h-1 bg-primary rounded-full"></span>
+                                    正在播放：歌手 2024
+                                </p>
+</div>
+</div>
+</div>
+</div>
+<!-- Channel Item 4 -->
+<div class="glass-panel rounded-xl overflow-hidden active:scale-95 transition-all duration-200 group">
+<div class="relative aspect-video w-full bg-surface-container-high">
+<img class="w-full h-full object-cover opacity-60 group-hover:opacity-90 transition-opacity" data-alt="A dramatic movie scene still featuring a futuristic city skyline with flying vehicles and glowing advertisements in a rainy, dark cyberpunk aesthetic. The lighting highlights shades of cyan and electric pink. The mood is cinematic and high-fidelity, designed for a premium IPTV content selection grid. The image feels like a natural extension of the media interface." src="https://lh3.googleusercontent.com/aida-public/AB6AXuBw5HtAiibORDl6RDv6zwQwyBV5i2J3zR5qsUAATmW4qogYsUafRAvjvHk_3W9soA0RvgUc0cko9AnFvxX_GvZGaIOBWUQ5KCD7cMNTuRMp6X2zNnAibis8u7rq4D4fO531vrgsq2bv3DikHNwQpbehvgp-uqQVP5uaFdbxsFfoZZoCixzVElOP8Lm8Vnrp-mCUW9hkytuoe8AtEdu3kw8PHF6-uJGLwsAWjsBkMFWzj2BVBT5PnXr4bnXhNpQaH2h9JjnEGNsbPM4">
+<div class="absolute inset-0 bg-gradient-to-t from-black via-transparent to-transparent"></div>
+<div class="absolute bottom-sm left-sm flex items-center gap-sm">
+<div class="w-10 h-10 bg-white/10 backdrop-blur-md rounded-lg border border-white/20 flex items-center justify-center p-1">
+<span class="material-symbols-outlined text-primary text-[24px]" data-icon="movie_filter">movie_filter</span>
+</div>
+<div>
+<p class="font-title-md text-body-sm text-white">HBO 影迷频道</p>
+<p class="text-[11px] text-on-surface-variant flex items-center gap-xs">
+<span class="w-1 h-1 bg-primary rounded-full"></span>
+                                    正在播放：极速追杀 4
+                                </p>
+</div>
+</div>
+</div>
+</div>
+<!-- Channel Item 5 -->
+<div class="glass-panel rounded-xl overflow-hidden active:scale-95 transition-all duration-200 group">
+<div class="relative aspect-video w-full bg-surface-container-high">
+<img class="w-full h-full object-cover opacity-60 group-hover:opacity-90 transition-opacity" data-alt="A stunning macro shot of a crystalline ice structure illuminated by a single point of cyan light, creating complex reflections and deep shadows. The atmosphere is quiet, sophisticated, and technologically precise, fitting the documentary channel aesthetic. The visual style follows a dark-room philosophy where the subject shines against an infinite black background." src="https://lh3.googleusercontent.com/aida-public/AB6AXuBWcM7eyJ5CwTmn7tI9ZBSUL7b1x0Kl1hhWjZNrOIHrtx6e7kGMwvLwKG-_075LhMO4GORtOa9Tex-znNCkN9I6dsZAkYf-ngndrnPVnlXAPIppTuPTye8iRJ_9qMFqnDXcWoAzFi_bgp8fABcjOGuX9GUU4dYeh0NVXtGCcqSqAwtxjM58UIDM0PEWFEc5QGdinMMpO1UXSUU-KaOP5TXvFTlRdB0s7SmwOmn6FO7vtekAzrbAgAPeUK7ksMu9K3I3dtjTliOOHsg">
+<div class="absolute inset-0 bg-gradient-to-t from-black via-transparent to-transparent"></div>
+<div class="absolute bottom-sm left-sm flex items-center gap-sm">
+<div class="w-10 h-10 bg-white/10 backdrop-blur-md rounded-lg border border-white/20 flex items-center justify-center p-1">
+<span class="material-symbols-outlined text-primary text-[24px]" data-icon="nature">nature</span>
+</div>
+<div>
+<p class="font-title-md text-body-sm text-white">纪实频道</p>
+<p class="text-[11px] text-on-surface-variant flex items-center gap-xs">
+<span class="w-1 h-1 bg-primary rounded-full"></span>
+                                    正在播放：蓝色星球
+                                </p>
+</div>
+</div>
+</div>
+</div>
+</div>
+<!-- More channels placeholder for scrolling feel -->
+<div class="py-xl flex justify-center opacity-30">
+<span class="material-symbols-outlined animate-bounce" data-icon="keyboard_double_arrow_down">keyboard_double_arrow_down</span>
+</div>
+</section>
+</main>
+<!-- BottomNavBar -->
+<nav class="fixed bottom-0 left-0 w-full z-50 flex justify-around items-center px-md pb-safe-area-inset h-[72px] bg-surface-container-lowest/80 backdrop-blur-xl rounded-t-xl">
+<a class="flex flex-col items-center justify-center text-on-surface-variant hover:text-primary transition-all active:scale-90 duration-150" href="#">
+<span class="material-symbols-outlined" data-icon="movie">movie</span>
+<span class="text-label-caps font-label-caps">视频</span>
+</a>
+<a class="flex flex-col items-center justify-center text-primary drop-shadow-[0_0_5px_rgba(0,221,214,0.8)] active:scale-90 duration-150" href="#">
+<span class="material-symbols-outlined" data-icon="live_tv" style="font-variation-settings: &quot;FILL&quot; 1;">live_tv</span>
+<span class="text-label-caps font-label-caps">直播</span>
+</a>
+<a class="flex flex-col items-center justify-center text-on-surface-variant hover:text-primary transition-all active:scale-90 duration-150" href="#">
+<span class="material-symbols-outlined" data-icon="headset">headset</span>
+<span class="text-label-caps font-label-caps">音乐</span>
+</a>
+<a class="flex flex-col items-center justify-center text-on-surface-variant hover:text-primary transition-all active:scale-90 duration-150" href="#">
+<span class="material-symbols-outlined" data-icon="auto_stories">auto_stories</span>
+<span class="text-label-caps font-label-caps">漫画</span>
+</a>
+<a class="flex flex-col items-center justify-center text-on-surface-variant hover:text-primary transition-all active:scale-90 duration-150" href="#">
+<span class="material-symbols-outlined" data-icon="person">person</span>
+<span class="text-label-caps font-label-caps">我的</span>
+</a>
+</nav>
+<script>
+        // Simple micro-interaction for category switching
+        document.querySelectorAll('aside nav a').forEach(link => {
+            link.addEventListener('click', (e) => {
+                e.preventDefault();
+                document.querySelectorAll('aside nav a').forEach(l => {
+                    l.classList.remove('text-primary', 'border-r-2', 'border-primary-container', 'bg-primary/5');
+                    l.classList.add('text-on-surface-variant');
+                    const icon = l.querySelector('.material-symbols-outlined');
+                    if(icon) icon.style.fontVariationSettings = "'FILL' 0";
+                });
+                link.classList.add('text-primary', 'border-r-2', 'border-primary-container', 'bg-primary/5');
+                link.classList.remove('text-on-surface-variant');
+                const icon = link.querySelector('.material-symbols-outlined');
+                if(icon) icon.style.fontVariationSettings = "'FILL' 1";
+            });
+        });
+
+        // Toggle state for Segmented Control
+        const buttons = document.querySelectorAll('.max-w-md button');
+        buttons.forEach(btn => {
+            btn.addEventListener('click', () => {
+                buttons.forEach(b => {
+                    b.classList.remove('bg-primary-container', 'text-on-primary-container', 'shadow-[0_0_10px_rgba(0,242,234,0.4)]');
+                    b.classList.add('text-on-surface-variant');
+                });
+                btn.classList.add('bg-primary-container', 'text-on-primary-container', 'shadow-[0_0_10px_rgba(0,242,234,0.4)]');
+                btn.classList.remove('text-on-surface-variant');
+            });
+        });
+    </script>
+
+
+
+
+</body></html>

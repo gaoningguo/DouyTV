@@ -1,0 +1,336 @@
+<!DOCTYPE html><html class="dark" lang="zh-CN"><head>
+<meta charset="utf-8">
+<meta content="width=device-width, initial-scale=1.0, viewport-fit=cover" name="viewport">
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700;800&amp;display=swap" rel="stylesheet">
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet">
+<script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
+<script id="tailwind-config">
+      tailwind.config = {
+        darkMode: "class",
+        theme: {
+          extend: {
+            "colors": {
+                    "secondary-container": "#ff516a",
+                    "tertiary-fixed": "#e2e2e2",
+                    "on-background": "#e5e2e1",
+                    "on-primary": "#003735",
+                    "on-tertiary": "#2f3131",
+                    "surface-container-lowest": "#0e0e0e",
+                    "surface-container": "#201f1f",
+                    "primary": "#cffffb",
+                    "outline": "#849492",
+                    "error-container": "#93000a",
+                    "tertiary-container": "#d9d9d9",
+                    "on-tertiary-fixed": "#1a1c1c",
+                    "on-surface": "#e5e2e1",
+                    "inverse-primary": "#006a66",
+                    "on-primary-fixed-variant": "#00504d",
+                    "tertiary": "#f5f5f5",
+                    "surface-variant": "#353534",
+                    "primary-fixed-dim": "#00ddd6",
+                    "secondary-fixed-dim": "#ffb2b6",
+                    "tertiary-fixed-dim": "#c6c6c7",
+                    "surface-container-low": "#1c1b1b",
+                    "on-tertiary-fixed-variant": "#454747",
+                    "inverse-surface": "#e5e2e1",
+                    "on-primary-fixed": "#00201e",
+                    "inverse-on-surface": "#313030",
+                    "primary-fixed": "#29fcf3",
+                    "secondary-fixed": "#ffdadb",
+                    "on-tertiary-container": "#5d5f5f",
+                    "on-secondary-fixed-variant": "#920029",
+                    "outline-variant": "#3a4a48",
+                    "background": "#131313",
+                    "on-secondary-container": "#5b0016",
+                    "on-primary-container": "#006a66",
+                    "surface-container-high": "#2a2a2a",
+                    "surface-container-highest": "#353534",
+                    "on-secondary-fixed": "#40000d",
+                    "on-error": "#690005",
+                    "primary-container": "#00f2ea",
+                    "surface-bright": "#3a3939",
+                    "on-secondary": "#67001b",
+                    "surface-tint": "#00ddd6",
+                    "error": "#ffb4ab",
+                    "surface": "#131313",
+                    "on-surface-variant": "#b9cac8",
+                    "secondary": "#ffb2b6",
+                    "surface-dim": "#131313",
+                    "on-error-container": "#ffdad6"
+            },
+            "borderRadius": {
+                    "DEFAULT": "0.25rem",
+                    "lg": "0.5rem",
+                    "xl": "0.75rem",
+                    "full": "9999px"
+            },
+            "spacing": {
+                    "md": "16px",
+                    "base": "4px",
+                    "xs": "4px",
+                    "lg": "24px",
+                    "sm": "8px",
+                    "xl": "32px",
+                    "safe-area-inset": "max(16px, env(safe-area-inset-bottom))"
+            },
+            "fontFamily": {
+                    "headline-lg": ["Inter"],
+                    "title-md": ["Inter"],
+                    "display-lg": ["Inter"],
+                    "body-sm": ["Inter"],
+                    "label-caps": ["Inter"],
+                    "headline-lg-mobile": ["Inter"],
+                    "body-lg": ["Inter"]
+            },
+            "fontSize": {
+                    "headline-lg": ["32px", {"lineHeight": "40px", "letterSpacing": "-0.01em", "fontWeight": "700"}],
+                    "title-md": ["20px", {"lineHeight": "28px", "fontWeight": "600"}],
+                    "display-lg": ["48px", {"lineHeight": "52px", "letterSpacing": "-0.02em", "fontWeight": "800"}],
+                    "body-sm": ["14px", {"lineHeight": "20px", "fontWeight": "400"}],
+                    "label-caps": ["12px", {"lineHeight": "16px", "letterSpacing": "0.05em", "fontWeight": "700"}],
+                    "headline-lg-mobile": ["24px", {"lineHeight": "32px", "fontWeight": "700"}],
+                    "body-lg": ["16px", {"lineHeight": "24px", "fontWeight": "400"}]
+            }
+          },
+        },
+      }
+    </script>
+<style>
+        body { background-color: #050505; color: #e5e2e1; -webkit-font-smoothing: antialiased; }
+        .glass-card { background: rgba(255, 255, 255, 0.05); backdrop-filter: blur(20px); border: 1px solid rgba(255, 255, 255, 0.1); }
+        .neon-glow-cyan { text-shadow: 0 0 8px rgba(0, 221, 214, 0.6); }
+        .neon-glow-pink { text-shadow: 0 0 8px rgba(255, 81, 106, 0.6); }
+        .shelf-gradient { background: linear-gradient(to bottom, transparent 60%, rgba(20, 20, 20, 0.8) 100%); }
+        .no-scrollbar::-webkit-scrollbar { display: none; }
+        .active-tab-line { height: 2px; width: 24px; background: #cffffb; margin-top: 4px; border-radius: 99px; }
+    </style>
+<style>
+    body {
+      min-height: max(884px, 100dvh);
+    }
+  </style>
+</head>
+<body class="font-body-lg text-on-background selection:bg-primary-container selection:text-on-primary-container">
+<!-- Top App Bar -->
+<nav class="fixed top-0 w-full z-50 bg-transparent backdrop-blur-md flex justify-between items-center px-md h-16">
+<div class="flex items-center gap-base">
+<span class="material-symbols-outlined text-primary cursor-pointer" data-icon="search">search</span>
+</div>
+<h1 class="font-headline-lg-mobile text-headline-lg-mobile tracking-tighter text-primary">为您推荐</h1>
+<div class="flex items-center gap-base">
+<span class="material-symbols-outlined text-primary cursor-pointer" data-icon="more_vert">more_vert</span>
+</div>
+</nav>
+<main class="pt-20 pb-24 px-md max-w-7xl mx-auto">
+<!-- Continue Reading Section -->
+<section class="mb-xl">
+<div class="flex items-center justify-between mb-md">
+<h2 class="font-headline-lg-mobile text-headline-lg-mobile">继续阅读</h2>
+<button class="font-label-caps text-label-caps text-primary uppercase tracking-wider">查看全部</button>
+</div>
+<div class="relative w-full h-48 md:h-64 rounded-xl overflow-hidden glass-card group cursor-pointer transition-transform duration-300 hover:scale-[1.01]">
+<img class="absolute inset-0 w-full h-full object-cover opacity-60 group-hover:opacity-80 transition-opacity" data-alt="A cinematic wide landscape of a futuristic neo-tokyo cityscape under a permanent twilight sky. The scene is dominated by deep blacks and vibrant cyan neon streaks reflecting off glass surfaces. The lighting is moody and high-contrast, with soft atmospheric fog and sharp digital details, creating a perfect immersive glassmorphism background for a manga portal." src="https://lh3.googleusercontent.com/aida-public/AB6AXuBayEIuV_3Ca246-mwNUCb0QzvtZsku4cmsnxWWjTb49IJRD_WKqLkz8UEWk2tCo6JVXMxkiiAG0IonIoMIR4pIvt6OfV9YOAayhHVAV2K6EW0AuidMCCZ8BbzpIfU0V-v-yIhSIgje8AtSWm5teC89aEJfyJCkyQ2kjDv-Ib4xOIxsCAeOSPr7yzyyaCAUGoYhgJxwDNoFv87eBSkK-DqqFAN2dof-vSFr4UDF0E2Vxw-QSXQ7OGPrASd5668QnvU9X__hpZv09g0">
+<div class="absolute inset-0 bg-gradient-to-t from-black via-black/20 to-transparent p-md flex flex-col justify-end">
+<span class="font-label-caps text-label-caps bg-secondary-container text-on-secondary-fixed-variant px-2 py-0.5 rounded w-fit mb-sm animate-pulse">正在更新</span>
+<h3 class="font-headline-lg text-white mb-xs">暗影扇区：起源</h3>
+<p class="font-body-sm text-on-surface-variant flex items-center gap-sm">
+<span>第42章：最终协议</span>
+<span class="w-1 h-1 bg-outline rounded-full"></span>
+<span>已读 85%</span>
+</p>
+<!-- Progress Bar -->
+<div class="mt-md w-full h-[2px] bg-white/20 rounded-full overflow-hidden">
+<div class="h-full bg-primary-fixed-dim w-[85%] neon-glow-cyan shadow-[0_0_8px_rgba(0,252,243,0.8)]"></div>
+</div>
+</div>
+</div>
+</section>
+<!-- Tabbed Navigation -->
+<div class="flex items-center gap-xl mb-lg border-b border-surface-variant">
+<button class="pb-md group" id="manga-tab" onclick="switchTab('manga')">
+<span class="font-headline-lg-mobile text-headline-lg-mobile transition-colors text-primary" id="manga-label">漫画</span>
+<div class="active-tab-line" id="manga-indicator"></div>
+</button>
+<button class="pb-md group" id="novels-tab" onclick="switchTab('novels')">
+<span class="font-headline-lg-mobile text-headline-lg-mobile transition-colors text-on-surface-variant group-hover:text-primary" id="novels-label">小说</span>
+<div class="active-tab-line opacity-0" id="novels-indicator"></div>
+</button>
+</div>
+<!-- Manga Grid -->
+<div class="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-sm md:gap-md" id="manga-content">
+<!-- Card 1 -->
+<div class="flex flex-col gap-sm group cursor-pointer">
+<div class="aspect-[2/3] rounded-lg overflow-hidden relative shadow-2xl transition-transform duration-300 group-hover:-translate-y-2">
+<img class="w-full h-full object-cover" data-alt="A high-contrast vertical portrait of a cybernetic warrior with glowing pink eyes and metallic armor. The background is a pitch-black abyss with subtle dark grey geometric shapes. Neon pink lighting highlights the 2px stroke weight of the armor's edges, emphasizing a sleek, digital manga cover aesthetic with professional line art." src="https://lh3.googleusercontent.com/aida-public/AB6AXuDRdO1gH5Ko6C0M8TjXYNYkCFM4U-WHNLeQ9Nfq0Cd-kRdFqadLMcd0ZdHOpEWWoO1fjxZUbMLGTAn03YT48QMa_syjhZbn4HT8d8MOjG71Gyx6sEaZEPCtc50sqZIhvhXgKzJ5x9vLzint2c-2U_R4a9KM5rDxQmwvlrmWsapkfWSqC9haIhKsoYvZz2jpu8ncns4ubG9HWXE0qItL6T06ECvJHKU548LxezOyB8Znwf9VCEdUH--ikeXXtWg7BLgx7ZLGqpsl8XY">
+<div class="absolute top-2 right-2 bg-black/60 backdrop-blur-md px-2 py-1 rounded-full flex items-center gap-1">
+<span class="material-symbols-outlined text-[14px] text-primary" style="font-variation-settings: 'FILL' 1;">star</span>
+<span class="font-label-caps text-label-caps text-primary">4.9</span>
+</div>
+</div>
+<div>
+<h4 class="font-title-md text-title-md truncate group-hover:text-primary transition-colors">新世纪 X</h4>
+<p class="font-body-sm text-on-surface-variant flex items-center gap-xs">
+<span class="material-symbols-outlined text-[16px]">menu_book</span>
+<span>科幻 • 赛博</span>
+</p>
+</div>
+</div>
+<!-- Card 2 -->
+<div class="flex flex-col gap-sm group cursor-pointer">
+<div class="aspect-[2/3] rounded-lg overflow-hidden relative shadow-2xl transition-transform duration-300 group-hover:-translate-y-2">
+<img class="w-full h-full object-cover" data-alt="Abstract dark fantasy illustration featuring a mysterious figure in a hooded cloak made of starlight. Deep indigo and charcoal black dominate the palette with pinpricks of bright white. The composition is asymmetrical and ethereal, suitable for a dark-room digital experience where the content feels like an extension of the void." src="https://lh3.googleusercontent.com/aida-public/AB6AXuBO5DIiC-DODbjcL5cAP8RoSAyxub6GZfb0e0_2T5L4iE_Rd1-nDan8bw6ap4G7YQedANw6U0zyBwoUmbEw-6Zu4nxs1Dmbvk7LFqoDtJkgFSDYb0jTCJluC8ixIYFxRO6iNtcIQFgjyPn-SPmbl1AslaPMhj_jqYnXBz7skFE8Ia2lWMJhvFQWzmwiAbr0XtcdJ_oeMmBf3mLTSEOmhKkcQaAzVTxqHNJBSt8UvM5wZuPkL-StnYoW82OG3zYGn1qUkunPkLuSivY">
+<div class="absolute top-2 right-2 bg-black/60 backdrop-blur-md px-2 py-1 rounded-full flex items-center gap-1">
+<span class="material-symbols-outlined text-[14px] text-primary" style="font-variation-settings: 'FILL' 1;">star</span>
+<span class="font-label-caps text-label-caps text-primary">4.7</span>
+</div>
+</div>
+<div>
+<h4 class="font-title-md text-title-md truncate group-hover:text-primary transition-colors">虚空行者</h4>
+<p class="font-body-sm text-on-surface-variant flex items-center gap-xs">
+<span class="material-symbols-outlined text-[16px]">menu_book</span>
+<span>奇幻 • 悬疑</span>
+</p>
+</div>
+</div>
+<!-- Card 3 -->
+<div class="flex flex-col gap-sm group cursor-pointer">
+<div class="aspect-[2/3] rounded-lg overflow-hidden relative shadow-2xl transition-transform duration-300 group-hover:-translate-y-2">
+<img class="w-full h-full object-cover" data-alt="Vibrant digital art of a high-tech gaming room illuminated by hot pink and cyan LED strips. A single manga book lies on a glass desk, reflecting the neon colors. The atmosphere is high-energy and modern, tailored for Gen-Z audiences with a focus on unapologetically digital and immersive aesthetics." src="https://lh3.googleusercontent.com/aida-public/AB6AXuBZ6OHXBV9X7yB20KwnQo7M6ti-EhqjbseMXRxbDj1HJkmrHMARBVRI9EqB46ohGITBlfH2SKZRnWrjqcMUriRI9G87SNEffE_1POPwtO46F2huSqDH0pZIT94OYjRTsO3mdI8bzbFejeeREWTzoRjJHNer9_VYNOvkiqzfnskPAtzicGLLOkqoHTIsoPccJMoqObwZvUANuV2QL6tKSHJBDNRV6u-o6di-PN3_AELRm3WJHwJvDKcjlEzctRZgf_FQ-Qa6KuLhpnU">
+<div class="absolute top-2 right-2 bg-black/60 backdrop-blur-md px-2 py-1 rounded-full flex items-center gap-1">
+<span class="material-symbols-outlined text-[14px] text-primary" style="font-variation-settings: 'FILL' 1;">star</span>
+<span class="font-label-caps text-label-caps text-primary">4.8</span>
+</div>
+</div>
+<div>
+<h4 class="font-title-md text-title-md truncate group-hover:text-primary transition-colors">单人升级</h4>
+<p class="font-body-sm text-on-surface-variant flex items-center gap-xs">
+<span class="material-symbols-outlined text-[16px]">menu_book</span>
+<span>动作 • RPG</span>
+</p>
+</div>
+</div>
+<!-- Card 4 -->
+<div class="flex flex-col gap-sm group cursor-pointer">
+<div class="aspect-[2/3] rounded-lg overflow-hidden relative shadow-2xl transition-transform duration-300 group-hover:-translate-y-2">
+<img class="w-full h-full object-cover" data-alt="A minimalist cover art for a light novel featuring a single delicate cherry blossom floating in a dark, reflective pool of oil. The lighting is high-contrast, highlighting the textures of the petal against the void-like black background. The style is sophisticated and evocative, using tonal stacking instead of shadows for depth." src="https://lh3.googleusercontent.com/aida-public/AB6AXuCc4AroSRqW-ENFUHbzFGiMwGS9k5Q6LfYlYUfgO59BLvQ01n09cmgQiLTpLcaucCUeBydKfC-BGnzIVcN8f9q95VMLTmK-4TqKj--8AfMV516btY85QrDy4SW9oY8E0KyauofOEmtjTQ_H5fRUgN355Erj5lyv5VfKVUYewiqdGaPtTuoxapgABTzofi6AIpufL61u5GQ-QD_Cg4DswWd1EYmyotVAgv1nTyT48g16qry7AkIJbhotNI51fPKmQvcoccBuKt0xCqM">
+<div class="absolute top-2 right-2 bg-black/60 backdrop-blur-md px-2 py-1 rounded-full flex items-center gap-1">
+<span class="material-symbols-outlined text-[14px] text-primary" style="font-variation-settings: 'FILL' 1;">star</span>
+<span class="font-label-caps text-label-caps text-primary">5.0</span>
+</div>
+</div>
+<div>
+<h4 class="font-title-md text-title-md truncate group-hover:text-primary transition-colors">雨后清晨</h4>
+<p class="font-body-sm text-on-surface-variant flex items-center gap-xs">
+<span class="material-symbols-outlined text-[16px]">menu_book</span>
+<span>剧情 • 治愈</span>
+</p>
+</div>
+</div>
+<!-- Card 5 -->
+<div class="flex flex-col gap-sm group cursor-pointer">
+<div class="aspect-[2/3] rounded-lg overflow-hidden relative shadow-2xl transition-transform duration-300 group-hover:-translate-y-2">
+<img class="w-full h-full object-cover" data-alt="Epic dark fantasy cover showing a ruined stone castle under a blood-red moon. The landscape is sharp and detailed, with glowing red embers flying in the air. The overall tone is high-contrast and intense, utilizing deep blacks and hot pink highlights to create a pulsing sense of danger and adventure." src="https://lh3.googleusercontent.com/aida-public/AB6AXuByDze9WR67q8SSifxy4BOdo7Hccna-vp4RC0eTERLpGYwbjj5SeWENsKUjVTjDzuJhL0Be7HM8tGVCZbl7jHZCR79izwWaeSAgA3ZDa9EkxppPNg4arT2YLb7_FLl7sw8Yzsp_vdtQ_3Qjf8E98bqOXx07R29dw34LLXywbdNtCfll8lyoYyxZqPpmsBCbbb2TiD5SrL8aK_lVToG-uZS7pubRMsrX3SfK1TEBts2sFWKY3Gk0oJhdF1PpRsjSEoMxDCFLcOiR0EE">
+<div class="absolute top-2 right-2 bg-black/60 backdrop-blur-md px-2 py-1 rounded-full flex items-center gap-1">
+<span class="material-symbols-outlined text-[14px] text-primary" style="font-variation-settings: 'FILL' 1;">star</span>
+<span class="font-label-caps text-label-caps text-primary">4.6</span>
+</div>
+</div>
+<div>
+<h4 class="font-title-md text-title-md truncate group-hover:text-primary transition-colors">深红天空</h4>
+<p class="font-body-sm text-on-surface-variant flex items-center gap-xs">
+<span class="material-symbols-outlined text-[16px]">menu_book</span>
+<span>暗黑奇幻</span>
+</p>
+</div>
+</div>
+</div>
+<!-- Novels Grid (Hidden by Default) -->
+<div class="hidden grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-sm md:gap-md" id="novels-content">
+<div class="flex flex-col gap-sm group cursor-pointer">
+<div class="aspect-[3/4] rounded-lg overflow-hidden relative glass-card p-4 flex flex-col justify-between transition-transform duration-300 group-hover:-translate-y-2">
+<div class="absolute inset-0 opacity-20 pointer-events-none">
+<img class="w-full h-full object-cover" data-alt="Soft focused background of an old library with dust motes dancing in a single beam of light. The colors are muted greys and deep blacks, providing a calm backdrop for a text-heavy light novel cover layout." src="https://lh3.googleusercontent.com/aida-public/AB6AXuAu4ogjo_z7pUgWuPC6UUnUAjEno-GWdCgoegVJGzfsKy4gFlO8PkuekcshpiX-28s9WdJY7YexPZ9QU5MUkFSv0nW6TtfhZ152vAk_FADLdgn_dN6wF6aNUpd1QXlDgbzq6Ev5MrpRFwaCQzK8wySf-B9Er21c4jnTDTOqBtWvlDoxX-eG3MlCiiFL24Snn3Uz6_6d5ct-rKBgMWdDyhw4PQvgMBhpMnaHHBHMMq2ZPf8juRm-FZ3WRcfbCnBQ-9y86MLHKmOdLk4">
+</div>
+<span class="font-label-caps text-label-caps border border-primary/30 px-2 py-1 rounded w-fit text-primary">网络小说</span>
+<h4 class="font-headline-lg-mobile text-white leading-tight">现实架构师</h4>
+<p class="font-label-caps text-on-surface-variant">第一卷 • 已完结</p>
+</div>
+<div>
+<h4 class="font-title-md text-title-md truncate group-hover:text-primary transition-colors">现实架构师</h4>
+<p class="font-body-sm text-on-surface-variant flex items-center gap-xs">
+<span class="material-symbols-outlined text-[16px]">auto_stories</span>
+<span>异世界 • 逻辑</span>
+</p>
+</div>
+</div>
+</div>
+<!-- Genre Pills - Horizontal Scroll -->
+<section class="mt-xl mb-xl">
+<h2 class="font-label-caps text-label-caps text-on-surface-variant mb-md uppercase tracking-[0.2em]">热门题材</h2>
+<div class="flex gap-sm overflow-x-auto no-scrollbar pb-sm">
+<div class="flex-shrink-0 px-6 py-2 rounded-full glass-card font-label-caps text-label-caps hover:bg-primary-container hover:text-on-primary-container transition-all cursor-pointer">赛博朋克</div>
+<div class="flex-shrink-0 px-6 py-2 rounded-full glass-card font-label-caps text-label-caps hover:bg-primary-container hover:text-on-primary-container transition-all cursor-pointer">暗黑奇幻</div>
+<div class="flex-shrink-0 px-6 py-2 rounded-full glass-card font-label-caps text-label-caps hover:bg-primary-container hover:text-on-primary-container transition-all cursor-pointer">少年漫</div>
+<div class="flex-shrink-0 px-6 py-2 rounded-full glass-card font-label-caps text-label-caps hover:bg-primary-container hover:text-on-primary-container transition-all cursor-pointer">日常</div>
+<div class="flex-shrink-0 px-6 py-2 rounded-full glass-card font-label-caps text-label-caps hover:bg-primary-container hover:text-on-primary-container transition-all cursor-pointer">心理</div>
+<div class="flex-shrink-0 px-6 py-2 rounded-full glass-card font-label-caps text-label-caps hover:bg-primary-container hover:text-on-primary-container transition-all cursor-pointer">悬疑</div>
+</div>
+</section>
+</main>
+<!-- Bottom Nav Bar -->
+<nav class="fixed bottom-0 left-0 w-full z-50 flex justify-around items-center px-md pb-safe-area-inset h-20 bg-background/80 backdrop-blur-xl">
+<div class="flex flex-col items-center justify-center text-primary scale-110 shadow-[0_0_15px_rgba(0,221,214,0.5)] cursor-pointer">
+<span class="material-symbols-outlined" data-icon="movie">movie</span>
+</div>
+<div class="flex flex-col items-center justify-center text-on-surface-variant opacity-60 hover:text-primary transition-all cursor-pointer">
+<span class="material-symbols-outlined" data-icon="live_tv">live_tv</span>
+</div>
+<div class="flex flex-col items-center justify-center text-on-surface-variant opacity-60 hover:text-primary transition-all cursor-pointer">
+<span class="material-symbols-outlined" data-icon="music_note">music_note</span>
+</div>
+<div class="flex flex-col items-center justify-center text-on-surface-variant opacity-60 hover:text-primary transition-all cursor-pointer">
+<span class="material-symbols-outlined" data-icon="auto_stories">auto_stories</span>
+</div>
+<div class="flex flex-col items-center justify-center text-on-surface-variant opacity-60 hover:text-primary transition-all cursor-pointer">
+<span class="material-symbols-outlined" data-icon="person">person</span>
+</div>
+</nav>
+<script>
+        function switchTab(tab) {
+            const mangaContent = document.getElementById('manga-content');
+            const novelsContent = document.getElementById('novels-content');
+            const mangaIndicator = document.getElementById('manga-indicator');
+            const novelsIndicator = document.getElementById('novels-indicator');
+            const mangaLabel = document.getElementById('manga-label');
+            const novelsLabel = document.getElementById('novels-label');
+
+            if (tab === 'manga') {
+                mangaContent.classList.remove('hidden');
+                novelsContent.classList.add('hidden');
+                mangaIndicator.classList.remove('opacity-0');
+                novelsIndicator.classList.add('opacity-0');
+                mangaLabel.classList.add('text-primary');
+                mangaLabel.classList.remove('text-on-surface-variant');
+                novelsLabel.classList.add('text-on-surface-variant');
+                novelsLabel.classList.remove('text-primary');
+            } else {
+                novelsContent.classList.remove('hidden');
+                mangaContent.classList.add('hidden');
+                novelsIndicator.classList.remove('opacity-0');
+                mangaIndicator.classList.add('opacity-0');
+                novelsLabel.classList.add('text-primary');
+                novelsLabel.classList.remove('text-on-surface-variant');
+                mangaLabel.classList.add('text-on-surface-variant');
+                mangaLabel.classList.remove('text-primary');
+            }
+        }
+
+        window.addEventListener('scroll', () => {
+            const scrolled = window.pageYOffset;
+            const hero = document.querySelector('section.mb-xl img');
+            if(hero) {
+                hero.style.transform = `translateY(${scrolled * 0.1}px)`;
+            }
+        });
+    </script>
+</body></html>

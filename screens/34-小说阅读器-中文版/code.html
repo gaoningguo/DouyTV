@@ -1,0 +1,307 @@
+<!DOCTYPE html>
+
+<html class="dark" lang="zh"><head>
+<meta charset="utf-8"/>
+<meta content="width=device-width, initial-scale=1.0" name="viewport"/>
+<title>虚空行者 - 第45章</title>
+<script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Noto+Serif+SC:wght@400;700&amp;family=Noto+Sans+SC:wght@400;700&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<script id="tailwind-config">
+        tailwind.config = {
+            darkMode: "class",
+            theme: {
+                extend: {
+                    "colors": {
+                        "on-background": "#e5e2e1",
+                        "tertiary-fixed-dim": "#c6c6c7",
+                        "on-primary": "#003735",
+                        "error-container": "#93000a",
+                        "inverse-on-surface": "#313030",
+                        "surface-container-high": "#2a2a2a",
+                        "error": "#ffb4ab",
+                        "surface-bright": "#3a3939",
+                        "secondary-container": "#ff516a",
+                        "primary-fixed": "#29fcf3",
+                        "inverse-surface": "#e5e2e1",
+                        "tertiary-container": "#d9d9d9",
+                        "secondary-fixed-dim": "#ffb2b6",
+                        "on-primary-fixed": "#00201e",
+                        "on-surface-variant": "#b9cac8",
+                        "on-secondary-fixed": "#40000d",
+                        "on-surface": "#e5e2e1",
+                        "on-error": "#690005",
+                        "surface-container-low": "#1c1b1b",
+                        "primary": "#cffffb",
+                        "on-primary-container": "#006a66",
+                        "secondary-fixed": "#ffdadb",
+                        "on-primary-fixed-variant": "#00504d",
+                        "surface-tint": "#00ddd6",
+                        "secondary": "#ffb2b6",
+                        "surface-variant": "#353534",
+                        "surface-dim": "#131313",
+                        "surface-container-highest": "#353534",
+                        "primary-container": "#00f2ea",
+                        "on-secondary": "#67001b",
+                        "inverse-primary": "#006a66",
+                        "on-tertiary": "#2f3131",
+                        "surface": "#131313",
+                        "on-tertiary-fixed-variant": "#454747",
+                        "on-tertiary-fixed": "#1a1c1c",
+                        "on-secondary-fixed-variant": "#920029",
+                        "on-tertiary-container": "#5d5f5f",
+                        "surface-container-lowest": "#0e0e0e",
+                        "tertiary": "#f5f5f5",
+                        "on-secondary-container": "#5b0016",
+                        "outline-variant": "#3a4a48",
+                        "primary-fixed-dim": "#00ddd6",
+                        "background": "#131313",
+                        "tertiary-fixed": "#e2e2e2",
+                        "surface-container": "#201f1f",
+                        "outline": "#849492",
+                        "on-error-container": "#ffdad6"
+                    },
+                    "borderRadius": {
+                        "DEFAULT": "0.25rem",
+                        "lg": "0.5rem",
+                        "xl": "0.75rem",
+                        "full": "9999px"
+                    },
+                    "spacing": {
+                        "lg": "24px",
+                        "safe-area-inset": "max(16px, env(safe-area-inset-bottom))",
+                        "base": "4px",
+                        "xs": "4px",
+                        "xl": "32px",
+                        "sm": "8px",
+                        "md": "16px"
+                    },
+                    "fontFamily": {
+                        "title-md": ["Inter"],
+                        "body-sm": ["Inter"],
+                        "label-caps": ["Inter"],
+                        "headline-lg": ["Inter"],
+                        "display-lg": ["Inter"],
+                        "headline-lg-mobile": ["Inter"],
+                        "body-lg": ["Inter"],
+                        "reader-serif": ["'Noto Serif SC'", "serif"],
+                        "reader-sans": ["'Noto Sans SC'", "sans-serif"]
+                    },
+                    "fontSize": {
+                        "title-md": ["20px", { "lineHeight": "28px", "fontWeight": "600" }],
+                        "body-sm": ["14px", { "lineHeight": "20px", "fontWeight": "400" }],
+                        "label-caps": ["12px", { "lineHeight": "16px", "letterSpacing": "0.05em", "fontWeight": "700" }],
+                        "headline-lg": ["32px", { "lineHeight": "40px", "letterSpacing": "-0.01em", "fontWeight": "700" }],
+                        "display-lg": ["48px", { "lineHeight": "52px", "letterSpacing": "-0.02em", "fontWeight": "800" }],
+                        "headline-lg-mobile": ["24px", { "lineHeight": "32px", "fontWeight": "700" }],
+                        "body-lg": ["16px", { "lineHeight": "24px", "fontWeight": "400" }]
+                    }
+                }
+            }
+        }
+    </script>
+<style>
+        /* Immersive background texture */
+        body {
+            background-image: radial-gradient(circle at 50% 0%, rgba(0, 221, 214, 0.05) 0%, transparent 50%),
+                              radial-gradient(circle at 100% 100%, rgba(255, 81, 106, 0.05) 0%, transparent 50%);
+            background-color: #050505; /* Deep Night base */
+            background-attachment: fixed;
+        }
+        
+        /* Reader specific styles */
+        .reader-content {
+            color: #888; /* Mid-grey to eliminate glare */
+            line-height: 1.8;
+            font-size: 1.125rem;
+            transition: all 0.3s ease;
+        }
+        
+        .reader-content p {
+            margin-bottom: 1.5em;
+            text-indent: 2em;
+        }
+
+        /* Glassmorphism overlays */
+        .glass-panel {
+            background-color: rgba(18, 18, 18, 0.85); /* Dark Grey Glass */
+            backdrop-filter: blur(20px);
+            -webkit-backdrop-filter: blur(20px);
+            border-top: 1px solid rgba(255, 255, 255, 0.05);
+        }
+
+        /* Custom Scrollbar for immersive feel */
+        ::-webkit-scrollbar {
+            width: 4px;
+        }
+        ::-webkit-scrollbar-track {
+            background: transparent;
+        }
+        ::-webkit-scrollbar-thumb {
+            background: rgba(0, 221, 214, 0.3);
+            border-radius: 4px;
+        }
+        ::-webkit-scrollbar-thumb:hover {
+            background: rgba(0, 221, 214, 0.6);
+        }
+        
+        /* Neon glow utilities */
+        .glow-primary {
+            text-shadow: 0 0 8px rgba(41, 252, 243, 0.5);
+        }
+        
+        /* Settings panel animation */
+        #settings-panel {
+            transform: translateY(100%);
+            transition: transform 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+        }
+        #settings-panel.open {
+            transform: translateY(0);
+        }
+    </style>
+<style>
+    body {
+      min-height: max(884px, 100dvh);
+    }
+  </style>
+  </head>
+<body class="text-on-background min-h-screen flex flex-col relative overflow-x-hidden selection:bg-primary-container selection:text-on-primary-container">
+<!-- TopAppBar -->
+<header class="fixed top-0 w-full z-50 bg-surface/80 backdrop-blur-xl dark:bg-surface/80 flex justify-between items-center px-md h-16 transition-transform duration-300 transform translate-y-0" id="top-nav">
+<button class="text-on-surface-variant hover:opacity-80 transition-opacity active:scale-95 flex items-center justify-center p-sm rounded-full bg-surface-container-high/50">
+<span class="material-symbols-outlined" style="font-variation-settings: 'wght' 200;">arrow_back</span>
+</button>
+<h1 class="font-headline-lg-mobile text-headline-lg-mobile text-primary dark:text-primary-fixed italic tracking-tighter truncate max-w-[200px] text-center glow-primary">
+            虚空行者
+        </h1>
+<button class="text-on-surface-variant hover:opacity-80 transition-opacity active:scale-95 flex items-center justify-center p-sm rounded-full bg-surface-container-high/50" onclick="toggleSettings()">
+<span class="material-symbols-outlined" style="font-variation-settings: 'wght' 200;">tune</span>
+</button>
+</header>
+<!-- Main Content Canvas -->
+<main class="flex-grow pt-24 pb-32 px-md md:px-xl max-w-3xl mx-auto w-full relative z-10" id="reader-container" onclick="toggleNav()">
+<div class="mb-xl text-center">
+<span class="font-label-caps text-label-caps text-secondary-container bg-secondary-container/10 px-3 py-1 rounded-full mb-sm inline-block">科幻 / 赛博朋克</span>
+<h2 class="font-headline-lg-mobile text-headline-lg-mobile md:font-headline-lg md:text-headline-lg text-primary-fixed-dim mt-sm mb-xs">第四十五章：虚空召唤</h2>
+<p class="font-body-sm text-body-sm text-on-surface-variant opacity-70">Chapter 45: The Void Beckons</p>
+</div>
+<article class="reader-content font-reader-serif" id="novel-text">
+<p>霓虹灯的光晕在全息雨幕中扭曲，折射出一种病态的紫红色。陈星站在天台边缘，俯瞰着这座被数据和贫穷淹没的城市——新长安。他义眼中的扫描矩阵正在飞速跳动，寻找着那个所谓的“裂隙”。</p>
+<p>“检测到异常能量波动，”耳麦里传来AI‘灵枢’冰冷的声音，“源头位于下层区B-4区块，能量层级正在呈指数级攀升。先生，我建议您立即撤离。”</p>
+<p>陈星没有理会。他抬起装配着单分子刃的左臂，金属外壳上倒映着下层区混乱的灯火。所谓的“虚空”，并不是什么物理上的空间，而是深潜网络中最底层的混沌数据流，那里埋葬着旧时代的AI残骸和无数失控的算法。而现在，虚空正在向现实渗透。</p>
+<p>他深吸了一口合成空气，混合着臭氧和廉价合成拉面的味道，然后纵身跃下。</p>
+<p>失重感瞬间包裹了他。风声在耳边呼啸，战术风衣的下摆如黑色的翅膀般展开。在他的视界中，下层区的建筑结构化作了一串串绿色的数据流。他正在坠入深渊，或者说，坠入另一个维度的网络。</p>
+<p>“开启深度潜行模式，”陈星默念，后颈处的神经接口微微发热。</p>
+<p>周围的景色开始剥离、重组。物理世界的高楼大厦被巨大的数据晶柱所取代，色彩被抽离，只剩下纯粹的黑与刺目的荧光蓝。前方，一个巨大的、呈螺旋状的数据旋涡正在缓缓旋转，那就是裂隙，虚空的入口。</p>
+<p>“警报！遭遇未知级别防火墙阻击。”灵枢的声音开始出现轻微的失真。</p>
+<p>几道猩红的数据锁链从旋涡中激射而出，直逼陈星而来。这是虚空的原生防御机制，被称作‘猎犬’的杀毒程序。它们没有实体，但如果在网络层面被击中，他的大脑皮层会瞬间被烧毁。</p>
+<p>陈星在半空中强行扭转身体，左臂的单分子刃弹出，带起一抹幽蓝的光弧，精准地切断了一条数据锁链。断裂的锁链化作漫天碎码消散在虚空中。</p>
+<p>“就这点能耐吗？”他冷笑一声，义眼中闪烁着狂热的光芒。虚空的呼唤越来越强烈，仿佛有一种古老的、不可名状的存在正在深渊之底凝视着他。</p>
+<p>他没有减速，反而启动了背部的微型推进器，像一颗黑色的流星，义无反顾地冲进了那个巨大的螺旋旋涡之中。黑暗，彻底吞噬了他。</p>
+</article>
+<!-- Chapter Navigation Bottom -->
+<div class="mt-xl pt-lg border-t border-surface-variant flex justify-between items-center">
+<button class="px-4 py-2 bg-surface-container-high hover:bg-surface-bright rounded-lg font-body-sm text-body-sm text-on-surface flex items-center gap-2 transition-colors">
+<span class="material-symbols-outlined text-[18px]">chevron_left</span>
+                上一章
+            </button>
+<button class="p-2 bg-surface-container-high hover:bg-surface-bright rounded-full text-primary transition-colors flex items-center justify-center">
+<span class="material-symbols-outlined text-[20px]">list</span>
+</button>
+<button class="px-4 py-2 bg-primary/10 hover:bg-primary/20 rounded-lg font-body-sm text-body-sm text-primary flex items-center gap-2 transition-colors">
+                下一章
+                <span class="material-symbols-outlined text-[18px]">chevron_right</span>
+</button>
+</div>
+</main>
+<!-- Settings Overlay / Bottom Sheet -->
+<div class="fixed bottom-0 left-0 w-full z-[60] glass-panel rounded-t-2xl pb-safe-area-inset" id="settings-panel">
+<div class="w-12 h-1 bg-surface-variant rounded-full mx-auto mt-3 mb-2"></div>
+<div class="p-md">
+<div class="flex justify-between items-center mb-lg">
+<h3 class="font-title-md text-title-md text-on-surface">阅读设置</h3>
+<button class="text-on-surface-variant hover:text-on-surface transition-colors" onclick="toggleSettings()">
+<span class="material-symbols-outlined">close</span>
+</button>
+</div>
+<!-- Typography Settings -->
+<div class="space-y-6">
+<!-- Font Size -->
+<div>
+<label class="font-label-caps text-label-caps text-on-surface-variant block mb-3">字号大小</label>
+<div class="flex items-center gap-4">
+<span class="text-on-surface-variant text-sm">A-</span>
+<div class="flex-grow h-1 bg-surface-container-highest rounded-full relative">
+<!-- Ultra-thin progress bar (2px) -->
+<div class="absolute top-0 left-0 h-full w-1/2 bg-primary rounded-full"></div>
+<!-- Handle -->
+<div class="absolute top-1/2 left-1/2 transform -translate-y-1/2 -translate-x-1/2 w-4 h-4 bg-primary rounded-full shadow-[0_0_8px_rgba(0,221,214,0.5)]"></div>
+</div>
+<span class="text-on-surface text-lg">A+</span>
+</div>
+</div>
+<!-- Font Family -->
+<div>
+<label class="font-label-caps text-label-caps text-on-surface-variant block mb-3">字体</label>
+<div class="flex gap-3">
+<button class="flex-1 py-2 rounded-lg bg-primary/20 border border-primary/30 text-primary font-reader-serif font-bold transition-colors">
+                            宋体 (Serif)
+                        </button>
+<button class="flex-1 py-2 rounded-lg bg-surface-container-high text-on-surface font-reader-sans transition-colors hover:bg-surface-bright">
+                            黑体 (Sans)
+                        </button>
+</div>
+</div>
+<!-- Theme / Contrast -->
+<div>
+<label class="font-label-caps text-label-caps text-on-surface-variant block mb-3">深色模式</label>
+<div class="flex gap-3">
+<button class="flex-1 py-3 rounded-lg bg-[#050505] border border-surface-variant text-on-surface flex items-center justify-center gap-2 transition-colors">
+<span class="material-symbols-outlined text-[18px]">dark_mode</span>
+                            深渊 (Deep Night)
+                        </button>
+<button class="flex-1 py-3 rounded-lg bg-[#1a1c1c] border border-transparent text-on-surface flex items-center justify-center gap-2 opacity-60 hover:opacity-100 transition-all">
+<span class="material-symbols-outlined text-[18px]">terminal</span>
+                            骇客 (Matrix)
+                        </button>
+</div>
+</div>
+</div>
+</div>
+</div>
+<!-- Scrim -->
+<div class="fixed inset-0 bg-black/50 z-[55] hidden backdrop-blur-sm transition-opacity opacity-0" id="scrim" onclick="toggleSettings()"></div>
+<script>
+        let navVisible = true;
+        const topNav = document.getElementById('top-nav');
+        
+        // Hide/Show Nav on tap
+        function toggleNav() {
+            navVisible = !navVisible;
+            if(navVisible) {
+                topNav.style.transform = 'translateY(0)';
+            } else {
+                topNav.style.transform = 'translateY(-100%)';
+            }
+        }
+
+        // Settings Panel Logic
+        function toggleSettings() {
+            const panel = document.getElementById('settings-panel');
+            const scrim = document.getElementById('scrim');
+            
+            if (panel.classList.contains('open')) {
+                panel.classList.remove('open');
+                scrim.style.opacity = '0';
+                setTimeout(() => scrim.classList.add('hidden'), 300);
+            } else {
+                scrim.classList.remove('hidden');
+                // Force reflow
+                void scrim.offsetWidth;
+                scrim.style.opacity = '1';
+                panel.classList.add('open');
+            }
+        }
+    </script>
+</body></html>

@@ -1,0 +1,332 @@
+<!DOCTYPE html><html class="dark" lang="en"><head>
+<meta charset="utf-8">
+<meta content="width=device-width, initial-scale=1.0, viewport-fit=cover" name="viewport">
+<title>Source Management | IPTV Stream</title>
+<script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700;800&amp;display=swap" rel="stylesheet">
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet">
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet">
+<style>
+        body {
+            background-color: #050505;
+            color: #e5e2e1;
+            font-family: 'Inter', sans-serif;
+            overflow-x: hidden;
+        }
+        .glass-panel {
+            background: rgba(18, 18, 18, 0.7);
+            backdrop-filter: blur(20px);
+            border: 1px solid rgba(255, 255, 255, 0.1);
+        }
+        .neon-glow-cyan {
+            filter: drop-shadow(0 0 8px rgba(0, 242, 234, 0.5));
+        }
+        .neon-glow-pink {
+            filter: drop-shadow(0 0 8px rgba(255, 81, 106, 0.5));
+        }
+        .safe-pb { padding-bottom: env(safe-area-inset-bottom); }
+        .material-symbols-outlined {
+            font-variation-settings: 'FILL' 0, 'wght' 200, 'GRAD' 0, 'opsz' 24;
+        }
+        /* Custom thin scrollbar */
+        ::-webkit-scrollbar { width: 4px; }
+        ::-webkit-scrollbar-track { background: #050505; }
+        ::-webkit-scrollbar-thumb { background: #353534; border-radius: 10px; }
+    </style>
+<script id="tailwind-config">
+      tailwind.config = {
+        darkMode: "class",
+        theme: {
+          extend: {
+            "colors": {
+                    "tertiary-fixed-dim": "#c6c6c7",
+                    "tertiary-fixed": "#e2e2e2",
+                    "on-secondary-fixed": "#40000d",
+                    "on-secondary-fixed-variant": "#920029",
+                    "surface-variant": "#353534",
+                    "inverse-primary": "#006a66",
+                    "outline-variant": "#3a4a48",
+                    "surface-container-lowest": "#0e0e0e",
+                    "outline": "#849492",
+                    "on-secondary-container": "#5b0016",
+                    "on-error-container": "#ffdad6",
+                    "surface-dim": "#131313",
+                    "secondary": "#ffb2b6",
+                    "on-tertiary": "#2f3131",
+                    "on-surface-variant": "#b9cac8",
+                    "on-secondary": "#67001b",
+                    "surface-tint": "#00ddd6",
+                    "primary": "#cffffb",
+                    "primary-container": "#00f2ea",
+                    "on-tertiary-fixed-variant": "#454747",
+                    "on-tertiary-container": "#5d5f5f",
+                    "error-container": "#93000a",
+                    "on-surface": "#e5e2e1",
+                    "surface": "#131313",
+                    "inverse-surface": "#e5e2e1",
+                    "surface-container-high": "#2a2a2a",
+                    "surface-container": "#201f1f",
+                    "surface-container-low": "#1c1b1b",
+                    "tertiary-container": "#d9d9d9",
+                    "on-primary": "#003735",
+                    "secondary-fixed-dim": "#ffb2b6",
+                    "secondary-fixed": "#ffdadb",
+                    "tertiary": "#f5f5f5",
+                    "on-tertiary-fixed": "#1a1c1c",
+                    "on-primary-container": "#006a66",
+                    "on-background": "#e5e2e1",
+                    "primary-fixed-dim": "#00ddd6",
+                    "primary-fixed": "#29fcf3",
+                    "on-primary-fixed-variant": "#00504d",
+                    "inverse-on-surface": "#313030",
+                    "on-error": "#690005",
+                    "error": "#ffb4ab",
+                    "background": "#131313",
+                    "surface-bright": "#3a3939",
+                    "on-primary-fixed": "#00201e",
+                    "secondary-container": "#ff516a",
+                    "surface-container-highest": "#353534"
+            },
+            "borderRadius": {
+                    "DEFAULT": "0.25rem",
+                    "lg": "0.5rem",
+                    "xl": "0.75rem",
+                    "full": "9999px"
+            },
+            "spacing": {
+                    "xs": "4px",
+                    "safe-area-inset": "max(16px, env(safe-area-inset-bottom))",
+                    "sm": "8px",
+                    "md": "16px",
+                    "xl": "32px",
+                    "lg": "24px",
+                    "base": "4px"
+            },
+            "fontFamily": {
+                    "body-lg": ["Inter"],
+                    "label-caps": ["Inter"],
+                    "display-lg": ["Inter"],
+                    "title-md": ["Inter"],
+                    "headline-lg-mobile": ["Inter"],
+                    "headline-lg": ["Inter"],
+                    "body-sm": ["Inter"]
+            },
+            "fontSize": {
+                    "body-lg": ["16px", {"lineHeight": "24px", "fontWeight": "400"}],
+                    "label-caps": ["12px", {"lineHeight": "16px", "letterSpacing": "0.05em", "fontWeight": "700"}],
+                    "display-lg": ["48px", {"lineHeight": "52px", "letterSpacing": "-0.02em", "fontWeight": "800"}],
+                    "title-md": ["20px", {"lineHeight": "28px", "fontWeight": "600"}],
+                    "headline-lg-mobile": ["24px", {"lineHeight": "32px", "fontWeight": "700"}],
+                    "headline-lg": ["32px", {"lineHeight": "40px", "letterSpacing": "-0.01em", "fontWeight": "700"}],
+                    "body-sm": ["14px", {"lineHeight": "20px", "fontWeight": "400"}]
+            }
+          },
+        },
+      }
+    </script>
+</head>
+<body class="bg-background text-on-surface min-h-screen">
+<!-- Top App Bar (Shared Component Strategy) -->
+<header class="sticky top-0 w-full z-50 bg-surface/80 backdrop-blur-xl flex justify-between items-center px-md py-sm border-b border-white/5">
+<div class="flex items-center gap-md">
+<button class="active:scale-95 transition-transform duration-200">
+<span class="material-symbols-outlined text-primary-fixed-dim" style="font-variation-settings: 'FILL' 0;">arrow_back</span>
+</button>
+<h1 class="font-headline-lg-mobile text-headline-lg-mobile text-primary-container neon-glow-cyan">Source Management</h1>
+</div>
+<div class="flex items-center gap-md">
+<button class="active:scale-95 transition-transform duration-200">
+<span class="material-symbols-outlined text-primary-fixed-dim" style="font-variation-settings: 'FILL' 0;">settings</span>
+</button>
+</div>
+</header>
+<main class="px-md pt-lg pb-xl space-y-xl max-w-5xl mx-auto">
+<!-- Hero Section: Immersive Header -->
+<section class="">
+
+<p class="font-body-lg text-on-surface-variant max-w-lg">Manage your IPTV playlists and EPG data sources. Keep your content library synchronized and up-to-date.</p>
+</section>
+<!-- Bento Grid Actions -->
+<div class="grid grid-cols-1 md:grid-cols-3 gap-md">
+<!-- Quick Import -->
+<div class="md:col-span-2 glass-panel p-lg rounded-xl flex flex-col justify-between overflow-hidden relative group">
+<div class="relative z-10 space-y-md">
+<div class="flex items-center gap-sm">
+<span class="material-symbols-outlined text-primary-container neon-glow-cyan" style="font-variation-settings: 'FILL' 1;">add_circle</span>
+<h3 class="font-title-md text-title-md">Import M3U Playlist</h3>
+</div>
+<p class="font-body-sm text-on-surface-variant">Add new content providers via M3U URL or local file upload.</p>
+<div class="flex gap-sm pt-sm">
+<button class="bg-primary-container text-on-primary-container px-lg py-sm rounded-lg font-label-caps text-label-caps active:scale-95 transition-all">UPLOAD FILE</button>
+<button class="border border-outline-variant bg-white/5 px-lg py-sm rounded-lg font-label-caps text-label-caps active:scale-95 transition-all">PASTE URL</button>
+</div>
+</div>
+<!-- Atmospheric Background Effect -->
+<div class="absolute -right-10 -bottom-10 w-48 h-48 bg-primary-container/10 blur-[60px] rounded-full group-hover:bg-primary-container/20 transition-all duration-700"></div>
+</div>
+<!-- Global Toggle: Auto-refresh -->
+<div class="glass-panel p-lg rounded-xl flex flex-col justify-center items-center text-center space-y-md">
+<span class="material-symbols-outlined text-secondary-container neon-glow-pink" style="font-variation-settings: 'FILL' 1;">sync_saved_locally</span>
+<div class="space-y-xs">
+<h3 class="font-title-md text-title-md">Auto-refresh EPG</h3>
+<p class="font-body-sm text-on-surface-variant">Update program guides daily</p>
+</div>
+<!-- Toggle Switch -->
+<label class="relative inline-flex items-center cursor-pointer">
+<input checked="" class="sr-only peer" type="checkbox">
+<div class="w-14 h-7 bg-surface-container-highest peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-6 after:w-6 after:transition-all peer-checked:bg-primary-container"></div>
+</label>
+</div>
+</div>
+<!-- Active Providers List -->
+<section class="space-y-md">
+<div class="flex justify-between items-center">
+<h3 class="font-title-md text-title-md flex items-center gap-sm">
+                    Active Providers
+                    <span class="bg-surface-container-highest text-on-surface px-sm py-xs rounded font-label-caps text-[10px]">3 ACTIVE</span>
+</h3>
+<button class="text-primary-container font-label-caps text-label-caps hover:underline">VIEW ALL</button>
+</div>
+<div class="space-y-sm">
+<!-- Provider Card 1 -->
+<div class="glass-panel rounded-xl p-md flex flex-col md:flex-row md:items-center justify-between gap-md group hover:bg-surface-container-low transition-colors duration-300">
+<div class="flex items-center gap-md">
+<div class="w-12 h-12 rounded-lg bg-surface-container-highest flex items-center justify-center overflow-hidden">
+<img class="w-full h-full object-cover" data-alt="A stylized minimalist vector logo of a media streaming provider, featuring abstract geometric shapes and neon cyan highlights on a deep black background, cinematic lighting, 8k resolution digital art style." src="https://lh3.googleusercontent.com/aida-public/AB6AXuDtEE0IXO_PfElr8_jeRiWsGEDlk0TZ4Z9FciLTx2F5dQDI7DC8_VGhcmyl8IGifSNR9in5vsbCX5cPXTemPh3lSljlQ3GKBalFOLwLZcbWMZ2W6RwbT9HfgphQmwbbhKjuAVfsv-6KyHBj_VjVeCYW5IwzspkNubG2ClVgzMZPwSTPWSuYmGCchEkVcXZX9KU7VFlPIlUBjK0mV4ffisG2S1zujzkUit-IE7zDo8nsYd4zOwxewOEsWi0kfq7_qZ9nHGYj-esdIuQ">
+</div>
+<div>
+<h4 class="font-title-md text-title-md text-on-surface">Global Stream Premium</h4>
+<p class="font-body-sm text-on-surface-variant">Last synced: 2 hours ago</p>
+</div>
+</div>
+<div class="flex items-center justify-between md:justify-end gap-xl">
+<div class="text-right">
+<div class="font-title-md text-title-md text-primary-container">2,450</div>
+<div class="font-label-caps text-label-caps text-on-surface-variant">CHANNELS</div>
+</div>
+<button class="w-10 h-10 rounded-full border border-outline-variant flex items-center justify-center hover:bg-primary-container hover:text-on-primary-container transition-all" onclick="this.classList.add('animate-spin')">
+<span class="material-symbols-outlined" style="font-variation-settings: 'FILL' 0;">sync</span>
+</button>
+</div>
+</div>
+<!-- Provider Card 2 -->
+<div class="glass-panel rounded-xl p-md flex flex-col md:flex-row md:items-center justify-between gap-md group hover:bg-surface-container-low transition-colors duration-300">
+<div class="flex items-center gap-md">
+<div class="w-12 h-12 rounded-lg bg-surface-container-highest flex items-center justify-center overflow-hidden">
+<img class="w-full h-full object-cover" data-alt="A futuristic digital icon for a sports broadcasting network, featuring a glowing pink electric pulse through a simplified stadium shape, set against an infinite dark background with subtle lens flare and glassmorphism textures." src="https://lh3.googleusercontent.com/aida-public/AB6AXuAr2DLtZVuxa6vf8nyRiSptm9y5EGw5VjMzrmNr18mWtc487styInhSjO9YhCnUkylvp3wGBfDrNtKvDpEcR9ga6-d-Jtoy2lyFxnuejm59F5PaXK_OLja5kKDb7alQ7QtvxEgkCLuwogp4g5vCZupNJv4-aMHJZjKbd0jtUMNglAn5yyWr9auWgemjvfxiLA8TCE4vvjSAfDmqPpZp7WqWvcO4hDLzAD29xTeb8buDLTdZzcixE6SWvzujbDhCSYKbPzXHd4JHIeA">
+</div>
+<div>
+<h4 class="font-title-md text-title-md text-on-surface">Ultra Sports Network</h4>
+<p class="font-body-sm text-on-surface-variant">Last synced: Yesterday</p>
+</div>
+</div>
+<div class="flex items-center justify-between md:justify-end gap-xl">
+<div class="text-right">
+<div class="font-title-md text-title-md text-primary-container">128</div>
+<div class="font-label-caps text-label-caps text-on-surface-variant">CHANNELS</div>
+</div>
+<button class="w-10 h-10 rounded-full border border-outline-variant flex items-center justify-center hover:bg-primary-container hover:text-on-primary-container transition-all">
+<span class="material-symbols-outlined" style="font-variation-settings: 'FILL' 0;">sync</span>
+</button>
+</div>
+</div>
+<!-- Provider Card 3 -->
+<div class="glass-panel rounded-xl p-md flex flex-col md:flex-row md:items-center justify-between gap-md group hover:bg-surface-container-low transition-colors duration-300">
+<div class="flex items-center gap-md">
+<div class="w-12 h-12 rounded-lg bg-surface-container-highest flex items-center justify-center overflow-hidden">
+<img class="w-full h-full object-cover" data-alt="A sophisticated glowing logo for an international news IPTV service, featuring a 3D glass sphere with digital grid lines and a soft cyan ambient glow, high-end studio lighting, sharp focus on dark aesthetic background." src="https://lh3.googleusercontent.com/aida-public/AB6AXuDw0AZp28LAskiGZ4djQjn6D9RRzzCuQjvFit3ex155gv0Yox0yOJMbfkxxwGJuGeeqRbF4cX4_HCquMyIH751g-UKGCyGMmdvz9O__D2h1gLOFJor50i8kOsXmCWsZcbl6WJUHiJX2mFLKxgO3YGr3EXI_oChKd1tt66Ouu7tsK6ga3uRdzWP6wDPQ1zHt6ZGrOo0T4bOxbtjGd9yHKucaG1HqeiBNjStKkzg_x4HN3IrazWyndHvzry4-YiKvCaC8V1WyadDJ5kk">
+</div>
+<div>
+<h4 class="font-title-md text-title-md text-on-surface">Cinema Plus HD</h4>
+<p class="font-body-sm text-on-surface-variant">Last synced: 3 days ago</p>
+</div>
+</div>
+<div class="flex items-center justify-between md:justify-end gap-xl">
+<div class="text-right">
+<div class="font-title-md text-title-md text-primary-container">8,900</div>
+<div class="font-label-caps text-label-caps text-on-surface-variant">CHANNELS</div>
+</div>
+<button class="w-10 h-10 rounded-full border border-outline-variant flex items-center justify-center hover:bg-primary-container hover:text-on-primary-container transition-all">
+<span class="material-symbols-outlined" style="font-variation-settings: 'FILL' 0;">sync</span>
+</button>
+</div>
+</div>
+</div>
+</section>
+<!-- Stats Section (Asymmetric Grid) -->
+<section class="grid grid-cols-2 md:grid-cols-4 gap-sm">
+<div class="bg-surface-container-low p-md rounded-lg">
+<div class="text-on-surface-variant font-label-caps text-[10px]">TOTAL CHANNELS</div>
+<div class="text-headline-lg-mobile font-headline-lg-mobile text-primary-fixed-dim">11,478</div>
+</div>
+<div class="bg-surface-container-low p-md rounded-lg">
+<div class="text-on-surface-variant font-label-caps text-[10px]">STORAGE USED</div>
+<div class="text-headline-lg-mobile font-headline-lg-mobile text-on-surface">248MB</div>
+</div>
+<div class="bg-surface-container-low p-md rounded-lg col-span-2">
+<div class="text-on-surface-variant font-label-caps text-[10px]">CONNECTION STATUS</div>
+<div class="flex items-center gap-sm mt-xs">
+<div class="w-3 h-3 rounded-full bg-primary-container animate-pulse shadow-[0_0_8px_#00f2ea]"></div>
+<div class="text-title-md font-title-md text-on-surface uppercase tracking-widest">Optimized</div>
+</div>
+</div>
+</section>
+</main>
+<!-- Bottom Navigation Bar (Shared Component Strategy) -->
+<nav class="fixed bottom-0 left-0 w-full flex justify-around items-center px-md pb-safe-area-inset pt-sm bg-surface/80 dark:bg-surface/80 backdrop-blur-xl z-50">
+<a class="flex flex-col items-center justify-center text-on-surface-variant hover:text-primary transition-all active:scale-90 duration-300" href="#">
+<span class="material-symbols-outlined" style="font-variation-settings: 'FILL' 0;">home</span>
+<span class="font-label-caps text-label-caps">Home</span>
+</a>
+<a class="flex flex-col items-center justify-center text-on-surface-variant hover:text-primary transition-all active:scale-90 duration-300" href="#">
+<span class="material-symbols-outlined" style="font-variation-settings: 'FILL' 0;">menu_book</span>
+<span class="font-label-caps text-label-caps">Manga</span>
+</a>
+<a class="flex flex-col items-center justify-center text-on-surface-variant hover:text-primary transition-all active:scale-90 duration-300" href="#">
+<span class="material-symbols-outlined" style="font-variation-settings: 'FILL' 0;">sensors</span>
+<span class="font-label-caps text-label-caps">Live</span>
+</a>
+<a class="flex flex-col items-center justify-center text-on-surface-variant hover:text-primary transition-all active:scale-90 duration-300" href="#">
+<span class="material-symbols-outlined" style="font-variation-settings: 'FILL' 0;">music_note</span>
+<span class="font-label-caps text-label-caps">Music</span>
+</a>
+<!-- ACTIVE TAB: Profile (since it's under settings/profile flow) -->
+<a class="flex flex-col items-center justify-center text-primary-container drop-shadow-[0_0_8px_rgba(0,242,234,0.5)] active:scale-90 transition-all duration-300" href="#">
+<span class="material-symbols-outlined" style="font-variation-settings: 'FILL' 1;">person</span>
+<span class="font-label-caps text-label-caps">Profile</span>
+</a>
+</nav>
+<!-- Floating Atmosphere Elements -->
+<div class="fixed top-1/4 -left-20 w-64 h-64 bg-primary-container/5 blur-[120px] pointer-events-none"></div>
+<div class="fixed bottom-1/4 -right-20 w-80 h-80 bg-secondary-container/5 blur-[120px] pointer-events-none"></div>
+<script>
+        // Simple micro-interaction for sync buttons
+        document.querySelectorAll('button .material-symbols-outlined').forEach(icon => {
+            if(icon.textContent === 'sync') {
+                icon.parentElement.addEventListener('click', function() {
+                    const btn = this;
+                    btn.querySelector('span').classList.add('animate-spin');
+                    setTimeout(() => {
+                        btn.querySelector('span').classList.remove('animate-spin');
+                        // Fake success state
+                        const originalColor = btn.style.color;
+                        btn.style.color = '#00f2ea';
+                        setTimeout(() => btn.style.color = originalColor, 2000);
+                    }, 1500);
+                });
+            }
+        });
+
+        // Background parallax effect
+        document.addEventListener('mousemove', (e) => {
+            const blobs = document.querySelectorAll('.fixed.blur-\\[120px\\]');
+            const x = e.clientX / window.innerWidth;
+            const y = e.clientY / window.innerHeight;
+            
+            blobs[0].style.transform = `translate(${x * 50}px, ${y * 50}px)`;
+            blobs[1].style.transform = `translate(${-x * 50}px, ${-y * 50}px)`;
+        });
+    </script>
+
+
+</body></html>

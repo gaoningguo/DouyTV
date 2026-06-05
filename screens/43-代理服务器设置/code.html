@@ -1,0 +1,300 @@
+<!DOCTYPE html><html class="dark" lang="en"><head>
+<meta charset="utf-8">
+<meta content="width=device-width, initial-scale=1.0, viewport-fit=cover" name="viewport">
+<title>Proxy Settings</title>
+<script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700;800&amp;display=swap" rel="stylesheet">
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet">
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet">
+<style>
+        .material-symbols-outlined {
+            font-variation-settings: 'FILL' 0, 'wght' 400, 'GRAD' 0, 'opsz' 24;
+            vertical-align: middle;
+        }
+        body {
+            background-color: #050505;
+            color: #e5e2e1;
+            -webkit-tap-highlight-color: transparent;
+        }
+        .glass-panel {
+            background: rgba(18, 18, 18, 0.7);
+            backdrop-filter: blur(20px);
+            border: 1px solid rgba(255, 255, 255, 0.05);
+        }
+        .neon-glow-cyan {
+            filter: drop-shadow(0 0 8px rgba(0, 242, 234, 0.4));
+        }
+        .cyber-input {
+            background: rgba(255, 255, 255, 0.08);
+            transition: all 0.2s ease;
+        }
+        .cyber-input:focus {
+            background: rgba(255, 255, 255, 0.15);
+            outline: none;
+            box-shadow: 0 0 0 1px #00ddd6;
+        }
+    </style>
+<script id="tailwind-config">
+        tailwind.config = {
+          darkMode: "class",
+          theme: {
+            extend: {
+              "colors": {
+                      "tertiary-fixed-dim": "#c6c6c7",
+                      "tertiary-fixed": "#e2e2e2",
+                      "on-secondary-fixed": "#40000d",
+                      "on-secondary-fixed-variant": "#920029",
+                      "surface-variant": "#353534",
+                      "inverse-primary": "#006a66",
+                      "outline-variant": "#3a4a48",
+                      "surface-container-lowest": "#0e0e0e",
+                      "outline": "#849492",
+                      "on-secondary-container": "#5b0016",
+                      "on-error-container": "#ffdad6",
+                      "surface-dim": "#131313",
+                      "secondary": "#ffb2b6",
+                      "on-tertiary": "#2f3131",
+                      "on-surface-variant": "#b9cac8",
+                      "on-secondary": "#67001b",
+                      "surface-tint": "#00ddd6",
+                      "primary": "#cffffb",
+                      "primary-container": "#00f2ea",
+                      "on-tertiary-fixed-variant": "#454747",
+                      "on-tertiary-container": "#5d5f5f",
+                      "error-container": "#93000a",
+                      "on-surface": "#e5e2e1",
+                      "surface": "#131313",
+                      "inverse-surface": "#e5e2e1",
+                      "surface-container-high": "#2a2a2a",
+                      "surface-container": "#201f1f",
+                      "surface-container-low": "#1c1b1b",
+                      "tertiary-container": "#d9d9d9",
+                      "on-primary": "#003735",
+                      "secondary-fixed-dim": "#ffb2b6",
+                      "secondary-fixed": "#ffdadb",
+                      "tertiary": "#f5f5f5",
+                      "on-tertiary-fixed": "#1a1c1c",
+                      "on-primary-container": "#006a66",
+                      "on-background": "#e5e2e1",
+                      "primary-fixed-dim": "#00ddd6",
+                      "primary-fixed": "#29fcf3",
+                      "on-primary-fixed-variant": "#00504d",
+                      "inverse-on-surface": "#313030",
+                      "on-error": "#690005",
+                      "error": "#ffb4ab",
+                      "background": "#131313",
+                      "surface-bright": "#3a3939",
+                      "on-primary-fixed": "#00201e",
+                      "secondary-container": "#ff516a",
+                      "surface-container-highest": "#353534"
+              },
+              "borderRadius": {
+                      "DEFAULT": "0.25rem",
+                      "lg": "0.5rem",
+                      "xl": "0.75rem",
+                      "full": "9999px"
+              },
+              "spacing": {
+                      "xs": "4px",
+                      "safe-area-inset": "max(16px, env(safe-area-inset-bottom))",
+                      "sm": "8px",
+                      "md": "16px",
+                      "xl": "32px",
+                      "lg": "24px",
+                      "base": "4px"
+              },
+              "fontFamily": {
+                      "body-lg": ["Inter"],
+                      "label-caps": ["Inter"],
+                      "display-lg": ["Inter"],
+                      "title-md": ["Inter"],
+                      "headline-lg-mobile": ["Inter"],
+                      "headline-lg": ["Inter"],
+                      "body-sm": ["Inter"]
+              },
+              "fontSize": {
+                      "body-lg": ["16px", {"lineHeight": "24px", "fontWeight": "400"}],
+                      "label-caps": ["12px", {"lineHeight": "16px", "letterSpacing": "0.05em", "fontWeight": "700"}],
+                      "display-lg": ["48px", {"lineHeight": "52px", "letterSpacing": "-0.02em", "fontWeight": "800"}],
+                      "title-md": ["20px", {"lineHeight": "28px", "fontWeight": "600"}],
+                      "headline-lg-mobile": ["24px", {"lineHeight": "32px", "fontWeight": "700"}],
+                      "headline-lg": ["32px", {"lineHeight": "40px", "letterSpacing": "-0.01em", "fontWeight": "700"}],
+                      "body-sm": ["14px", {"lineHeight": "20px", "fontWeight": "400"}]
+              }
+            },
+          },
+        }
+    </script>
+</head>
+<body class="bg-background text-on-background min-h-screen selection:bg-primary-container/30">
+<!-- Top AppBar (from JSON) -->
+<header class="sticky top-0 w-full z-50 bg-surface/80 dark:bg-surface/80 backdrop-blur-xl flex justify-between items-center px-md py-sm">
+<div class="flex items-center gap-md">
+<button class="active:scale-95 transition-transform duration-200 text-primary-container">
+<span class="material-symbols-outlined">arrow_back</span>
+</button>
+<h1 class="font-headline-lg-mobile text-headline-lg-mobile text-primary-container neon-glow-cyan">Proxy Configuration</h1>
+</div>
+<button class="active:scale-95 transition-transform duration-200 text-primary-container">
+<span class="material-symbols-outlined">settings</span>
+</button>
+</header>
+<main class="px-md pt-lg pb-[120px] max-w-2xl mx-auto space-y-lg">
+<!-- Hero Section -->
+<section class="space-y-sm">
+<p class="font-label-caps text-label-caps text-primary-container tracking-widest uppercase">Network Layer</p>
+<h2 class="font-headline-lg-mobile text-headline-lg-mobile">Proxy Configuration</h2>
+<p class="font-body-sm text-body-sm text-on-surface-variant">Reroute your connection through a secure gateway for improved privacy and content accessibility.</p>
+</section>
+<!-- Main Settings Card -->
+<div class="glass-panel p-lg rounded-xl space-y-xl">
+<!-- Enable Toggle -->
+<div class="flex justify-between items-center">
+<div class="space-y-xs">
+<p class="font-title-md text-title-md">Enable Proxy</p>
+<p class="font-body-sm text-body-sm text-on-surface-variant">Activate proxy settings for all media requests</p>
+</div>
+<label class="relative inline-flex items-center cursor-pointer">
+<input checked="" class="sr-only peer" id="proxy-toggle" type="checkbox">
+<div class="w-14 h-8 bg-surface-container-highest peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-1 after:left-1 after:bg-white after:border-gray-300 after:border after:rounded-full after:h-6 after:w-6 after:transition-all peer-checked:bg-primary-container"></div>
+</label>
+</div>
+<!-- Configuration Form -->
+<div class="space-y-lg transition-opacity duration-300" id="proxy-form">
+<!-- Protocol Selection -->
+<div class="space-y-md">
+<label class="font-label-caps text-label-caps text-on-surface-variant">PROTOCOL</label>
+<div class="flex gap-sm">
+<button class="flex-1 py-sm rounded-lg border border-primary-container bg-primary-container/10 text-primary-container font-body-sm text-body-sm neon-glow-cyan transition-all">HTTP</button>
+<button class="flex-1 py-sm rounded-lg border border-outline-variant bg-transparent text-on-surface-variant font-body-sm text-body-sm hover:bg-surface-container-high transition-all">SOCKS5</button>
+</div>
+</div>
+<!-- Server & Port Grid -->
+<div class="grid grid-cols-4 gap-md">
+<div class="col-span-3 space-y-sm">
+<label class="font-label-caps text-label-caps text-on-surface-variant">SERVER ADDRESS</label>
+<input class="cyber-input w-full p-md rounded-lg text-body-lg font-body-lg border-none placeholder:text-on-surface-variant/40" placeholder="192.168.1.1" type="text">
+</div>
+<div class="col-span-1 space-y-sm">
+<label class="font-label-caps text-label-caps text-on-surface-variant">PORT</label>
+<input class="cyber-input w-full p-md rounded-lg text-body-lg font-body-lg border-none placeholder:text-on-surface-variant/40" placeholder="8080" type="number">
+</div>
+</div>
+<!-- Auth Section -->
+<div class="space-y-md pt-md border-t border-outline-variant/30">
+<div class="space-y-sm">
+<label class="font-label-caps text-label-caps text-on-surface-variant">USERNAME (OPTIONAL)</label>
+<div class="relative">
+<span class="material-symbols-outlined absolute left-md top-1/2 -translate-y-1/2 text-on-surface-variant">person</span>
+<input class="cyber-input w-full pl-[48px] p-md rounded-lg text-body-lg font-body-lg border-none placeholder:text-on-surface-variant/40" placeholder="Admin" type="text">
+</div>
+</div>
+<div class="space-y-sm">
+<label class="font-label-caps text-label-caps text-on-surface-variant">PASSWORD</label>
+<div class="relative">
+<span class="material-symbols-outlined absolute left-md top-1/2 -translate-y-1/2 text-on-surface-variant">lock</span>
+<input class="cyber-input w-full pl-[48px] p-md rounded-lg text-body-lg font-body-lg border-none placeholder:text-on-surface-variant/40" type="password" value="••••••••">
+</div>
+</div>
+</div>
+<!-- Action Button -->
+<div class="pt-md">
+<button class="w-full bg-primary-container text-on-primary font-title-md text-title-md py-lg rounded-xl flex items-center justify-center gap-sm active:scale-95 transition-all shadow-[0_0_20px_rgba(0,242,234,0.3)]" id="test-btn">
+<span class="material-symbols-outlined" id="test-icon">network_check</span>
+<span id="test-text" class="">Test Connectivity</span>
+</button>
+</div>
+</div>
+</div>
+<!-- Information Chips -->
+<section class="flex flex-wrap gap-sm pt-md">
+<div class="bg-surface-container-highest/50 px-md py-sm rounded-full flex items-center gap-xs">
+<span class="material-symbols-outlined text-[18px] text-primary-container">verified_user</span>
+<span class="font-label-caps text-label-caps">Encrypted Traffic</span>
+</div>
+<div class="bg-surface-container-highest/50 px-md py-sm rounded-full flex items-center gap-xs">
+<span class="material-symbols-outlined text-[18px] text-primary-container">speed</span>
+<span class="font-label-caps text-label-caps">Low Latency Optimization</span>
+</div>
+</section>
+</main>
+<!-- BottomNavBar (from JSON) -->
+<nav class="fixed bottom-0 left-0 w-full flex justify-around items-center px-md pb-safe-area-inset pt-sm bg-surface/80 dark:bg-surface/80 backdrop-blur-xl z-50">
+<div class="flex flex-col items-center justify-center text-on-surface-variant hover:text-primary transition-all">
+<span class="material-symbols-outlined">home</span>
+<span class="font-label-caps text-label-caps">Home</span>
+</div>
+<div class="flex flex-col items-center justify-center text-on-surface-variant hover:text-primary transition-all">
+<span class="material-symbols-outlined">menu_book</span>
+<span class="font-label-caps text-label-caps">Manga</span>
+</div>
+<div class="flex flex-col items-center justify-center text-on-surface-variant hover:text-primary transition-all">
+<span class="material-symbols-outlined">sensors</span>
+<span class="font-label-caps text-label-caps">Live</span>
+</div>
+<div class="flex flex-col items-center justify-center text-on-surface-variant hover:text-primary transition-all">
+<span class="material-symbols-outlined">music_note</span>
+<span class="font-label-caps text-label-caps">Music</span>
+</div>
+<div class="flex flex-col items-center justify-center text-primary-container drop-shadow-[0_0_8px_rgba(0,242,234,0.5)] active:scale-90 transition-all duration-300">
+<span class="material-symbols-outlined" style="font-variation-settings: 'FILL' 1;">person</span>
+<span class="font-label-caps text-label-caps">Profile</span>
+</div>
+</nav>
+<script>
+        // Micro-interactions
+        const toggle = document.getElementById('proxy-toggle');
+        const form = document.getElementById('proxy-form');
+        const testBtn = document.getElementById('test-btn');
+        const testText = document.getElementById('test-text');
+        const testIcon = document.getElementById('test-icon');
+
+        toggle.addEventListener('change', () => {
+            if (toggle.checked) {
+                form.style.opacity = '1';
+                form.style.pointerEvents = 'auto';
+            } else {
+                form.style.opacity = '0.4';
+                form.style.pointerEvents = 'none';
+            }
+        });
+
+        testBtn.addEventListener('click', () => {
+            testText.innerText = 'Testing...';
+            testBtn.classList.add('animate-pulse');
+            testIcon.innerText = 'sync';
+            testIcon.classList.add('animate-spin');
+
+            setTimeout(() => {
+                testBtn.classList.remove('animate-pulse');
+                testBtn.classList.replace('bg-primary-container', 'bg-green-500');
+                testBtn.classList.replace('shadow-[0_0_20px_rgba(0,242,234,0.3)]', 'shadow-[0_0_20px_rgba(34,197,94,0.3)]');
+                testIcon.classList.remove('animate-spin');
+                testIcon.innerText = 'check_circle';
+                testText.innerText = 'Connected';
+                
+                setTimeout(() => {
+                    testBtn.classList.replace('bg-green-500', 'bg-primary-container');
+                    testBtn.classList.replace('shadow-[0_0_20px_rgba(34,197,94,0.3)]', 'shadow-[0_0_20px_rgba(0,242,234,0.3)]');
+                    testIcon.innerText = 'network_check';
+                    testText.innerText = 'Test Connectivity';
+                }, 2000);
+            }, 1500);
+        });
+
+        // Tab selection logic
+        const protocolBtns = document.querySelectorAll('#proxy-form button.flex-1');
+        protocolBtns.forEach(btn => {
+            btn.addEventListener('click', () => {
+                protocolBtns.forEach(b => {
+                    b.classList.remove('border-primary-container', 'bg-primary-container/10', 'text-primary-container', 'neon-glow-cyan');
+                    b.classList.add('border-outline-variant', 'bg-transparent', 'text-on-surface-variant');
+                });
+                btn.classList.add('border-primary-container', 'bg-primary-container/10', 'text-primary-container', 'neon-glow-cyan');
+                btn.classList.remove('border-outline-variant', 'bg-transparent', 'text-on-surface-variant');
+            });
+        });
+    </script>
+
+
+</body></html>

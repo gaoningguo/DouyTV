@@ -1,0 +1,233 @@
+<!DOCTYPE html><html class="dark" lang="zh-CN" style=""><head>
+<meta charset="utf-8">
+<meta content="width=device-width, initial-scale=1.0, viewport-fit=cover" name="viewport">
+<title>Cyber-Live Immersive</title>
+<script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700;800&amp;display=swap" rel="stylesheet">
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet">
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet">
+<style>
+        body {
+            margin: 0;
+            padding: 0;
+            background-color: #050505;
+            color: #e5e2e1;
+            overflow: hidden;
+            font-family: 'Inter', sans-serif;
+        }
+        .glass-container {
+            background: rgba(18, 18, 18, 0.1);
+            backdrop-filter: blur(20px);
+            -webkit-backdrop-filter: blur(20px);
+        }
+        .neon-glow-cyan {
+            box-shadow: 0 0 15px rgba(0, 221, 214, 0.5);
+        }
+        .neon-glow-pink {
+            box-shadow: 0 0 15px rgba(255, 81, 106, 0.5);
+        }
+        @keyframes rotate-record {
+            from { transform: rotate(0deg); }
+            to { transform: rotate(360deg); }
+        }
+        .spinning-record {
+            animation: rotate-record 4s linear infinite;
+        }
+        .danmaku-container {
+            mask-image: linear-gradient(to top, black 80%, transparent 100%);
+        }
+        .material-symbols-outlined {
+            font-variation-settings: 'FILL' 0, 'wght' 200, 'GRAD' 0, 'opsz' 24;
+        }
+    </style>
+<script id="tailwind-config">
+        tailwind.config = {
+          darkMode: "class",
+          theme: {
+            extend: {
+              "colors": {
+                      "surface-tint": "#00ddd6",
+                      "primary-container": "#00f2ea",
+                      "tertiary-fixed": "#e2e2e2",
+                      "surface-container-high": "#2a2a2a",
+                      "secondary-fixed": "#ffdadb",
+                      "inverse-primary": "#006a66",
+                      "on-primary-container": "#006a66",
+                      "outline-variant": "#3a4a48",
+                      "on-secondary-fixed-variant": "#920029",
+                      "secondary-fixed-dim": "#ffb2b6",
+                      "outline": "#849492",
+                      "on-secondary-container": "#5b0016",
+                      "surface": "#131313",
+                      "surface-container": "#201f1f",
+                      "on-tertiary": "#2f3131",
+                      "error": "#ffb4ab",
+                      "on-primary-fixed-variant": "#00504d",
+                      "surface-container-highest": "#353534",
+                      "error-container": "#93000a",
+                      "tertiary-fixed-dim": "#c6c6c7",
+                      "tertiary-container": "#d9d9d9",
+                      "on-tertiary-fixed": "#1a1c1c",
+                      "background": "#131313",
+                      "tertiary": "#f5f5f5",
+                      "on-secondary-fixed": "#40000d",
+                      "on-surface": "#e5e2e1",
+                      "secondary-container": "#ff516a",
+                      "surface-dim": "#131313",
+                      "on-tertiary-container": "#5d5f5f",
+                      "on-error-container": "#ffdad6",
+                      "surface-container-low": "#1c1b1b",
+                      "on-secondary": "#67001b",
+                      "on-primary-fixed": "#00201e",
+                      "inverse-on-surface": "#313030",
+                      "on-tertiary-fixed-variant": "#454747",
+                      "on-surface-variant": "#b9cac8",
+                      "primary-fixed": "#29fcf3",
+                      "on-error": "#690005",
+                      "on-background": "#e5e2e1",
+                      "primary": "#cffffb",
+                      "on-primary": "#003735",
+                      "surface-variant": "#353534",
+                      "surface-container-lowest": "#0e0e0e",
+                      "inverse-surface": "#e5e2e1",
+                      "surface-bright": "#3a3939",
+                      "primary-fixed-dim": "#00ddd6",
+                      "secondary": "#ffb2b6"
+              },
+              "borderRadius": {
+                      "DEFAULT": "0.25rem",
+                      "lg": "0.5rem",
+                      "xl": "0.75rem",
+                      "full": "9999px"
+              },
+              "spacing": {
+                      "xl": "32px",
+                      "base": "4px",
+                      "sm": "8px",
+                      "md": "16px",
+                      "safe-area-inset": "max(16px, env(safe-area-inset-bottom))",
+                      "lg": "24px",
+                      "xs": "4px"
+              },
+              "fontFamily": {
+                      "display-lg": ["Inter"],
+                      "title-md": ["Inter"],
+                      "headline-lg": ["Inter"],
+                      "headline-lg-mobile": ["Inter"],
+                      "body-sm": ["Inter"],
+                      "label-caps": ["Inter"],
+                      "body-lg": ["Inter"]
+              },
+              "fontSize": {
+                      "display-lg": ["48px", {"lineHeight": "52px", "letterSpacing": "-0.02em", "fontWeight": "800"}],
+                      "title-md": ["20px", {"lineHeight": "28px", "fontWeight": "600"}],
+                      "headline-lg": ["32px", {"lineHeight": "40px", "letterSpacing": "-0.01em", "fontWeight": "700"}],
+                      "headline-lg-mobile": ["24px", {"lineHeight": "32px", "fontWeight": "700"}],
+                      "body-sm": ["14px", {"lineHeight": "20px", "fontWeight": "400"}],
+                      "label-caps": ["12px", {"lineHeight": "16px", "letterSpacing": "0.05em", "fontWeight": "700"}],
+                      "body-lg": ["16px", {"lineHeight": "24px", "fontWeight": "400"}]
+              }
+            },
+          },
+        }
+    </script>
+</head>
+<body class="bg-background overflow-hidden h-screen w-full relative">
+<!-- BACKGROUND: FULL SCREEN LIVE STREAM (Immersive) -->
+<div class="absolute inset-0 z-0 bg-[#050505]">
+<img alt="Cyberpunk Festival Live Stream" class="w-full h-full object-cover opacity-80" data-alt="A cinematic vertical live stream shot of a massive cyberpunk music festival stage at night. Neon cyan and electric pink lasers cut through a dense, atmospheric haze and artificial fog. In the foreground, a vibrant, high-energy crowd is silhouetted against the blinding stage lights. The lighting is dramatic and high-contrast, dominated by deep blacks and intense primary color accents, capturing a high-energy digital aesthetic for a Gen-Z audience." src="https://lh3.googleusercontent.com/aida-public/AB6AXuA5H4N5odzbsJjivTXpJc4Fj_2ekambSjg7TRubKDx9NkOsXeq4UmwmJrDTqAABDIin2nfRA8Q4ehn-nBu-03dzS61KnyFvGc9x-oaCtnM9xnsn_RPCWh887Jz4MPDgE4f6GgAVovwrUGPFIqgZhuSx5VnR7PvqllG8lFLTxp_4HHlBYJPr1pkAmap29x8dj-Chc5dcB3X9HLU_VaQJEAMAJfRCGPj1h17Gfl7BBOeSofdL9G8DFMFLGyAObcRhduwqeoWWTVPiQu8">
+<div class="absolute inset-0 bg-gradient-to-t from-[#050505] via-transparent to-[#050505]/40"></div>
+</div>
+<!-- TOP APP BAR -->
+<header class="fixed top-0 w-full z-50 flex justify-between items-center px-md h-16 bg-transparent backdrop-blur-md">
+<div class="flex items-center gap-base">
+</div>
+<nav class="flex items-center gap-lg">
+</nav>
+<div class="flex items-center">
+</div>
+</header>
+<!-- RIGHT SIDE INTERACTION BAR -->
+<aside class="fixed right-4 z-40 flex flex-col items-center gap-6 bottom-40">
+<!-- Host Avatar -->
+<!-- Like -->
+
+<!-- Comment -->
+
+<!-- Share -->
+
+<!-- Music Record -->
+<div class="mt-4 spinning-record">
+<div class="w-12 h-12 rounded-full bg-surface-container-highest border border-outline/30 flex items-center justify-center p-2">
+<div class="w-full h-full rounded-full bg-black flex items-center justify-center relative">
+<div class="w-4 h-4 rounded-full bg-primary neon-glow-cyan z-10"></div>
+<div class="absolute inset-0 rounded-full border-2 border-dashed border-primary/20"></div>
+</div>
+</div>
+</div>
+</aside>
+<!-- BOTTOM LEFT: DANMAKU CHAT AREA -->
+
+<!-- BOTTOM INTERACTIVE BAR -->
+<div id="danmaku-chat" class="fixed bottom-24 left-4 z-40 w-72 max-h-64 overflow-hidden flex flex-col gap-sm danmaku-container pointer-events-none">
+  <div class="glass-container px-md py-sm rounded-lg flex gap-sm items-start border-l-2 border-primary/50 bg-black/20 backdrop-blur-md">
+    <span class="text-primary-fixed-dim font-label-caps text-label-caps whitespace-nowrap">CyberRunner:</span>
+    <span class="text-on-surface text-body-sm">This drop is insane! 🔥</span>
+  </div>
+  <div class="glass-container px-md py-sm rounded-lg flex gap-sm items-start border-l-2 border-secondary/50 bg-black/20 backdrop-blur-md">
+    <span class="text-secondary font-label-caps text-label-caps whitespace-nowrap">NeonVibe:</span>
+    <span class="text-on-surface text-body-sm">Anyone know the track ID?</span>
+  </div>
+  <div class="glass-container px-md py-sm rounded-lg flex gap-sm items-start border-l-2 border-primary/50 bg-black/20 backdrop-blur-md">
+    <span class="text-primary-fixed-dim font-label-caps text-label-caps whitespace-nowrap">TechGhost:</span>
+    <span class="text-on-surface text-body-sm">Visuals are next level tonight.</span>
+  </div>
+  <div class="glass-container px-md py-sm rounded-lg flex gap-sm items-start border-l-2 border-secondary/50 bg-black/20 backdrop-blur-md">
+    <span class="text-secondary font-label-caps text-label-caps whitespace-nowrap">PixelPunk:</span>
+    <span class="text-on-surface text-body-sm">Greetings from the metaverse! 🚀</span>
+  </div>
+</div><footer class="fixed bottom-0 left-0 w-full z-50 px-md pb-safe-area-inset h-20 flex items-center gap-md"><div class="flex items-center justify-between w-full px-md py-sm bg-black/40 backdrop-blur-md border-t border-outline/20 gap-xl"><div class="flex items-center gap-md"><button class="px-md py-2 rounded-full border border-primary/50 text-primary font-label-caps text-body-sm hover:bg-primary/10 transition-colors neon-glow-cyan hover:scale-105 transition-all">1080P</button><div class="flex items-center gap-sm"><span class="material-symbols-outlined text-on-surface text-[20px] text-[24px] transition-transform hover:scale-110">chat_bubble</span></div><div class="flex items-center gap-md ml-4 border-l border-outline/20 pl-4 gap-lg gap-xl"><button class="flex items-center gap-1 group"><span class="material-symbols-outlined text-on-surface text-[24px] scale-110 scale-125 transition-transform hover:scale-110 hover:text-primary transition-colors" style="font-variation-settings: &quot;FILL&quot; 1;">favorite</span><span class="text-body-sm text-on-surface font-bold flex items-center opacity-100">2.4w</span></button><button class="flex items-center gap-1 group"><span class="material-symbols-outlined text-on-surface text-[24px] scale-110 scale-125 transition-transform hover:scale-110 hover:text-primary transition-colors">bookmark</span></button><button class="flex items-center gap-1 group"><span class="material-symbols-outlined text-on-surface text-[24px] scale-110 scale-125 transition-transform hover:scale-110 hover:text-primary transition-colors">share</span><span class="text-body-sm text-on-surface font-bold flex items-center opacity-100">856</span></button></div></div><div class="flex items-center gap-lg gap-xl"><button class="flex flex-col items-center gap-xs group"><span class="material-symbols-outlined text-on-surface text-[24px] group-active:scale-90 transition-transform scale-125 hover:scale-110 hover:text-primary transition-colors">card_giftcard</span></button><button class="flex flex-col items-center gap-xs group"><span class="material-symbols-outlined text-on-surface text-[24px] group-active:scale-90 transition-transform scale-125 hover:scale-110 hover:text-primary transition-colors">more_horiz</span></button></div></div></footer>
+<!-- ATMOSPHERIC EFFECTS -->
+<div class="fixed inset-0 pointer-events-none z-10">
+<div class="absolute top-1/4 left-1/4 w-96 h-96 bg-primary/5 rounded-full blur-[120px]"></div>
+<div class="absolute bottom-1/4 right-1/4 w-96 h-96 bg-secondary/5 rounded-full blur-[120px]"></div>
+</div>
+<script>
+        // Simple chat stream animation
+        const chatContainer = document.getElementById('chat-stream');
+        const comments = [
+            { user: "极客阿强", text: "有人知道背景音乐叫什么吗？" },
+            { user: "Pinky", text: "这个混音太炸了！" },
+            { user: "元宇宙村民", text: "疯狂刷屏中..." },
+            { user: "赛博甜心_Official", text: "大家注意安全，不要拥挤哦 ❤️" }
+        ];
+
+        let index = 0;
+        setInterval(() => {
+            const comment = comments[index];
+            const div = document.createElement('div');
+            div.className = "glass-container px-md py-sm rounded-lg flex gap-sm items-start opacity-0 translate-y-4 transition-all duration-500";
+            div.innerHTML = `
+                <span class="text-primary-fixed-dim font-label-caps text-label-caps whitespace-nowrap">${comment.user}:</span>
+                <span class="text-on-surface text-body-sm">${comment.text}</span>
+            `;
+            chatContainer.appendChild(div);
+            
+            // Trigger animation
+            setTimeout(() => {
+                div.classList.remove('opacity-0', 'translate-y-4');
+            }, 50);
+
+            // Keep only latest 4
+            if (chatContainer.children.length > 5) {
+                chatContainer.removeChild(chatContainer.firstChild);
+            }
+
+            index = (index + 1) % comments.length;
+        }, 3000);
+    </script>
+
+
+
+
+</body></html>

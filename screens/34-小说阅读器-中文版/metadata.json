@@ -1,0 +1,24 @@
+{
+  "projectId": "3391305001861538506",
+  "requestedId": "bd8aefcf3f354b61b1129a01c52e40ec",
+  "title": "小说阅读器 (中文版)",
+  "stitchTitle": "小说阅读器 (中文版)",
+  "resourceName": "projects/3391305001861538506/screens/bd8aefcf3f354b61b1129a01c52e40ec",
+  "deviceType": "MOBILE",
+  "width": "780",
+  "height": "4596",
+  "files": {
+    "screenshot": {
+      "path": "stitch-export/screens/34-小说阅读器-中文版/screenshot.png",
+      "mimeType": "image/png",
+      "bytes": 1083705,
+      "resourceName": "projects/3391305001861538506/files/000cab12124645dca8e83dcb4caccd47"
+    },
+    "code": {
+      "path": "stitch-export/screens/34-小说阅读器-中文版/code.html",
+      "mimeType": "text/html",
+      "bytes": 16775,
+      "resourceName": "projects/3391305001861538506/files/bd800a108184457dab11b2628aa429c6"
+    }
+  }
+}

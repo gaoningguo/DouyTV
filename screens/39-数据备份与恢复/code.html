@@ -1,0 +1,310 @@
+<!DOCTYPE html><html class="dark" lang="en"><head>
+<meta charset="utf-8">
+<meta content="width=device-width, initial-scale=1.0, viewport-fit=cover" name="viewport">
+<title>Backup &amp; Recovery Settings</title>
+<script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet">
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700;800&amp;display=swap" rel="stylesheet">
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet">
+<style>
+        .material-symbols-outlined {
+            font-variation-settings: 'FILL' 0, 'wght' 400, 'GRAD' 0, 'opsz' 24;
+        }
+        body {
+            background-color: #050505;
+            color: #e5e2e1;
+            -webkit-tap-highlight-color: transparent;
+        }
+        .glass-panel {
+            background: rgba(255, 255, 255, 0.05);
+            backdrop-filter: blur(20px);
+            -webkit-backdrop-filter: blur(20px);
+            border: 1px solid rgba(255, 255, 255, 0.1);
+        }
+        .neon-glow-cyan {
+            filter: drop-shadow(0 0 8px rgba(0, 242, 234, 0.4));
+        }
+        .neon-glow-pink {
+            filter: drop-shadow(0 0 8px rgba(255, 81, 106, 0.4));
+        }
+        .safe-pb {
+            padding-bottom: env(safe-area-inset-bottom);
+        }
+    </style>
+<script id="tailwind-config">
+        tailwind.config = {
+          darkMode: "class",
+          theme: {
+            extend: {
+              "colors": {
+                      "tertiary-fixed-dim": "#c6c6c7",
+                      "tertiary-fixed": "#e2e2e2",
+                      "on-secondary-fixed": "#40000d",
+                      "on-secondary-fixed-variant": "#920029",
+                      "surface-variant": "#353534",
+                      "inverse-primary": "#006a66",
+                      "outline-variant": "#3a4a48",
+                      "surface-container-lowest": "#0e0e0e",
+                      "outline": "#849492",
+                      "on-secondary-container": "#5b0016",
+                      "on-error-container": "#ffdad6",
+                      "surface-dim": "#131313",
+                      "secondary": "#ffb2b6",
+                      "on-tertiary": "#2f3131",
+                      "on-surface-variant": "#b9cac8",
+                      "on-secondary": "#67001b",
+                      "surface-tint": "#00ddd6",
+                      "primary": "#cffffb",
+                      "primary-container": "#00f2ea",
+                      "on-tertiary-fixed-variant": "#454747",
+                      "on-tertiary-container": "#5d5f5f",
+                      "error-container": "#93000a",
+                      "on-surface": "#e5e2e1",
+                      "surface": "#131313",
+                      "inverse-surface": "#e5e2e1",
+                      "surface-container-high": "#2a2a2a",
+                      "surface-container": "#201f1f",
+                      "surface-container-low": "#1c1b1b",
+                      "tertiary-container": "#d9d9d9",
+                      "on-primary": "#003735",
+                      "secondary-fixed-dim": "#ffb2b6",
+                      "secondary-fixed": "#ffdadb",
+                      "tertiary": "#f5f5f5",
+                      "on-tertiary-fixed": "#1a1c1c",
+                      "on-primary-container": "#006a66",
+                      "on-background": "#e5e2e1",
+                      "primary-fixed-dim": "#00ddd6",
+                      "primary-fixed": "#29fcf3",
+                      "on-primary-fixed-variant": "#00504d",
+                      "inverse-on-surface": "#313030",
+                      "on-error": "#690005",
+                      "error": "#ffb4ab",
+                      "background": "#131313",
+                      "surface-bright": "#3a3939",
+                      "on-primary-fixed": "#00201e",
+                      "secondary-container": "#ff516a",
+                      "surface-container-highest": "#353534"
+              },
+              "borderRadius": {
+                      "DEFAULT": "0.25rem",
+                      "lg": "0.5rem",
+                      "xl": "0.75rem",
+                      "full": "9999px"
+              },
+              "spacing": {
+                      "xs": "4px",
+                      "safe-area-inset": "max(16px, env(safe-area-inset-bottom))",
+                      "sm": "8px",
+                      "md": "16px",
+                      "xl": "32px",
+                      "lg": "24px",
+                      "base": "4px"
+              },
+              "fontFamily": {
+                      "body-lg": ["Inter"],
+                      "label-caps": ["Inter"],
+                      "display-lg": ["Inter"],
+                      "title-md": ["Inter"],
+                      "headline-lg-mobile": ["Inter"],
+                      "headline-lg": ["Inter"],
+                      "body-sm": ["Inter"]
+              },
+              "fontSize": {
+                      "body-lg": ["16px", {"lineHeight": "24px", "fontWeight": "400"}],
+                      "label-caps": ["12px", {"lineHeight": "16px", "letterSpacing": "0.05em", "fontWeight": "700"}],
+                      "display-lg": ["48px", {"lineHeight": "52px", "letterSpacing": "-0.02em", "fontWeight": "800"}],
+                      "title-md": ["20px", {"lineHeight": "28px", "fontWeight": "600"}],
+                      "headline-lg-mobile": ["24px", {"lineHeight": "32px", "fontWeight": "700"}],
+                      "headline-lg": ["32px", {"lineHeight": "40px", "letterSpacing": "-0.01em", "fontWeight": "700"}],
+                      "body-sm": ["14px", {"lineHeight": "20px", "fontWeight": "400"}]
+              }
+            },
+          },
+        }
+      </script>
+</head>
+<body class="bg-background min-h-screen pb-32">
+<!-- TopAppBar -->
+<header class="sticky top-0 w-full z-50 bg-background/80 backdrop-blur-xl flex justify-between items-center px-md py-sm border-b border-white/5">
+<div class="flex items-center gap-md">
+<button class="active:scale-95 transition-transform duration-200 text-on-surface-variant hover:text-primary-fixed-dim transition-colors">
+<span class="material-symbols-outlined" data-icon="arrow_back">arrow_back</span>
+</button>
+<h1 class="font-headline-lg-mobile text-headline-lg-mobile text-primary-fixed-dim neon-glow-cyan">Data Management</h1>
+</div>
+<div class="flex items-center gap-md">
+<button class="active:scale-95 transition-transform duration-200 text-on-surface-variant hover:text-primary-fixed-dim transition-colors">
+<span class="material-symbols-outlined" data-icon="settings">settings</span>
+</button>
+</div>
+</header>
+<main class="px-md mt-lg space-y-xl">
+<!-- Section: Hero Visual (Implicit background context for data) -->
+<div class="relative w-full h-48 rounded-xl overflow-hidden glass-panel">
+<img alt="Abstract digital data nodes" class="w-full h-full object-cover opacity-40" data-alt="A cinematic 3D digital visualization representing cloud data and security. Cascading neon cyan geometric nodes and flowing light trails represent data transfer in a deep obsidian space. The lighting is moody and high-contrast, with sharp highlights and soft depth-of-field blurs, embodying a futuristic and hyper-digital aesthetic. The atmosphere is professional and secure, emphasizing speed and data integrity through vibrant cyan pulses against a pure black background." src="https://lh3.googleusercontent.com/aida-public/AB6AXuACP-Kgs68Bhmbj7yqCQLiRWbDtY66bZkJAuxbi6Diw9-CfV2yUFbobsI_dd8lSYZtu5cacNek9SgaM9l64uqm9cQDVbtbD8y2RXMmj13l4cGUwcsBbjde3VRKYpmsbQAY8cmFTCjNJTgxgLFSHwf7BgmHoABQAmN3m_T71i5qoAQ-FYRYboKJw0ss4wgmHNqLwJPquzfB8HJuMwadXbnls2LlSu5WR_ab8Ij0-_CWMufS60LoFadqiEu69HgUHF_L1jkkl5o71U5w">
+<div class="absolute inset-0 bg-gradient-to-t from-background to-transparent"></div>
+<div class="absolute bottom-md left-md">
+<div class="flex items-center gap-sm">
+<div class="w-2 h-2 rounded-full bg-primary-container neon-glow-cyan animate-pulse"></div>
+<span class="font-label-caps text-label-caps text-primary-container">SYSTEM STATUS: OPTIMAL</span>
+</div>
+<h2 class="font-headline-lg-mobile text-headline-lg-mobile text-on-surface mt-xs">Data Management</h2>
+</div>
+</div>
+<!-- Section: Local Backup -->
+<section class="space-y-md">
+<div class="flex items-center justify-between">
+<h3 class="font-title-md text-title-md text-on-surface">Local Backup</h3>
+<span class="font-label-caps text-label-caps text-on-surface-variant">V 2.4.0</span>
+</div>
+<div class="glass-panel p-md rounded-xl space-y-lg">
+<div class="flex items-start justify-between">
+<div class="space-y-xs">
+<p class="font-body-lg text-body-lg text-on-surface">Offline Snapshot</p>
+<p class="font-body-sm text-body-sm text-on-surface-variant">Last backup: Oct 24, 2023 • 14:32</p>
+</div>
+<span class="material-symbols-outlined text-primary-fixed-dim" data-icon="inventory_2">inventory_2</span>
+</div>
+<div class="grid grid-cols-2 gap-md">
+<button class="flex items-center justify-center gap-sm py-md rounded-lg glass-panel hover:bg-white/10 active:scale-95 transition-all text-primary-fixed-dim border border-primary-fixed-dim/20">
+<span class="material-symbols-outlined text-[20px]" data-icon="upload_file">upload_file</span>
+<span class="font-label-caps text-label-caps">Export Data</span>
+</button>
+<button class="flex items-center justify-center gap-sm py-md rounded-lg glass-panel hover:bg-white/10 active:scale-95 transition-all text-on-surface-variant">
+<span class="material-symbols-outlined text-[20px]" data-icon="download_file">download_done</span>
+<span class="font-label-caps text-label-caps">Import Data</span>
+</button>
+</div>
+</div>
+</section>
+<!-- Section: Cloud Sync -->
+<section class="space-y-md">
+<h3 class="font-title-md text-title-md text-on-surface">Cloud Sync</h3>
+<div class="glass-panel rounded-xl overflow-hidden">
+<!-- WebDAV Status -->
+<div class="p-md flex items-center justify-between border-b border-white/5">
+<div class="flex items-center gap-md">
+<div class="p-sm rounded-lg bg-primary-container/10">
+<span class="material-symbols-outlined text-primary-container" data-icon="cloud_sync" style="font-variation-settings: 'FILL' 1;">cloud_sync</span>
+</div>
+<div class="space-y-xs">
+<p class="font-body-lg text-body-lg text-on-surface">WebDAV Storage</p>
+<p class="font-body-sm text-body-sm text-primary-container">Connected: dav.nextcloud.xyz</p>
+</div>
+</div>
+<div class="flex items-center gap-xs">
+<span class="font-label-caps text-label-caps text-primary-container uppercase">Live</span>
+<div class="w-1.5 h-1.5 rounded-full bg-secondary-container neon-glow-pink animate-pulse"></div>
+</div>
+</div>
+<!-- Sync History List -->
+<div class="p-md space-y-md">
+<p class="font-label-caps text-label-caps text-on-surface-variant">Recent History</p>
+<div class="space-y-lg">
+<!-- History Item 1 -->
+<div class="flex items-center justify-between">
+<div class="flex items-center gap-md">
+<span class="material-symbols-outlined text-on-surface-variant text-[20px]" data-icon="history">history</span>
+<div>
+<p class="font-body-sm text-body-sm text-on-surface">Library Metadata Sync</p>
+<p class="font-body-sm text-[12px] text-on-surface-variant">Successful • 2m ago</p>
+</div>
+</div>
+<span class="material-symbols-outlined text-primary-fixed-dim text-[18px]" data-icon="check_circle">check_circle</span>
+</div>
+<!-- History Item 2 -->
+<div class="flex items-center justify-between">
+<div class="flex items-center gap-md">
+<span class="material-symbols-outlined text-on-surface-variant text-[20px]" data-icon="history">history</span>
+<div>
+<p class="font-body-sm text-body-sm text-on-surface">Manga Reading Progress</p>
+<p class="font-body-sm text-[12px] text-on-surface-variant">Successful • 1h ago</p>
+</div>
+</div>
+<span class="material-symbols-outlined text-primary-fixed-dim text-[18px]" data-icon="check_circle">check_circle</span>
+</div>
+<!-- History Item 3 -->
+<div class="flex items-center justify-between opacity-60">
+<div class="flex items-center gap-md">
+<span class="material-symbols-outlined text-on-surface-variant text-[20px]" data-icon="history">history</span>
+<div>
+<p class="font-body-sm text-body-sm text-on-surface">Configuration Patch</p>
+<p class="font-body-sm text-[12px] text-on-surface-variant">Successful • 5h ago</p>
+</div>
+</div>
+<span class="material-symbols-outlined text-primary-fixed-dim text-[18px]" data-icon="check_circle">check_circle</span>
+</div>
+</div>
+<button class="w-full mt-md py-sm font-label-caps text-label-caps text-primary-container hover:underline transition-all">
+                        View Full History
+                    </button>
+</div>
+</div>
+</section>
+<!-- Section: Reset -->
+<section class="pt-lg">
+<div class="p-md rounded-xl border border-secondary-container/30 bg-secondary-container/5 space-y-md">
+<div class="flex items-center gap-md text-secondary-container">
+<span class="material-symbols-outlined" data-icon="warning">warning</span>
+<h4 class="font-title-md text-title-md">Danger Zone</h4>
+</div>
+<p class="font-body-sm text-body-sm text-on-surface-variant">Resetting application data will permanently erase all local manga chapters, music cache, and offline settings. This action is irreversible.</p>
+<button class="w-full py-md rounded-lg bg-secondary-container/10 border border-secondary-container/50 text-secondary-container font-label-caps text-label-caps hover:bg-secondary-container hover:text-on-secondary-container active:scale-95 transition-all">
+                    Reset Application Data
+                </button>
+</div>
+</section>
+</main>
+<!-- BottomNavBar -->
+<nav class="fixed bottom-0 left-0 w-full flex justify-around items-center px-md pb-safe-area-inset pt-sm bg-surface/80 dark:bg-surface/80 backdrop-blur-xl z-50">
+<a class="flex flex-col items-center justify-center text-on-surface-variant hover:text-primary transition-all active:scale-90 duration-300" href="#">
+<span class="material-symbols-outlined" data-icon="home">home</span>
+<span class="font-label-caps text-label-caps">Home</span>
+</a>
+<a class="flex flex-col items-center justify-center text-on-surface-variant hover:text-primary transition-all active:scale-90 duration-300" href="#">
+<span class="material-symbols-outlined" data-icon="menu_book">menu_book</span>
+<span class="font-label-caps text-label-caps">Manga</span>
+</a>
+<a class="flex flex-col items-center justify-center text-on-surface-variant hover:text-primary transition-all active:scale-90 duration-300" href="#">
+<span class="material-symbols-outlined" data-icon="sensors">sensors</span>
+<span class="font-label-caps text-label-caps">Live</span>
+</a>
+<a class="flex flex-col items-center justify-center text-on-surface-variant hover:text-primary transition-all active:scale-90 duration-300" href="#">
+<span class="material-symbols-outlined" data-icon="music_note">music_note</span>
+<span class="font-label-caps text-label-caps">Music</span>
+</a>
+<a class="flex flex-col items-center justify-center text-primary-container drop-shadow-[0_0_8px_rgba(0,242,234,0.5)] active:scale-90 transition-all duration-300" href="#">
+<span class="material-symbols-outlined" data-icon="person" style="font-variation-settings: 'FILL' 1;">person</span>
+<span class="font-label-caps text-label-caps">Profile</span>
+</a>
+</nav>
+<script>
+        // Simple micro-interaction for buttons
+        document.querySelectorAll('button').forEach(btn => {
+            btn.addEventListener('click', () => {
+                const originalText = btn.innerText;
+                if(btn.innerText.includes('Export') || btn.innerText.includes('Import')) {
+                    const span = btn.querySelector('.font-label-caps');
+                    const icon = btn.querySelector('.material-symbols-outlined');
+                    const originalIcon = icon.innerText;
+                    
+                    icon.innerText = 'sync';
+                    icon.classList.add('animate-spin');
+                    span.innerText = 'Processing...';
+                    
+                    setTimeout(() => {
+                        icon.innerText = 'check';
+                        icon.classList.remove('animate-spin');
+                        span.innerText = 'Completed';
+                        setTimeout(() => {
+                            icon.innerText = originalIcon;
+                            span.innerText = originalText.trim();
+                        }, 2000);
+                    }, 1500);
+                }
+            });
+        });
+    </script>
+
+
+</body></html>

@@ -1,0 +1,337 @@
+<!DOCTYPE html>
+
+<html class="dark" lang="en"><head>
+<meta charset="utf-8"/>
+<meta content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover" name="viewport"/>
+<title>NEOVOX - VOD Discovery Home</title>
+<script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700;800&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<script id="tailwind-config">
+      tailwind.config = {
+        darkMode: "class",
+        theme: {
+          extend: {
+            "colors": {
+                    "surface": "#131313",
+                    "inverse-surface": "#e5e2e1",
+                    "on-surface": "#e5e2e1",
+                    "surface-container-high": "#2a2a2a",
+                    "primary": "#cffffb",
+                    "surface-tint": "#00ddd6",
+                    "on-tertiary-fixed-variant": "#454747",
+                    "primary-container": "#00f2ea",
+                    "on-tertiary-container": "#5d5f5f",
+                    "error-container": "#93000a",
+                    "surface-dim": "#131313",
+                    "secondary": "#ffb2b6",
+                    "surface-container-lowest": "#0e0e0e",
+                    "outline": "#849492",
+                    "on-secondary-container": "#5b0016",
+                    "on-error-container": "#ffdad6",
+                    "on-tertiary": "#2f3131",
+                    "on-secondary": "#67001b",
+                    "on-surface-variant": "#b9cac8",
+                    "tertiary-fixed-dim": "#c6c6c7",
+                    "tertiary-fixed": "#e2e2e2",
+                    "on-secondary-fixed": "#40000d",
+                    "on-secondary-fixed-variant": "#920029",
+                    "surface-variant": "#353534",
+                    "inverse-primary": "#006a66",
+                    "outline-variant": "#3a4a48",
+                    "error": "#ffb4ab",
+                    "background": "#131313",
+                    "on-error": "#690005",
+                    "on-primary-fixed": "#00201e",
+                    "surface-bright": "#3a3939",
+                    "surface-container-highest": "#353534",
+                    "secondary-container": "#ff516a",
+                    "primary-fixed-dim": "#00ddd6",
+                    "primary-fixed": "#29fcf3",
+                    "on-background": "#e5e2e1",
+                    "on-primary-fixed-variant": "#00504d",
+                    "inverse-on-surface": "#313030",
+                    "secondary-fixed-dim": "#ffb2b6",
+                    "secondary-fixed": "#ffdadb",
+                    "on-tertiary-fixed": "#1a1c1c",
+                    "on-primary-container": "#006a66",
+                    "tertiary": "#f5f5f5",
+                    "surface-container-low": "#1c1b1b",
+                    "surface-container": "#201f1f",
+                    "tertiary-container": "#d9d9d9",
+                    "on-primary": "#003735"
+            },
+            "borderRadius": {
+                    "DEFAULT": "0.25rem",
+                    "lg": "0.5rem",
+                    "xl": "0.75rem",
+                    "full": "9999px"
+            },
+            "spacing": {
+                    "lg": "24px",
+                    "base": "4px",
+                    "xl": "32px",
+                    "sm": "8px",
+                    "md": "16px",
+                    "xs": "4px",
+                    "safe-area-inset": "max(16px, env(safe-area-inset-bottom))"
+            },
+            "fontFamily": {
+                    "title-md": ["Inter"],
+                    "headline-lg-mobile": ["Inter"],
+                    "headline-lg": ["Inter"],
+                    "body-sm": ["Inter"],
+                    "display-lg": ["Inter"],
+                    "label-caps": ["Inter"],
+                    "body-lg": ["Inter"]
+            },
+            "fontSize": {
+                    "title-md": ["20px", {"lineHeight": "28px", "fontWeight": "600"}],
+                    "headline-lg-mobile": ["24px", {"lineHeight": "32px", "fontWeight": "700"}],
+                    "headline-lg": ["32px", {"lineHeight": "40px", "letterSpacing": "-0.01em", "fontWeight": "700"}],
+                    "body-sm": ["14px", {"lineHeight": "20px", "fontWeight": "400"}],
+                    "display-lg": ["48px", {"lineHeight": "52px", "letterSpacing": "-0.02em", "fontWeight": "800"}],
+                    "label-caps": ["12px", {"lineHeight": "16px", "letterSpacing": "0.05em", "fontWeight": "700"}],
+                    "body-lg": ["16px", {"lineHeight": "24px", "fontWeight": "400"}]
+            }
+          }
+        }
+      }
+    </script>
+<style>
+        /* Custom scrollbar for horizontal scrolling */
+        .hide-scrollbar::-webkit-scrollbar {
+            display: none;
+        }
+        .hide-scrollbar {
+            -ms-overflow-style: none;
+            scrollbar-width: none;
+        }
+        
+        /* Glassmorphism utilities */
+        .glass-panel {
+            background: rgba(18, 18, 18, 0.6);
+            backdrop-filter: blur(20px);
+            -webkit-backdrop-filter: blur(20px);
+        }
+        
+        .glass-chip {
+            background: rgba(255, 255, 255, 0.1);
+            backdrop-filter: blur(10px);
+            -webkit-backdrop-filter: blur(10px);
+        }
+        
+        /* Neon text effect */
+        .neon-text-primary {
+            text-shadow: 0 0 8px rgba(0, 221, 214, 0.6);
+        }
+        .neon-text-secondary {
+            text-shadow: 0 0 8px rgba(255, 81, 106, 0.6);
+        }
+        
+        /* Smooth image loading */
+        img {
+            transition: opacity 0.3s ease-in-out;
+        }
+    </style>
+<style>
+    body {
+      min-height: max(884px, 100dvh);
+    }
+  </style>
+  </head>
+<body class="bg-surface text-on-surface antialiased min-h-screen pb-24 font-body-lg">
+<!-- TopAppBar -->
+<header class="fixed top-0 w-full z-50 bg-surface/80 backdrop-blur-xl dark:bg-surface/80 border-b border-outline-variant/20">
+<div class="flex flex-col w-full px-md pt-sm">
+<div class="flex items-center justify-between h-14">
+<div class="flex items-center gap-sm">
+<div class="w-8 h-8 rounded-full overflow-hidden border border-outline-variant/30 flex-shrink-0">
+<img alt="User Profile Avatar" class="w-full h-full object-cover" data-alt="A futuristic cyberpunk portrait of a young woman with glowing neon implants and augmented reality contact lenses. The lighting is harsh and dramatic, casting deep shadows against a stark, high-tech dark background. The color palette emphasizes cool cyan and hot pink highlights, reflecting a gritty, digital dystopian aesthetic." src="https://lh3.googleusercontent.com/aida-public/AB6AXuCp0a927acldz4dgbu7D-EFGaey2z8M2LCcWmKOP47GYJ-YzVnbp8rsLpqW-OV-0EZ34gWgP_ruFIq__pP37Wu44XGMiAQzl9B5xSM__iJaP6kM_bTRpGWKXTTIC-p0Qv3-grFYgDDZese6_1vNEwybEmSHhEcYcRGwkbozpEj85RIPv44ckc3HXxujj2jME2bHEBMkciGgQbo8NAlz9fUkmYiQZ7CHBXTHY-Bi6yx1tw0VK2GI_9DubEUR9nPOQRS1jlsfNDNzH6g"/>
+</div>
+<span class="font-display-lg text-title-md tracking-tighter text-primary dark:text-primary-fixed drop-shadow-[0_0_8px_rgba(0,221,214,0.6)]">NEOVOX</span>
+</div>
+<div class="flex items-center gap-sm">
+<button class="w-10 h-10 flex items-center justify-center rounded-full hover:bg-surface-variant/50 transition-colors active:scale-95 duration-200 text-on-surface-variant hover:text-primary-fixed">
+<span class="material-symbols-outlined" data-icon="search">search</span>
+</button>
+<button class="w-10 h-10 flex items-center justify-center rounded-full hover:bg-surface-variant/50 transition-colors active:scale-95 duration-200 text-on-surface-variant hover:text-primary-fixed">
+<span class="material-symbols-outlined" data-icon="cast">cast</span>
+</button>
+</div>
+</div>
+</div>
+</header>
+<!-- Main Canvas -->
+<main class="pt-[72px] flex flex-col gap-xl">
+<!-- Featured Carousel Hero -->
+<section class="relative w-full h-[530px] min-h-[400px] overflow-hidden">
+<!-- Background Image -->
+<div class="absolute inset-0 w-full h-full">
+<img alt="Featured Movie" class="w-full h-full object-cover object-top opacity-70" data-alt="A sprawling futuristic megacity viewed from a high vantage point at night. Towering skyscrapers are adorned with colossal, vibrant holographic advertisements and glowing neon signs in cyan and magenta. Flying vehicles leave trails of light through the misty, polluted air. The scene is incredibly detailed, capturing the essence of a high-tech, low-life cyberpunk world with deep black shadows and blinding artificial lights." src="https://lh3.googleusercontent.com/aida-public/AB6AXuCns2XExoBnYz8IwxXNbaA5ZUYE9gmKThD8g077cp7dfAGjaQyyA9eFOVus2UxxS0Q32GJAHIRdfbbmEi-mb7LCRbDttYNOS545OEHYq09f-iDXxs7MLOatpr9JLiz2OUvawVYL-B6v-ErN_ZPrDSpVWEO7l-dGrYCEZRsYPNBlT-GzGEx8bYWPpBID7DFfRqmgkJgZGo2PF7BuK1P7V95VabNsuQ-b6-CxWbcV_8AgzXdIabnG1osM96q_GI0h7IVwfXG3-dfpLmI"/>
+<!-- Gradient Overlay for readability -->
+<div class="absolute inset-0 bg-gradient-to-t from-surface via-surface/40 to-transparent"></div>
+</div>
+<!-- Content Overlay -->
+<div class="absolute bottom-0 w-full p-md flex flex-col gap-sm pb-lg">
+<div class="flex gap-xs flex-wrap">
+<span class="glass-chip px-2 py-1 rounded text-[10px] font-bold text-white uppercase tracking-wider">Sci-Fi</span>
+<span class="glass-chip px-2 py-1 rounded text-[10px] font-bold text-white uppercase tracking-wider">Action</span>
+<span class="glass-chip px-2 py-1 rounded text-[10px] font-bold text-primary border border-primary/30 uppercase tracking-wider">4K HDR</span>
+</div>
+<h1 class="font-headline-lg-mobile text-headline-lg-mobile text-on-surface mt-xs leading-tight drop-shadow-md">
+                    NEON SYNTHESIS
+                </h1>
+<p class="font-body-sm text-body-sm text-on-surface-variant line-clamp-2 max-w-[85%]">
+                    In a world where memories are currency, one rogue archivist must steal the ultimate secret before her mind is wiped forever.
+                </p>
+<div class="flex gap-sm mt-sm">
+<button class="flex-1 bg-primary text-on-primary font-title-md text-body-lg font-semibold py-3 rounded-full flex items-center justify-center gap-xs active:scale-95 transition-transform">
+<span class="material-symbols-outlined" style="font-variation-settings: 'FILL' 1;">play_arrow</span>
+                        Play
+                    </button>
+<button class="w-12 h-12 glass-panel rounded-full flex items-center justify-center border border-white/10 text-on-surface hover:bg-white/10 transition-colors active:scale-95">
+<span class="material-symbols-outlined">add</span>
+</button>
+</div>
+</div>
+<!-- Carousel Indicators -->
+<div class="absolute bottom-md left-0 w-full flex justify-center gap-1 z-10">
+<div class="w-6 h-1 rounded-full bg-primary shadow-[0_0_8px_rgba(0,221,214,0.8)]"></div>
+<div class="w-2 h-1 rounded-full bg-surface-variant"></div>
+<div class="w-2 h-1 rounded-full bg-surface-variant"></div>
+</div>
+</section>
+<!-- Continue Watching Row -->
+<section class="pl-md flex flex-col gap-sm">
+<h2 class="font-title-md text-title-md text-on-surface flex items-center gap-xs">
+                Continue Watching
+                <span class="material-symbols-outlined text-primary text-sm" style="font-variation-settings: 'FILL' 1;">history</span>
+</h2>
+<div class="flex overflow-x-auto hide-scrollbar gap-sm pb-sm pr-md">
+<!-- Item 1 -->
+<div class="flex-none w-64 relative rounded-lg overflow-hidden group cursor-pointer active:scale-[0.98] transition-transform">
+<div class="aspect-video w-full relative">
+<img alt="Anime" class="w-full h-full object-cover" data-alt="A highly detailed anime-style illustration of a mecha robot standing in a ruined city under a red sky. The robot is sleek and modern, heavily armed, and painted in dark gunmetal with glowing blue accents. Dust and debris float in the air, creating a moody, post-apocalyptic atmosphere. The aesthetic blends traditional hand-drawn anime techniques with high-end digital compositing." src="https://lh3.googleusercontent.com/aida-public/AB6AXuC1hV7V-0a6u8LAxgxFQHarMRo4XXoYqdc7hqswfT7SE7U86Kx8cdD_XwI-ETsAgDuAfI3Bi9QCYd_P9bKBOOpm7MP2G8VYgJv_c878ngEoZ4u6fOznhHoHs57YH8szQsigWEwTNQUUBjn46eQo49AaM2MNL9T0Ix3jYCDgaslj4fNp7b2X_pCXtubLrDuvpMLLkma-C0YTjEGYD80bepsFNjeJ0CfYVlcKe6rDl_Spwzo9kOSGlR5z4UP-Uy8p_iCjhmtef9Zn5lk"/>
+<div class="absolute inset-0 bg-black/40 group-hover:bg-black/20 transition-colors flex items-center justify-center">
+<div class="w-10 h-10 rounded-full bg-black/50 backdrop-blur-md flex items-center justify-center border border-white/20">
+<span class="material-symbols-outlined text-white" style="font-variation-settings: 'FILL' 1;">play_arrow</span>
+</div>
+</div>
+<div class="absolute top-2 right-2 glass-chip px-1.5 py-0.5 rounded text-[9px] font-bold text-white uppercase">
+                            BiliBili
+                        </div>
+</div>
+<!-- Progress Bar -->
+<div class="w-full h-1 bg-surface-variant">
+<div class="h-full bg-primary w-[65%] shadow-[0_0_5px_rgba(0,221,214,0.5)]"></div>
+</div>
+<div class="pt-2">
+<h3 class="font-body-sm text-body-sm text-on-surface font-semibold truncate">Cybernetic Dawn Ep. 04</h3>
+<p class="font-label-caps text-[10px] text-on-surface-variant mt-0.5">24m left</p>
+</div>
+</div>
+<!-- Item 2 -->
+<div class="flex-none w-64 relative rounded-lg overflow-hidden group cursor-pointer active:scale-[0.98] transition-transform">
+<div class="aspect-video w-full relative">
+<img alt="Coding Stream" class="w-full h-full object-cover" data-alt="A close-up shot of a dark computer screen displaying lines of complex code in vibrant syntax highlighting colors—greens, yellows, and blues against a deep grey background. The screen is slightly out of focus at the edges, creating a depth of field effect. The reflection of a neon pink light is faintly visible on the monitor's glossy surface, suggesting a hacker's den setting." src="https://lh3.googleusercontent.com/aida-public/AB6AXuDNAX8WKitRUkc6AWShNmNtiI72o3F7Vo6jG71SdLPuSQlVxOY_K2HmK_F_2tnBnvrH4N-makadB2kiokVyhimzz-C318vT3r1BN6jSsa4kQ4jDYVqeD6WqECFkFWJzXnbeDuuIWwCJw44BsmXKlIyJJMom4UB1CmSwldJOf3lIhXMXxX_vQC_VshfWeLWvbpOp7BftCpQ9o8TmrG6QIF8l8PKW4r7y8ah281fyNydz2pzyXuFK7o3LhfAI3Qxp8EcFmmS1dtTUKUM"/>
+<div class="absolute inset-0 bg-black/40 group-hover:bg-black/20 transition-colors flex items-center justify-center">
+<div class="w-10 h-10 rounded-full bg-black/50 backdrop-blur-md flex items-center justify-center border border-white/20">
+<span class="material-symbols-outlined text-white" style="font-variation-settings: 'FILL' 1;">play_arrow</span>
+</div>
+</div>
+<div class="absolute top-2 right-2 glass-chip px-1.5 py-0.5 rounded text-[9px] font-bold text-white uppercase">
+                            YouTube
+                        </div>
+</div>
+<!-- Progress Bar -->
+<div class="w-full h-1 bg-surface-variant">
+<div class="h-full bg-primary w-[15%] shadow-[0_0_5px_rgba(0,221,214,0.5)]"></div>
+</div>
+<div class="pt-2">
+<h3 class="font-body-sm text-body-sm text-on-surface font-semibold truncate">Building an AI from Scratch</h3>
+<p class="font-label-caps text-[10px] text-on-surface-variant mt-0.5">1h 45m left</p>
+</div>
+</div>
+</div>
+</section>
+<!-- Trending Grid (Bento Style) -->
+<section class="px-md flex flex-col gap-sm">
+<h2 class="font-title-md text-title-md text-on-surface flex items-center justify-between">
+                Trending Now
+                <span class="material-symbols-outlined text-on-surface-variant text-sm">chevron_right</span>
+</h2>
+<div class="grid grid-cols-2 gap-sm">
+<!-- Large Item (Spans 2 cols) -->
+<div class="col-span-2 relative rounded-lg overflow-hidden h-40 group cursor-pointer active:scale-[0.98] transition-transform">
+<img alt="Trending" class="w-full h-full object-cover" data-alt="A wide cinematic shot of a dark, rain-slicked alleyway in a futuristic metropolis. The wet asphalt reflects vibrant neon signs in electric blue, bright pink, and radioactive green. A lone figure in a dark trench coat stands silhouetted against the bright lights of a noodle stand at the end of the alley. The atmosphere is dense with fog and mystery, typical of a classic cyberpunk thriller." src="https://lh3.googleusercontent.com/aida-public/AB6AXuCTOvHizGmmE3JxUT5dwyZE0t3uvQMs_dxOt6d_uGQGtA9WnylWQjIXr08-FLE5kqgcrb4-R79JcY0y46Zo7k3ssiZI0-JE6bFpbBCl5x2f80f4Tu1ODrtGGWIFtbbj2Xta-ojgxfE7PStu9QhGw1pPEmyQr42cEUgrHlu9hG-T0CZywGtTPTiA8DKwBmBDZAa5b0YVlr1QEY1C-8sqraC-hrFXRmoXC8jKDTC9kBcckJQ0n4ysy5wJHg5UdVSpbZvGzRim2cx7k-c"/>
+<div class="absolute inset-0 bg-gradient-to-t from-surface via-transparent to-transparent"></div>
+<div class="absolute top-2 left-2 flex gap-1">
+<span class="bg-secondary-container text-on-secondary-container px-1.5 py-0.5 rounded text-[9px] font-bold uppercase tracking-wider flex items-center gap-0.5">
+<div class="w-1 h-1 rounded-full bg-white animate-pulse"></div>
+                            TOP 1
+                        </span>
+</div>
+<div class="absolute top-2 right-2 glass-chip px-1.5 py-0.5 rounded text-[9px] font-bold text-white uppercase border border-white/10">
+                        1080p
+                    </div>
+<div class="absolute bottom-2 left-2 right-2">
+<h3 class="font-body-sm text-body-sm text-on-surface font-semibold truncate">Underground Grid: The Fall</h3>
+<p class="font-label-caps text-[10px] text-on-surface-variant mt-0.5">Sci-Fi • 2h 14m</p>
+</div>
+</div>
+<!-- Small Item 1 -->
+<div class="relative rounded-lg overflow-hidden aspect-[3/4] group cursor-pointer active:scale-[0.98] transition-transform">
+<img alt="Poster" class="w-full h-full object-cover" data-alt="A portrait-oriented movie poster showing an intense close-up of a human eye. The iris is unnaturally vibrant, glowing with complex digital patterns and circuits instead of organic tissue. The reflection in the eye shows a sprawling digital cityscape. The overall color palette is dark, with striking contrast provided by the glowing cyan circuitry within the eye. The style is hyper-realistic digital art." src="https://lh3.googleusercontent.com/aida-public/AB6AXuAS1GGv7mQjWBtWa1MyPT0KTcG3jpzO6HWnGVF3-_UXi2IPTIZ7I6j4eGm-tcNN1I6dB-rKYlT7tpTD66MMH4Wa4UgX_wgIchVVhlaEG0X26UCV6CTkmhiZG4HLngCU8qA4zPDF_PIbcaa-0skysOsFEm6VwCuNgbLoTeJT3uzxuD0SIgnEhNPGL-ekmCuTnMbujjK8P1383Dcx1xDswc7uI_RIn1RVOxxXb3wR0A2zot-t3TrEstkktT5Xw6EyDLVRz2Bu1bGFWtg"/>
+<div class="absolute inset-0 bg-gradient-to-t from-surface/90 to-transparent"></div>
+<div class="absolute top-2 right-2 glass-chip px-1.5 py-0.5 rounded text-[9px] font-bold text-white uppercase border border-white/10">
+                        HD
+                    </div>
+<div class="absolute bottom-2 left-2 right-2">
+<h3 class="font-body-sm text-[13px] leading-tight text-on-surface font-semibold line-clamp-2">The Ocular Interface</h3>
+</div>
+</div>
+<!-- Small Item 2 -->
+<div class="relative rounded-lg overflow-hidden aspect-[3/4] group cursor-pointer active:scale-[0.98] transition-transform">
+<img alt="Poster" class="w-full h-full object-cover" data-alt="Abstract 3D rendering of floating geometric shapes in a dark, empty void. Glass-like spheres and metallic cubes drift weightlessly, reflecting ethereal purple and blue lights. The lighting is dramatic and moody, creating a sense of deep space and isolation. The surfaces of the objects are highly detailed, showing scratches and imperfections despite their futuristic nature." src="https://lh3.googleusercontent.com/aida-public/AB6AXuAZSKwqHvsCSOo54gFhyCcIHYKfdah1Jy9zrit_jwwlV8biox72K_1fMIpa0d71Yn5qWiEpp5AEyNOWGkq8_ZCphS4254ru6J6voT1HzmGoXyoM0gfPBpq1XBczPk77QFvJLRku9DOwP_mud2PMQJYwhSapNN3QBetlj-ZFzF-8TJnICLQ9ZW_t8hkSxcixDD1vPPjno1rjHBixOb2wiTWbgO9B-dFWkepvo-FLyZ0q0TiOCaJmDH-VyTzcr_XaKQwrdvUPvCy2aDw"/>
+<div class="absolute inset-0 bg-gradient-to-t from-surface/90 to-transparent"></div>
+<div class="absolute top-2 right-2 glass-chip px-1.5 py-0.5 rounded text-[9px] font-bold text-primary uppercase border border-primary/30">
+                        4K
+                    </div>
+<div class="absolute bottom-2 left-2 right-2">
+<h3 class="font-body-sm text-[13px] leading-tight text-on-surface font-semibold line-clamp-2">Void Constructs</h3>
+</div>
+</div>
+</div>
+</section>
+</main>
+<!-- BottomNavBar -->
+<nav class="fixed bottom-0 w-full z-50 px-md pb-safe-area-inset bg-surface/80 backdrop-blur-xl dark:bg-surface/80 border-t border-outline-variant/20">
+<div class="flex justify-between items-center h-16 w-full">
+<!-- Active Tab: Home -->
+<button class="flex flex-col items-center justify-center text-primary dark:text-primary-fixed drop-shadow-[0_0_10px_rgba(0,221,214,0.8)] active:scale-110 transition-transform duration-300 w-16 relative">
+<span class="material-symbols-outlined mb-1" style="font-variation-settings: 'FILL' 1;">home</span>
+<span class="font-label-caps text-label-caps">Home</span>
+<!-- Subtle indicator for the toggle state mentioned in prompt -->
+<div class="absolute -top-1 right-3 w-1.5 h-1.5 bg-secondary-container rounded-full animate-pulse"></div>
+</button>
+<button class="flex flex-col items-center justify-center text-on-surface-variant hover:text-primary-container active:scale-110 transition-transform duration-300 w-16">
+<span class="material-symbols-outlined mb-1">menu_book</span>
+<span class="font-label-caps text-label-caps">Manga</span>
+</button>
+<button class="flex flex-col items-center justify-center text-on-surface-variant hover:text-primary-container active:scale-110 transition-transform duration-300 w-16">
+<span class="material-symbols-outlined mb-1">sensors</span>
+<span class="font-label-caps text-label-caps">Live</span>
+</button>
+<button class="flex flex-col items-center justify-center text-on-surface-variant hover:text-primary-container active:scale-110 transition-transform duration-300 w-16">
+<span class="material-symbols-outlined mb-1">music_note</span>
+<span class="font-label-caps text-label-caps">Music</span>
+</button>
+<button class="flex flex-col items-center justify-center text-on-surface-variant hover:text-primary-container active:scale-110 transition-transform duration-300 w-16">
+<span class="material-symbols-outlined mb-1">person</span>
+<span class="font-label-caps text-label-caps">Profile</span>
+</button>
+</div>
+</nav>
+</body></html>

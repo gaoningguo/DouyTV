@@ -1,0 +1,345 @@
+<!DOCTYPE html><html class="dark" lang="en" style=""><head>
+<meta charset="utf-8">
+<meta content="width=device-width, initial-scale=1.0" name="viewport">
+<title>Source Management | Video Scrapers</title>
+<script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700;800&amp;display=swap" rel="stylesheet">
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet">
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet">
+<script id="tailwind-config">
+        tailwind.config = {
+            darkMode: "class",
+            theme: {
+                extend: {
+                    "colors": {
+                        "on-surface": "#e5e2e1",
+                        "on-tertiary": "#2f3131",
+                        "surface-container-highest": "#353534",
+                        "tertiary-fixed": "#e2e2e2",
+                        "primary": "#cffffb",
+                        "inverse-surface": "#e5e2e1",
+                        "outline": "#849492",
+                        "on-secondary-fixed": "#40000d",
+                        "on-tertiary-fixed-variant": "#454747",
+                        "on-primary-fixed-variant": "#00504d",
+                        "surface-bright": "#3a3939",
+                        "primary-fixed": "#29fcf3",
+                        "on-primary": "#003735",
+                        "tertiary": "#f5f5f5",
+                        "on-error-container": "#ffdad6",
+                        "inverse-primary": "#006a66",
+                        "surface-variant": "#353534",
+                        "on-primary-container": "#006a66",
+                        "on-primary-fixed": "#00201e",
+                        "primary-fixed-dim": "#00ddd6",
+                        "surface-container-lowest": "#0e0e0e",
+                        "on-secondary-fixed-variant": "#920029",
+                        "error-container": "#93000a",
+                        "on-tertiary-fixed": "#1a1c1c",
+                        "outline-variant": "#3a4a48",
+                        "secondary-fixed-dim": "#ffb2b6",
+                        "tertiary-fixed-dim": "#c6c6c7",
+                        "secondary-fixed": "#ffdadb",
+                        "surface-dim": "#131313",
+                        "background": "#131313",
+                        "tertiary-container": "#d9d9d9",
+                        "error": "#ffb4ab",
+                        "surface": "#131313",
+                        "surface-container": "#201f1f",
+                        "on-error": "#690005",
+                        "inverse-on-surface": "#313030",
+                        "secondary": "#ffb2b6",
+                        "surface-container-high": "#2a2a2a",
+                        "surface-container-low": "#1c1b1b",
+                        "on-tertiary-container": "#5d5f5f",
+                        "on-secondary-container": "#5b0016",
+                        "surface-tint": "#00ddd6",
+                        "on-surface-variant": "#b9cac8",
+                        "on-background": "#e5e2e1",
+                        "on-secondary": "#67001b",
+                        "secondary-container": "#ff516a",
+                        "primary-container": "#00f2ea"
+                    },
+                    "borderRadius": {
+                        "DEFAULT": "0.25rem",
+                        "lg": "0.5rem",
+                        "xl": "0.75rem",
+                        "full": "9999px"
+                    },
+                    "spacing": {
+                        "xs": "4px",
+                        "md": "16px",
+                        "xl": "32px",
+                        "lg": "24px",
+                        "safe-area-inset": "max(16px, env(safe-area-inset-bottom))",
+                        "base": "4px",
+                        "sm": "8px"
+                    }
+                },
+            },
+        }
+    </script>
+<style>
+        body {
+            background-color: #050505;
+            color: #e5e2e1;
+            font-family: 'Inter', sans-serif;
+            -webkit-font-smoothing: antialiased;
+        }
+        .glass-panel {
+            background: rgba(32, 31, 31, 0.6);
+            backdrop-filter: blur(20px);
+            border: 1px solid rgba(255, 255, 255, 0.05);
+        }
+        .neon-glow-cyan {
+            box-shadow: 0 0 15px rgba(0, 242, 234, 0.3);
+        }
+        .neon-glow-pink {
+            box-shadow: 0 0 15px rgba(255, 0, 79, 0.3);
+        }
+        .material-symbols-outlined {
+            font-variation-settings: 'FILL' 0, 'wght' 400, 'GRAD' 0, 'opsz' 24;
+        }
+        .active-pill {
+            background: linear-gradient(90deg, #00f2ea 0%, #006a66 100%);
+        }
+    </style>
+<style>
+    body {
+      min-height: max(884px, 100dvh);
+    }
+  </style>
+  </head>
+<body class="min-h-screen pb-24">
+<!-- Header Area (Custom for Focused View) -->
+<header class="sticky top-0 z-50 glass-panel px-md py-sm flex items-center justify-between border-b border-outline-variant">
+<div class="flex items-center gap-md">
+<button class="p-sm rounded-full hover:bg-surface-container-high transition-colors" onclick="history.back()">
+<span class="material-symbols-outlined text-on-surface">arrow_back</span>
+</button>
+<h1 class="text-headline-lg-mobile font-bold tracking-tight">Video Sources</h1>
+</div>
+<button class="bg-primary-container text-on-primary-fixed px-md py-sm rounded-lg font-bold flex items-center gap-sm transition-transform active:scale-95 neon-glow-cyan">
+<span class="material-symbols-outlined">add</span>
+<span class="">Add Source</span>
+</button>
+</header>
+<main class="max-w-4xl mx-auto p-md space-y-lg">
+<!-- Quick Stats -->
+<div class="grid grid-cols-2 gap-md">
+<div class="glass-panel p-md rounded-xl flex flex-col gap-xs">
+<span class="text-label-caps text-on-surface-variant uppercase">Active Scrapers</span>
+<div class="flex items-baseline gap-sm">
+<span class="text-headline-lg font-extrabold text-primary-container">12</span>
+<span class="text-body-sm text-outline">/ 14 total</span>
+</div>
+<div class="w-full bg-surface-container-highest h-1 rounded-full mt-sm overflow-hidden">
+<div class="bg-primary-container h-full w-[85%]"></div>
+</div>
+</div>
+<div class="glass-panel p-md rounded-xl flex flex-col gap-xs">
+<span class="text-label-caps text-on-surface-variant uppercase">Global Uptime</span>
+<div class="flex items-baseline gap-sm">
+<span class="text-headline-lg font-extrabold text-secondary">99.8</span>
+<span class="text-body-sm text-secondary">%</span>
+</div>
+<div class="flex items-center gap-xs mt-sm">
+<div class="w-2 h-2 rounded-full bg-secondary animate-pulse"></div>
+<span class="text-[10px] text-on-surface-variant font-bold uppercase tracking-widest">Real-time monitoring</span>
+</div>
+</div>
+</div>
+<!-- Scraper List -->
+<section class="space-y-md">
+<div class="flex items-center justify-between px-xs">
+<h2 class="text-title-md font-bold text-on-surface">Configured Endpoints</h2>
+<span class="text-body-sm text-outline">Last synced: 2m ago</span>
+</div>
+<!-- YouTube API v3 -->
+<div class="glass-panel p-md rounded-xl flex flex-col sm:flex-row sm:items-center justify-between gap-md group hover:border-primary-container/30 transition-all">
+<div class="flex items-center gap-md">
+<div class="size-12 rounded-lg bg-surface-container-highest flex items-center justify-center text-primary-container border border-outline-variant">
+<span class="material-symbols-outlined" style="font-variation-settings: 'FILL' 1;">smart_display</span>
+</div>
+<div>
+<div class="flex items-center gap-sm">
+<h3 class="text-body-lg font-bold text-on-surface">YouTube API v3</h3>
+<span class="px-xs py-[2px] bg-primary-container/10 text-primary-container text-[10px] font-black rounded uppercase">Official</span>
+</div>
+<div class="flex items-center gap-sm mt-1">
+<span class="flex items-center gap-1 text-primary-fixed-dim text-body-sm">
+<span class="size-2 rounded-full bg-primary-fixed-dim"></span>
+                                Online
+                            </span>
+<span class="text-outline text-body-sm">• Latency: 42ms</span>
+</div>
+</div>
+</div>
+<div class="flex items-center gap-md justify-between sm:justify-end">
+<button class="text-on-surface-variant hover:text-white transition-colors text-body-sm font-semibold flex items-center gap-xs px-sm py-xs rounded-lg hover:bg-surface-container-high border border-transparent hover:border-outline-variant">
+<span class="material-symbols-outlined text-[18px]">settings</span>
+                        Edit
+                    </button>
+<label class="relative inline-flex items-center cursor-pointer">
+<input checked="" class="sr-only peer" type="checkbox">
+<div class="w-11 h-6 bg-surface-container-highest rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-primary-container"></div>
+</label>
+</div>
+</div>
+<!-- Twitch Scraper -->
+<div class="glass-panel p-md rounded-xl flex flex-col sm:flex-row sm:items-center justify-between gap-md group hover:border-primary-container/30 transition-all">
+<div class="flex items-center gap-md">
+<div class="size-12 rounded-lg bg-surface-container-highest flex items-center justify-center text-on-surface-variant border border-outline-variant">
+<span class="material-symbols-outlined">dynamic_feed</span>
+</div>
+<div>
+<div class="flex items-center gap-sm">
+<h3 class="text-body-lg font-bold text-on-surface">Twitch Live Scraper</h3>
+<span class="px-xs py-[2px] bg-secondary-container/10 text-secondary text-[10px] font-black rounded uppercase">Legacy</span>
+</div>
+<div class="flex items-center gap-sm mt-1">
+<span class="flex items-center gap-1 text-error text-body-sm">
+<span class="size-2 rounded-full bg-error"></span>
+                                Offline
+                            </span>
+<span class="text-outline text-body-sm">• Error: Auth Token Expired</span>
+</div>
+</div>
+</div>
+<div class="flex items-center gap-md justify-between sm:justify-end">
+<button class="text-on-surface-variant hover:text-white transition-colors text-body-sm font-semibold flex items-center gap-xs px-sm py-xs rounded-lg hover:bg-surface-container-high border border-transparent hover:border-outline-variant">
+<span class="material-symbols-outlined text-[18px]">settings</span>
+                        Edit
+                    </button>
+<label class="relative inline-flex items-center cursor-pointer">
+<input class="sr-only peer" type="checkbox">
+<div class="w-11 h-6 bg-surface-container-highest rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-primary-container"></div>
+</label>
+</div>
+</div>
+<!-- Vimeo Search Crawler -->
+<div class="glass-panel p-md rounded-xl flex flex-col sm:flex-row sm:items-center justify-between gap-md group hover:border-primary-container/30 transition-all">
+<div class="flex items-center gap-md">
+<div class="size-12 rounded-lg bg-surface-container-highest flex items-center justify-center text-primary-container border border-outline-variant">
+<span class="material-symbols-outlined">travel_explore</span>
+</div>
+<div>
+<div class="flex items-center gap-sm">
+<h3 class="text-body-lg font-bold text-on-surface">Vimeo Meta-Crawler</h3>
+<span class="px-xs py-[2px] bg-surface-container-highest text-on-surface-variant text-[10px] font-black rounded uppercase">Beta</span>
+</div>
+<div class="flex items-center gap-sm mt-1">
+<span class="flex items-center gap-1 text-primary-fixed-dim text-body-sm">
+<span class="size-2 rounded-full bg-primary-fixed-dim"></span>
+                                Online
+                            </span>
+<span class="text-outline text-body-sm">• Rate Limit: 12%</span>
+</div>
+</div>
+</div>
+<div class="flex items-center gap-md justify-between sm:justify-end">
+<button class="text-on-surface-variant hover:text-white transition-colors text-body-sm font-semibold flex items-center gap-xs px-sm py-xs rounded-lg hover:bg-surface-container-high border border-transparent hover:border-outline-variant">
+<span class="material-symbols-outlined text-[18px]">settings</span>
+                        Edit
+                    </button>
+<label class="relative inline-flex items-center cursor-pointer">
+<input checked="" class="sr-only peer" type="checkbox">
+<div class="w-11 h-6 bg-surface-container-highest rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-primary-container"></div>
+</label>
+</div>
+</div>
+<!-- Custom Python Script -->
+<div class="glass-panel p-md rounded-xl flex flex-col sm:flex-row sm:items-center justify-between gap-md group hover:border-primary-container/30 transition-all">
+<div class="flex items-center gap-md">
+<div class="size-12 rounded-lg bg-surface-container-highest flex items-center justify-center text-secondary border border-outline-variant">
+<span class="material-symbols-outlined">terminal</span>
+</div>
+<div>
+<div class="flex items-center gap-sm">
+<h3 class="text-body-lg font-bold text-on-surface">Local-Py-Proxy-3</h3>
+</div>
+<div class="flex items-center gap-sm mt-1">
+<span class="flex items-center gap-1 text-primary-fixed-dim text-body-sm">
+<span class="size-2 rounded-full bg-primary-fixed-dim"></span>
+                                Online
+                            </span>
+<span class="text-outline text-body-sm">• 0 Requests Today</span>
+</div>
+</div>
+</div>
+<div class="flex items-center gap-md justify-between sm:justify-end">
+<button class="text-on-surface-variant hover:text-white transition-colors text-body-sm font-semibold flex items-center gap-xs px-sm py-xs rounded-lg hover:bg-surface-container-high border border-transparent hover:border-outline-variant">
+<span class="material-symbols-outlined text-[18px]">settings</span>
+                        Edit
+                    </button>
+<label class="relative inline-flex items-center cursor-pointer">
+<input checked="" class="sr-only peer" type="checkbox">
+<div class="w-11 h-6 bg-surface-container-highest rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-primary-container"></div>
+</label>
+</div>
+</div>
+</section>
+<!-- Advanced Config Banner -->
+<section class="relative overflow-hidden rounded-2xl bg-surface-container-low p-lg border border-outline-variant/30">
+
+<!-- Visual Decor -->
+<div class="absolute -right-12 -bottom-12 size-48 bg-primary-container/5 rounded-full blur-3xl"></div>
+<div class="absolute -left-12 -top-12 size-48 bg-secondary/5 rounded-full blur-3xl"></div>
+</section>
+</main>
+<!-- Floating Action Button (Alternative for Mobile) -->
+<div class="fixed bottom-32 right-md md:hidden">
+<button class="size-16 rounded-full bg-primary-container text-on-primary flex items-center justify-center neon-glow-cyan shadow-xl active:scale-90 transition-transform">
+
+</button>
+</div>
+<!-- Bottom Nav Shared Component (Included as it is a top-level destination navigation context) -->
+<nav class="fixed bottom-0 left-0 right-0 z-[100] border-t border-[#204b4a] bg-[#173635] px-4 pb-safe-area-inset pt-2 flex gap-2">
+<a class="flex flex-1 flex-col items-center justify-end gap-1 text-[#8dcecc]" href="#">
+<div class="text-[#8dcecc] flex h-8 items-center justify-center" data-icon="House" data-size="24px" data-weight="regular">
+<span class="material-symbols-outlined">house</span>
+</div>
+<p class="text-[#8dcecc] text-[10px] font-medium leading-normal tracking-[0.015em]">Dashboard</p>
+</a>
+<a class="flex flex-1 flex-col items-center justify-end gap-1 rounded-full text-white" href="#">
+<div class="text-white flex h-8 items-center justify-center" data-icon="Database" data-size="24px" data-weight="fill">
+<span class="material-symbols-outlined" style="font-variation-settings: 'FILL' 1;">database</span>
+</div>
+<p class="text-white text-[10px] font-medium leading-normal tracking-[0.015em]">Sources</p>
+</a>
+<a class="flex flex-1 flex-col items-center justify-end gap-1 text-[#8dcecc]" href="#">
+<div class="text-[#8dcecc] flex h-8 items-center justify-center" data-icon="Terminal" data-size="24px" data-weight="regular">
+<span class="material-symbols-outlined">terminal</span>
+</div>
+<p class="text-[#8dcecc] text-[10px] font-medium leading-normal tracking-[0.015em]">Logs</p>
+</a>
+<a class="flex flex-1 flex-col items-center justify-end gap-1 text-[#8dcecc]" href="#">
+<div class="text-[#8dcecc] flex h-8 items-center justify-center" data-icon="User" data-size="24px" data-weight="regular">
+<span class="material-symbols-outlined">person</span>
+</div>
+<p class="text-[#8dcecc] text-[10px] font-medium leading-normal tracking-[0.015em]">Profile</p>
+</a>
+</nav>
+<script>
+        // Simple Interaction logic for switches
+        document.querySelectorAll('input[type="checkbox"]').forEach(toggle => {
+            toggle.addEventListener('change', function() {
+                const parent = this.closest('.glass-panel');
+                const statusLabel = parent.querySelector('.flex.items-center.gap-1');
+                
+                if (this.checked) {
+                    statusLabel.innerHTML = `<span class="size-2 rounded-full bg-primary-fixed-dim"></span> Online`;
+                    statusLabel.classList.remove('text-error');
+                    statusLabel.classList.add('text-primary-fixed-dim');
+                } else {
+                    statusLabel.innerHTML = `<span class="size-2 rounded-full bg-surface-container-highest"></span> Disabled`;
+                    statusLabel.classList.remove('text-primary-fixed-dim');
+                    statusLabel.classList.remove('text-error');
+                    statusLabel.classList.add('text-outline');
+                }
+            });
+        });
+    </script>
+
+
+</body></html>

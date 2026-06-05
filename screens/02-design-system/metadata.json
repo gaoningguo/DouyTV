@@ -1,0 +1,23 @@
+{
+  "projectId": "3391305001861538506",
+  "requestedId": "asset-stub-assets-f2bd14efffbf4e8289864548c7a77b3c-1780495100845",
+  "title": "Design System",
+  "kind": "design_system",
+  "note": "The Stitch MCP API exposes this item as a design-system asset, not as a screen with hosted screenshot/htmlCode URLs.",
+  "assetName": "assets/f2bd14efffbf4e8289864548c7a77b3c",
+  "version": "1",
+  "screenInstances": [
+    {
+      "height": 540,
+      "id": "assets-f2bd14efffbf4e8289864548c7a77b3c-1780495100845",
+      "sourceAsset": "assets/f2bd14efffbf4e8289864548c7a77b3c",
+      "type": "DESIGN_SYSTEM_INSTANCE",
+      "width": 960,
+      "x": -1024
+    }
+  ],
+  "files": {
+    "designSystemJson": "stitch-export/screens/02-design-system/design-system.json",
+    "designMd": "stitch-export/screens/02-design-system/DESIGN.md"
+  }
+}

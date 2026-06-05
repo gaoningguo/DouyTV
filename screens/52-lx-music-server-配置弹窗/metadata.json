@@ -1,0 +1,24 @@
+{
+  "projectId": "3391305001861538506",
+  "requestedId": "471899cf752b4133b91dc622766c659f",
+  "title": "LX-Music Server 配置弹窗",
+  "stitchTitle": "LX-Music Server 配置弹窗",
+  "resourceName": "projects/3391305001861538506/screens/471899cf752b4133b91dc622766c659f",
+  "deviceType": "MOBILE",
+  "width": "780",
+  "height": "1768",
+  "files": {
+    "screenshot": {
+      "path": "stitch-export/screens/52-lx-music-server-配置弹窗/screenshot.png",
+      "mimeType": "image/png",
+      "bytes": 153179,
+      "resourceName": "projects/3391305001861538506/files/a541a85e663f470094f670c6562a5dbc"
+    },
+    "code": {
+      "path": "stitch-export/screens/52-lx-music-server-配置弹窗/code.html",
+      "mimeType": "text/html",
+      "bytes": 14488,
+      "resourceName": "projects/3391305001861538506/files/f105325d96a84158b495730a6352ef50"
+    }
+  }
+}

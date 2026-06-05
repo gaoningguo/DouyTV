@@ -1,0 +1,305 @@
+<!DOCTYPE html>
+
+<html class="dark" lang="en"><head>
+<meta charset="utf-8"/>
+<meta content="width=device-width, initial-scale=1.0" name="viewport"/>
+<title>My Bookshelf - Immersive Aggregator</title>
+<script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700;800&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<script id="tailwind-config">
+    tailwind.config = {
+      darkMode: "class",
+      theme: {
+        extend: {
+          "colors": {
+                  "on-primary-container": "#006a66",
+                  "tertiary-fixed-dim": "#c6c6c7",
+                  "error": "#ffb4ab",
+                  "tertiary-container": "#d9d9d9",
+                  "on-surface-variant": "#b9cac8",
+                  "on-tertiary": "#2f3131",
+                  "secondary-fixed": "#ffdadb",
+                  "outline-variant": "#3a4a48",
+                  "on-tertiary-fixed-variant": "#454747",
+                  "on-primary-fixed": "#00201e",
+                  "surface-container-lowest": "#0e0e0e",
+                  "surface-dim": "#131313",
+                  "on-primary-fixed-variant": "#00504d",
+                  "secondary": "#ffb2b6",
+                  "surface-container-high": "#2a2a2a",
+                  "on-tertiary-fixed": "#1a1c1c",
+                  "on-tertiary-container": "#5d5f5f",
+                  "on-secondary-fixed": "#40000d",
+                  "inverse-on-surface": "#313030",
+                  "surface": "#131313",
+                  "error-container": "#93000a",
+                  "inverse-primary": "#006a66",
+                  "on-error-container": "#ffdad6",
+                  "on-secondary-container": "#5b0016",
+                  "on-secondary": "#67001b",
+                  "surface-variant": "#353534",
+                  "surface-tint": "#00ddd6",
+                  "primary-fixed-dim": "#00ddd6",
+                  "outline": "#849492",
+                  "surface-container-highest": "#353534",
+                  "on-primary": "#003735",
+                  "tertiary-fixed": "#e2e2e2",
+                  "on-background": "#e5e2e1",
+                  "surface-container-low": "#1c1b1b",
+                  "primary": "#cffffb",
+                  "tertiary": "#f5f5f5",
+                  "on-error": "#690005",
+                  "on-surface": "#e5e2e1",
+                  "inverse-surface": "#e5e2e1",
+                  "primary-container": "#00f2ea",
+                  "surface-container": "#201f1f",
+                  "surface-bright": "#3a3939",
+                  "primary-fixed": "#29fcf3",
+                  "background": "#050505",
+                  "secondary-container": "#ff516a",
+                  "secondary-fixed-dim": "#ffb2b6",
+                  "on-secondary-fixed-variant": "#920029"
+          },
+          "borderRadius": {
+                  "DEFAULT": "0.5rem",
+                  "lg": "1rem",
+                  "xl": "1.5rem",
+                  "full": "9999px"
+          },
+          "spacing": {
+                  "lg": "24px",
+                  "sm": "8px",
+                  "xs": "4px",
+                  "xl": "32px",
+                  "safe-area-inset": "max(16px, env(safe-area-inset-bottom))",
+                  "base": "4px",
+                  "md": "16px"
+          }
+        },
+      },
+    }
+  </script>
+<style>
+    body {
+      background-color: #050505;
+      color: #e5e2e1;
+      -webkit-tap-highlight-color: transparent;
+    }
+    .glass-card {
+      background: rgba(255, 255, 255, 0.05);
+      backdrop-filter: blur(20px);
+      border: 1px solid rgba(255, 255, 255, 0.1);
+    }
+    .neon-glow {
+      box-shadow: 0 0 15px rgba(0, 242, 234, 0.3);
+    }
+    .no-scrollbar::-webkit-scrollbar {
+      display: none;
+    }
+    .no-scrollbar {
+      -ms-overflow-style: none;
+      scrollbar-width: none;
+    }
+  </style>
+<style>
+    body {
+      min-height: max(884px, 100dvh);
+    }
+  </style>
+  </head>
+<body class="font-['Inter']">
+<!-- Main Container -->
+<div class="relative flex min-h-screen w-full flex-col bg-background overflow-x-hidden">
+<!-- Top Bar -->
+<header class="sticky top-0 z-50 flex items-center bg-background/80 backdrop-blur-xl px-md py-sm justify-between border-b border-surface-variant">
+<div class="flex items-center gap-sm">
+<span class="material-symbols-outlined text-on-surface" style="font-size: 24px;">list</span>
+<h1 class="text-headline-lg-mobile text-on-surface font-bold">My Bookshelf</h1>
+</div>
+<div class="flex gap-md">
+<button class="p-xs text-on-surface">
+<span class="material-symbols-outlined" style="font-size: 24px;">search</span>
+</button>
+<button class="p-xs text-on-surface">
+<span class="material-symbols-outlined" style="font-size: 24px;">settings</span>
+</button>
+</div>
+</header>
+<!-- Content Toggle -->
+<div class="px-md py-md">
+<div class="flex h-12 w-full items-center justify-center rounded-xl bg-surface-container-high p-1">
+<button class="flex h-full grow items-center justify-center rounded-lg px-2 bg-background shadow-lg text-white text-sm font-semibold transition-all" id="toggle-manga">
+          Manga
+        </button>
+<button class="flex h-full grow items-center justify-center rounded-lg px-2 text-outline text-sm font-medium transition-all" id="toggle-novels">
+          Novels
+        </button>
+</div>
+</div>
+<!-- Continue Reading -->
+<section>
+<div class="flex items-center justify-between px-md pb-md pt-xs">
+<h2 class="text-title-md text-on-surface font-bold">Continue Reading</h2>
+<span class="text-primary-container text-label-caps uppercase">View History</span>
+</div>
+<div class="flex overflow-x-auto no-scrollbar gap-md px-md pb-lg">
+<!-- Progress Card 1 -->
+<div class="flex flex-col gap-sm min-w-[280px] group">
+<div class="relative w-full aspect-[16/9] overflow-hidden rounded-xl border border-outline-variant bg-surface-container-low">
+<div class="absolute inset-0 bg-cover bg-center transition-transform duration-500 group-hover:scale-105" data-alt="Detailed anime-style digital art of a celestial dragon slayer standing on a floating island against a deep indigo star-filled night sky. The character has glowing cyan hair and holding a massive obsidian sword. The scene is illuminated by vibrant neon cyan magic circles and sparks. High contrast, cinematic lighting, and sharp details consistent with a dark mode digital media aggregator aesthetic." style="background-image: url('https://lh3.googleusercontent.com/aida-public/AB6AXuB2WZQSNBCcb5uY9grpTC22A254v1Nm5xmXoOvL9OHBIm6poum9o-wzgOBry1SlawSAsiUT4G7yiWr--aB9B3zTkj4MnE21-RtJMSKa8WyF4syvDlJ9dn3EtfBuucFx5xZ8wo30qevkLvbJ1tTyW-aofTuxVt9sGHB8Zu8e2J6DvqtuS4N2xZUCd60oWG_w5DcgA7xXi2Nk-fXQ7iUwUToUlA7oyQAZXKgHnLoPZNlBlu_swuXsoiSBy5BXl7mQbkzeygcT52ktqxk')">
+</div>
+<div class="absolute bottom-0 left-0 right-0 h-1 bg-surface-variant">
+<div class="h-full bg-primary-container neon-glow" style="width: 64%"></div>
+</div>
+<div class="absolute bottom-3 right-3 glass-card px-2 py-1 rounded-md">
+<p class="text-[10px] font-bold text-white uppercase tracking-wider">64% Read</p>
+</div>
+</div>
+<div>
+<h3 class="text-body-lg font-bold text-on-surface truncate">Dragon Slayer Saga</h3>
+<p class="text-body-sm text-outline">Chapter 45 • 2 days ago</p>
+</div>
+</div>
+<!-- Progress Card 2 -->
+<div class="flex flex-col gap-sm min-w-[280px] group">
+<div class="relative w-full aspect-[16/9] overflow-hidden rounded-xl border border-outline-variant bg-surface-container-low">
+<div class="absolute inset-0 bg-cover bg-center transition-transform duration-500 group-hover:scale-105" data-alt="A cinematic, atmospheric manga-style illustration of a lone explorer reaching the edge of a futuristic neon city overlooking a digital horizon. Glowing circuitry patterns cover the structures in vibrant pink and cyan. Dark, immersive atmosphere with deep shadows and soft volumetric light rays. The visual style is premium and high-energy, matching a modern Gen-Z media consumption app." style="background-image: url('https://lh3.googleusercontent.com/aida-public/AB6AXuCVF6TyS-ZCM-Y_n1lkKVdQuhxAW6-OnSQLDp505kS1qZ7Y9efSz7XY6nwm1DwvCHIhCshsYF92Zt-uJHf6OZNdfu6i8EKHfHVzHiMUUo-cGYnxiEth6FkpyFt8zSAwWuaHPnYhUj55Vm5nCrdc5gUbjPWlt40FY_FdBl3ghOUx3lho_QSS8Dvp8Ji9r5TL4YQVZD-gQtRzjYczDIB6xtX9La_VzoFQZE_Ggz6KYiPBXgndGutTGNxmbnW9lETZcIVXHnn5RTE4MAk')">
+</div>
+<div class="absolute bottom-0 left-0 right-0 h-1 bg-surface-variant">
+<div class="h-full bg-primary-container neon-glow" style="width: 89%"></div>
+</div>
+<div class="absolute bottom-3 right-3 glass-card px-2 py-1 rounded-md">
+<p class="text-[10px] font-bold text-white uppercase tracking-wider">89% Read</p>
+</div>
+</div>
+<div>
+<h3 class="text-body-lg font-bold text-on-surface truncate">Beyond the Horizon</h3>
+<p class="text-body-sm text-outline">Volume 12 • 4 hours ago</p>
+</div>
+</div>
+</div>
+</section>
+<!-- Library Grid -->
+<section class="flex-1 px-md pb-safe-area-inset">
+<div class="flex items-center justify-between pb-md">
+<h2 class="text-title-md text-on-surface font-bold">All Bookmarks</h2>
+<button class="flex items-center gap-xs text-outline">
+<span class="text-body-sm">Sort by Update</span>
+<span class="material-symbols-outlined" style="font-size: 18px;">expand_more</span>
+</button>
+</div>
+<div class="grid grid-cols-3 gap-x-sm gap-y-lg">
+<!-- Item 1 -->
+<div class="flex flex-col gap-xs relative">
+<div class="relative aspect-[2/3] w-full rounded-lg overflow-hidden border border-outline-variant">
+<img alt="Manga Cover" class="h-full w-full object-cover" data-alt="High-quality digital painting of a female cybernetic samurai in a dark cyberpunk alleyway. Her armor is detailed with glowing blue lines, and she holds a translucent energy katana. The lighting is moody with neon pink and cyan reflections on wet pavement. Sharp cinematic focus and intricate details typical of premium manga cover art in a modern digital library." src="https://lh3.googleusercontent.com/aida-public/AB6AXuCDMKUyIydj_p1hNSqAKLX-OEiXSzw7hXogjEYY3u2Eu4hg9IYzTvpLuFNX638yMf_IqYZ2sWJ5gGE-oQ6BXlzMShrPZSOOnBpwxK2CCuRsmpawvMWgU965Ipe2lRE5fzZaP1coo9UmlreOZU4g9MQSWrcaO4d6UGi5-2P62frMPSHzizRj1d8Tk_cDwXgKXDMpoUm-pxPkQLPoaiyVE7FkKxC1M6GxNchzwR3sUGtJOWcaA3HuaYdB59EnvHKi44yPJQhAcUv-2sw"/>
+<div class="absolute top-2 left-2 bg-secondary-container text-white text-[10px] font-black px-1.5 py-0.5 rounded shadow-lg uppercase tracking-tighter">New</div>
+</div>
+<p class="text-body-sm font-semibold text-on-surface truncate mt-1">Neon Samurai</p>
+<p class="text-[10px] text-outline uppercase tracking-wider">Ch. 120</p>
+</div>
+<!-- Item 2 -->
+<div class="flex flex-col gap-xs">
+<div class="relative aspect-[2/3] w-full rounded-lg overflow-hidden border border-outline-variant">
+<img alt="Novel Cover" class="h-full w-full object-cover" data-alt="Artistic book cover illustration featuring an ethereal forest where trees are made of glowing crystalline structures. A soft mist hangs between the trunks, illuminated by a giant pale moon. The color palette consists of deep violets, blacks, and vibrant cyan highlights. The mood is mysterious and immersive, designed for a dark-mode novel aggregator app interface." src="https://lh3.googleusercontent.com/aida-public/AB6AXuB6muFQVqXM3sMf37iDIX0XfbTyIhoripwntJ8SvixWHqTmgNREbMOocnpfNTGasc5UPTotLSPCYab0bMhhQ4ceeHh6Yc781ZXHglSs46Z6hAueGCV6XIhHFKrJq3xy53ZZuQxcLaT8U7CxI0-CLTw1RMVa-sgdXyyqdaa2PIgEJJmwiRoB7TQtiZU-3pQnC1qBaw3mWa7P5H3Zsp1kCNX-LMlHk37gvD6oosz-NDDrTB2xP6H2VsWjjSA_rSW4y7QsPy72HVPPjec"/>
+</div>
+<p class="text-body-sm font-semibold text-on-surface truncate mt-1">Crystal Forest</p>
+<p class="text-[10px] text-outline uppercase tracking-wider">Vol. 3</p>
+</div>
+<!-- Item 3 -->
+<div class="flex flex-col gap-xs relative">
+<div class="relative aspect-[2/3] w-full rounded-lg overflow-hidden border border-outline-variant">
+<img alt="Manga Cover" class="h-full w-full object-cover" data-alt="Dynamic action scene illustration from a high-fantasy manga. A mage is casting a spell of white fire, creating a blinding light that illuminates the dark ruins of a gothic castle. High contrast with deep black shadows and intense white and gold highlights. The artistic style is sharp and modern, perfectly fitting a high-end digital media consumption platform." src="https://lh3.googleusercontent.com/aida-public/AB6AXuDhaOPJfPVH3cONIoEoRekcTnIT8Jb-oAPf2YNHOea9Qd1-9vI6RDdi88SrK6DR8Hw_QFahkKiC013ERfOyHqmkPOsSCVS-55goLCYnWLej4BdKdpzRvS4rsOdIUYbuSwhYjPkE1t7rvuFCKDblA93eu-U52wYJy1PUL_slhCbvBlj_EBD6Zxye_v5220DOI-efMDfVESJ1piDWCUoaeLYt93bunCc2uPHD-_JFYSBRR_iBRireA8ooiAdvi18drlstTfX0PZEK7zU"/>
+<div class="absolute top-2 left-2 bg-secondary-container text-white text-[10px] font-black px-1.5 py-0.5 rounded shadow-lg uppercase tracking-tighter">New</div>
+</div>
+<p class="text-body-sm font-semibold text-on-surface truncate mt-1">White Flame</p>
+<p class="text-[10px] text-outline uppercase tracking-wider">Ch. 58</p>
+</div>
+<!-- Item 4 -->
+<div class="flex flex-col gap-xs">
+<div class="relative aspect-[2/3] w-full rounded-lg overflow-hidden border border-outline-variant">
+<img alt="Manga Cover" class="h-full w-full object-cover" data-alt="Epic digital illustration of a futuristic starship fleet cruising through a vibrant nebula of swirling pink, purple, and blue gases. The ships have sleek, dark silhouettes with glowing engine trails. The scene captures a sense of vastness and adventure. Cinematic wide-angle perspective with high-fidelity textures, designed as a premium media asset." src="https://lh3.googleusercontent.com/aida-public/AB6AXuALUw2vH0EGgRwGv4xxiNhXdNr3T0v7pk-Ti_Tdflu2ALS7wX3Nc1T_uMpgim3Fb3DdDVECj98LNCm_FlS-o5suXfkxIdwUJl6LYRMYSPP_o1FghAVzfevLhvFtMais_0NtOYtCKpVDjYE5cNmMKjI_fz3IwoflL8GKWgqClri5Pu62Z4VrlNDYcbV6_SdI3ybKMg-VxkxWx9vNLPzimQKuY_kLR6uRAw7HilVBEpVl-cH9r4OAEZYv_1qkO82kdB-KsbQm4iEV2tg"/>
+</div>
+<p class="text-body-sm font-semibold text-on-surface truncate mt-1">Star Voyage</p>
+<p class="text-[10px] text-outline uppercase tracking-wider">Ch. 210</p>
+</div>
+<!-- Item 5 -->
+<div class="flex flex-col gap-xs">
+<div class="relative aspect-[2/3] w-full rounded-lg overflow-hidden border border-outline-variant">
+<img alt="Manga Cover" class="h-full w-full object-cover" data-alt="A moody, noir-inspired illustration of a detective standing under a flickering streetlamp in a rainy, dark city. Neon signs reflect on the wet pavement in shades of cyan and magenta. The character wears a dark trench coat, their face partially obscured by shadows. The atmosphere is heavy and immersive, styled for a high-contrast digital aggregator." src="https://lh3.googleusercontent.com/aida-public/AB6AXuDr49ct9ATKNGqlVl-8cgMc61CCqr_ZdyzsC78i_yRlFOvT-eI24pXEToYF7jUjJUM1LKCVHSXkU-aZL8sNYC6mOlVQCNNxvbvhZHbc5Lk5KQrED24nSZQH0MsvKMCo-AFetncsWBGtHVsEUdwN0DoDDCsbsHCz2SivbD1LK-Um5A_d9WO3yrwhGiqKGENGnnaMkAlOv2kPvHpoHP4YkTRwbX7YuxQmj6NIfW_JIgSOtINH0NPadv6z4oR1P2zNKkcbBWH6HelW-sg"/>
+</div>
+<p class="text-body-sm font-semibold text-on-surface truncate mt-1">Night City Noir</p>
+<p class="text-[10px] text-outline uppercase tracking-wider">Ch. 44</p>
+</div>
+<!-- Item 6 -->
+<div class="flex flex-col gap-xs relative">
+<div class="relative aspect-[2/3] w-full rounded-lg overflow-hidden border border-outline-variant">
+<img alt="Manga Cover" class="h-full w-full object-cover" data-alt="Stylized portrait of an alchemist surrounded by floating magical potions and ancient scrolls. The character has an intense expression, with glowing green eyes and ornate silver jewelry. The lighting is magical and warm, contrasting with a deep, dark background. Rich textures and professional digital art style suitable for a premium reading platform." src="https://lh3.googleusercontent.com/aida-public/AB6AXuDzEnRIedpu-EzJMdzBLAI4aZt9W1iQuK17-ob1ovPYwxpVLPag97BH7yb6BMWkDxU8LaeRreuuk83x-c4FdegiSBF8crGQsyBhLK3hoWy3l7rtsFmkYWCDjWdL69lHHQ_Fx_adLAiTXB4b3mGG4dD9YSYAOt3VbLgEo7k2w0pEmTI-AkcXz5S2Q3GhsVXLixRYuailYMRzqh81aktT-CmRLaWey6FDt9wVR6h2WPOIPx88lzXBhyQ8E8cZnAsAvfMIRYDfdEkhE5U"/>
+<div class="absolute top-2 left-2 bg-secondary-container text-white text-[10px] font-black px-1.5 py-0.5 rounded shadow-lg uppercase tracking-tighter">New</div>
+</div>
+<p class="text-body-sm font-semibold text-on-surface truncate mt-1">The Alchemist</p>
+<p class="text-[10px] text-outline uppercase tracking-wider">Ch. 12</p>
+</div>
+</div>
+</section>
+<!-- Bottom Nav -->
+<nav class="fixed bottom-0 w-full bg-surface-container/95 backdrop-blur-xl border-t border-surface-variant flex justify-around items-center px-4 py-2 pb-safe-area-inset z-50">
+<a class="flex flex-col items-center gap-1 text-outline py-2" href="#">
+<span class="material-symbols-outlined" style="font-size: 24px;">house</span>
+<span class="text-[10px] font-medium uppercase tracking-widest">Home</span>
+</a>
+<a class="flex flex-col items-center gap-1 text-primary-container py-2" href="#">
+<span class="material-symbols-outlined" style="font-size: 24px; font-variation-settings: 'FILL' 1;">book</span>
+<span class="text-[10px] font-bold uppercase tracking-widest">Library</span>
+<div class="w-1 h-1 bg-primary-container rounded-full absolute bottom-2"></div>
+</a>
+<a class="flex flex-col items-center gap-1 text-outline py-2" href="#">
+<span class="material-symbols-outlined" style="font-size: 24px;">explore</span>
+<span class="text-[10px] font-medium uppercase tracking-widest">Discover</span>
+</a>
+<a class="flex flex-col items-center gap-1 text-outline py-2" href="#">
+<span class="material-symbols-outlined" style="font-size: 24px;">person</span>
+<span class="text-[10px] font-medium uppercase tracking-widest">Profile</span>
+</a>
+</nav>
+</div>
+<script>
+    const btnManga = document.getElementById('toggle-manga');
+    const btnNovels = document.getElementById('toggle-novels');
+
+    btnManga.addEventListener('click', () => {
+      btnManga.classList.add('bg-background', 'shadow-lg', 'text-white');
+      btnManga.classList.remove('text-outline');
+      btnNovels.classList.remove('bg-background', 'shadow-lg', 'text-white');
+      btnNovels.classList.add('text-outline');
+    });
+
+    btnNovels.addEventListener('click', () => {
+      btnNovels.classList.add('bg-background', 'shadow-lg', 'text-white');
+      btnNovels.classList.remove('text-outline');
+      btnManga.classList.remove('bg-background', 'shadow-lg', 'text-white');
+      btnManga.classList.add('text-outline');
+    });
+
+    // Simple scroll reveal for cards
+    const observerOptions = {
+      threshold: 0.1
+    };
+
+    const observer = new IntersectionObserver((entries) => {
+      entries.forEach(entry => {
+        if (entry.isIntersecting) {
+          entry.target.classList.add('opacity-100', 'translate-y-0');
+          entry.target.classList.remove('opacity-0', 'translate-y-4');
+        }
+      });
+    }, observerOptions);
+
+    document.querySelectorAll('.grid > div').forEach(card => {
+      card.classList.add('transition-all', 'duration-500', 'opacity-0', 'translate-y-4');
+      observer.observe(card);
+    });
+  </script>
+</body></html>

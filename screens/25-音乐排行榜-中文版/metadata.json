@@ -1,0 +1,24 @@
+{
+  "projectId": "3391305001861538506",
+  "requestedId": "07eb0a17a6aa42239483475bc84fc6c6",
+  "title": "音乐排行榜 (中文版)",
+  "stitchTitle": "音乐排行榜 (中文版)",
+  "resourceName": "projects/3391305001861538506/screens/07eb0a17a6aa42239483475bc84fc6c6",
+  "deviceType": "MOBILE",
+  "width": "780",
+  "height": "1768",
+  "files": {
+    "screenshot": {
+      "path": "stitch-export/screens/25-音乐排行榜-中文版/screenshot.png",
+      "mimeType": "image/png",
+      "bytes": 412962,
+      "resourceName": "projects/3391305001861538506/files/a48146d7aae7481a91df25048df92b14"
+    },
+    "code": {
+      "path": "stitch-export/screens/25-音乐排行榜-中文版/code.html",
+      "mimeType": "text/html",
+      "bytes": 16442,
+      "resourceName": "projects/3391305001861538506/files/9a4fa7d239e64622992f5cd9d7d617ad"
+    }
+  }
+}

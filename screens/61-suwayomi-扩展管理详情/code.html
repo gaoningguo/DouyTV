@@ -1,0 +1,243 @@
+<!DOCTYPE html>
+
+<html class="dark" lang="en"><head>
+<meta charset="utf-8"/>
+<meta content="width=device-width, initial-scale=1.0" name="viewport"/>
+<title>Suwayomi Server Manager</title>
+<script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700;800&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<style>
+        .glass-panel {
+            background: rgba(28, 27, 27, 0.7);
+            backdrop-filter: blur(20px);
+            border: 1px solid rgba(255, 255, 255, 0.05);
+        }
+        .neon-glow-cyan {
+            box-shadow: 0 0 15px rgba(0, 221, 214, 0.3);
+        }
+        .neon-glow-pink {
+            box-shadow: 0 0 15px rgba(255, 0, 79, 0.3);
+        }
+        .pulse-animation {
+            animation: pulse 2s cubic-bezier(0.4, 0, 0.6, 1) infinite;
+        }
+        @keyframes pulse {
+            0%, 100% { opacity: 1; transform: scale(1); }
+            50% { opacity: .5; transform: scale(1.2); }
+        }
+        body {
+            background-color: #050505;
+            color: #e5e2e1;
+            font-family: 'Inter', sans-serif;
+        }
+    </style>
+<script id="tailwind-config">
+        tailwind.config = {
+            darkMode: "class",
+            theme: {
+                extend: {
+                    colors: {
+                        "surface-container-high": "#2a2a2a",
+                        "on-secondary-fixed-variant": "#920029",
+                        "secondary-container": "#ff516a",
+                        "on-primary-fixed": "#00201e",
+                        "inverse-surface": "#e5e2e1",
+                        "primary": "#cffffb",
+                        "surface-container-low": "#1c1b1b",
+                        "on-primary-container": "#006a66",
+                        "on-secondary-container": "#5b0016",
+                        "outline-variant": "#3a4a48",
+                        "on-surface": "#e5e2e1",
+                        "error-container": "#93000a",
+                        "on-secondary-fixed": "#40000d",
+                        "primary-fixed": "#29fcf3",
+                        "tertiary-fixed-dim": "#c6c6c7",
+                        "on-background": "#e5e2e1",
+                        "primary-container": "#00f2ea",
+                        "on-primary-fixed-variant": "#00504d",
+                        "on-secondary": "#67001b",
+                        "surface-tint": "#00ddd6",
+                        "secondary-fixed-dim": "#ffb2b6",
+                        "surface-container-highest": "#353534",
+                        "inverse-on-surface": "#313030",
+                        "on-primary": "#003735",
+                        "secondary-fixed": "#ffdadb",
+                        "surface-container-lowest": "#0e0e0e",
+                        "surface-container": "#201f1f",
+                        "on-tertiary-container": "#5d5f5f",
+                        "surface": "#131313",
+                        "background": "#131313",
+                        "on-tertiary-fixed": "#1a1c1c",
+                        "surface-dim": "#131313",
+                        "outline": "#849492",
+                        "tertiary": "#f5f5f5",
+                        "error": "#ffb4ab",
+                        "secondary": "#ffb2b6",
+                        "on-error": "#690005",
+                        "primary-fixed-dim": "#00ddd6",
+                        "tertiary-fixed": "#e2e2e2",
+                        "on-error-container": "#ffdad6",
+                        "on-tertiary-fixed-variant": "#454747",
+                        "on-tertiary": "#2f3131",
+                        "surface-variant": "#353534",
+                        "inverse-primary": "#006a66",
+                        "surface-bright": "#3a3939",
+                        "tertiary-container": "#d9d9d9",
+                        "on-surface-variant": "#b9cac8"
+                    },
+                    borderRadius: {
+                        "DEFAULT": "0.5rem",
+                        "lg": "1rem",
+                        "xl": "1.5rem",
+                        "full": "9999px"
+                    },
+                    spacing: {
+                        "md": "16px",
+                        "safe-area-inset": "max(16px, env(safe-area-inset-bottom))",
+                        "xs": "4px",
+                        "xl": "32px",
+                        "base": "4px",
+                        "sm": "8px",
+                        "lg": "24px"
+                    }
+                }
+            }
+        }
+    </script>
+<style>
+    body {
+      min-height: max(884px, 100dvh);
+    }
+  </style>
+  </head>
+<body class="min-h-screen flex flex-col pb-safe-area-inset">
+<header class="sticky top-0 z-50 glass-panel border-b border-outline-variant px-md py-lg flex items-center justify-between">
+<div class="flex items-center gap-md">
+<div class="text-primary-container flex size-10 shrink-0 items-center" data-icon="pepper" data-size="32px">
+<span class="material-symbols-outlined text-3xl">people</span>
+</div>
+<div>
+<h1 class="text-on-surface text-title-md font-bold leading-tight">Suwayomi Server</h1>
+<div class="flex items-center gap-xs">
+<span class="size-2 rounded-full bg-primary-container pulse-animation shadow-[0_0_8px_#00f2ea]"></span>
+<span class="text-primary-container text-label-caps uppercase">System Online</span>
+</div>
+</div>
+</div>
+<button class="size-12 rounded-full flex items-center justify-center hover:bg-surface-container-high transition-colors">
+<span class="material-symbols-outlined text-on-surface">settings</span>
+</button>
+</header>
+<main class="flex-1 p-md flex flex-col gap-lg">
+<section>
+<div class="flex items-baseline justify-between mb-md">
+<h2 class="text-on-surface text-headline-lg-mobile font-bold">Installed Extensions</h2>
+<span class="text-on-surface-variant text-body-sm font-medium">3 Active</span>
+</div>
+<div class="space-y-sm">
+<div class="glass-panel rounded-xl p-md flex items-center gap-md hover:border-primary-container/30 transition-all group">
+<div class="size-14 rounded-lg overflow-hidden bg-surface-container-high flex-shrink-0">
+<img class="w-full h-full object-cover" data-alt="Close-up of a digital manga service icon MangaDex, featuring minimalist typography and a futuristic aesthetic. The background is a deep black with vibrant cyan and hot pink accents, maintaining a high-contrast cyber-neon style consistent with modern aggregator platforms. Soft glow effects surround the logo." src="https://lh3.googleusercontent.com/aida-public/AB6AXuDuqqHk6C_fAZv_uyijAsVV_n_Xb4FRqqG47kQex_VeIulWuvdloZWEQUljCu3x0jqBpC2zaDylDWU3jhKHi1r7kUY_3VzVF6Pbui_BMnh3TF5mUuyQ8tQBS2FeyUHd9GgPSWwyRhPRCN6d4ApIHaEMCaYrE_JOi7HkRDj_HsCqHJ7ZCNBJsJWPYJvUs1acO5_XWsWeZ0HrVEDnIrJFFPUAOhCurKmvP4UOrKgLnjq2gg0KyeO5KQXEyEed1wtRNIL0owdZ2XK_pB4"/>
+</div>
+<div class="flex-1 min-w-0">
+<h3 class="text-on-surface text-body-lg font-bold truncate">MangaDex</h3>
+<p class="text-on-surface-variant text-body-sm">v1.4.32 • Stable</p>
+</div>
+<div class="flex gap-sm">
+<button class="size-10 rounded-full glass-panel flex items-center justify-center text-primary-container hover:bg-primary-container hover:text-on-primary transition-all">
+<span class="material-symbols-outlined" data-icon="update">update</span>
+</button>
+<button class="size-10 rounded-full glass-panel flex items-center justify-center text-secondary hover:bg-secondary-container hover:text-on-secondary transition-all">
+<span class="material-symbols-outlined" data-icon="delete">delete</span>
+</button>
+</div>
+</div>
+<div class="glass-panel rounded-xl p-md flex items-center gap-md hover:border-primary-container/30 transition-all">
+<div class="size-14 rounded-lg overflow-hidden bg-surface-container-high flex-shrink-0">
+<img class="w-full h-full object-cover" data-alt="A stylized logo for the CopyManga extension, set against a dark, immersive background. The visual language uses neon pink highlights and high-contrast blacks. The icon is rendered with 2px stroke weight lines, fitting perfectly into a futuristic digital media hub interface designed for high-energy content consumption." src="https://lh3.googleusercontent.com/aida-public/AB6AXuDr9QOf-K0-E9hOmbFyCNz97ECOgWyhGngAS7LSNrOS5FsMJNDfFyiFm29r5HnxIiCPamG1tV2wyguKvk4tsH_yzZT6RGlT2Lvdw6stK3fuFOemllbz9OuzWDDguRjtys5MHIsqRoxnOq-bLa3c9emo0p1a532A3oVrjckua6pq8ydJebD9ORfG2PJninNLIfzLA2kl2onjrMu2jxdX2aJXW6s5hlMGOkpltoCnZkIoMT2d2U5ctxr9_578cdK2SNzQk2FkQ35jtVk"/>
+</div>
+<div class="flex-1 min-w-0">
+<h3 class="text-on-surface text-body-lg font-bold truncate">CopyManga</h3>
+<p class="text-on-surface-variant text-body-sm">v2.1.0 • Update available</p>
+</div>
+<div class="flex gap-sm">
+<div class="relative">
+<button class="size-10 rounded-full glass-panel flex items-center justify-center text-primary-container hover:bg-primary-container hover:text-on-primary transition-all neon-glow-cyan bg-primary-container/10">
+<span class="material-symbols-outlined" data-icon="download">download</span>
+</button>
+<span class="absolute -top-1 -right-1 size-3 bg-secondary-container rounded-full border-2 border-background"></span>
+</div>
+<button class="size-10 rounded-full glass-panel flex items-center justify-center text-secondary hover:bg-secondary-container hover:text-on-secondary transition-all">
+<span class="material-symbols-outlined" data-icon="delete">delete</span>
+</button>
+</div>
+</div>
+<div class="glass-panel rounded-xl p-md flex items-center gap-md hover:border-primary-container/30 transition-all">
+<div class="size-14 rounded-lg overflow-hidden bg-surface-container-high flex-shrink-0">
+<img class="w-full h-full object-cover" data-alt="The Bilibili Comics extension icon presented in a sleek, dark-room aesthetic. The image features a bright white logo on a deep charcoal background with subtle cyan lighting from the edges. The style is unapologetically digital, emphasizing a borderless and fluid user experience typical of luxury aggregator apps." src="https://lh3.googleusercontent.com/aida-public/AB6AXuAozuwN5VxOi1S1v7zMfYRjfYU9PONLkUCr5go681DLje3CbKlGoQlebUYROCP-qfHPkbHKbc88Sy1Oa_U_hmDe9mJFy21Dylp_xQtLdNe-U5Y35elofbN_PHw5jw02tAGQfV9vOP5SPsMyOSfuL9NQ7xE-J47iR76YwzOETu31OuFLMuOuxM3uVb9AT_tM9bVDphzp06tH3V7FjniYMkSDBf8F4o6wAsRYN5_Q5cuIWo1w7sV2DiXWneLWou8MOjfhn70s3KGz-Lo"/>
+</div>
+<div class="flex-1 min-w-0">
+<h3 class="text-on-surface text-body-lg font-bold truncate">Bilibili Comics</h3>
+<p class="text-on-surface-variant text-body-sm">v0.9.15 • Beta</p>
+</div>
+<div class="flex gap-sm">
+<button class="size-10 rounded-full glass-panel flex items-center justify-center text-primary-container hover:bg-primary-container hover:text-on-primary transition-all">
+<span class="material-symbols-outlined" data-icon="update">update</span>
+</button>
+<button class="size-10 rounded-full glass-panel flex items-center justify-center text-secondary hover:bg-secondary-container hover:text-on-secondary transition-all">
+<span class="material-symbols-outlined" data-icon="delete">delete</span>
+</button>
+</div>
+</div>
+</div>
+</section>
+<section class="mt-4">
+<h3 class="text-on-surface-variant text-label-caps uppercase px-xs mb-md">Server Stats</h3>
+<div class="grid grid-cols-2 gap-md">
+<div class="glass-panel p-md rounded-xl">
+<p class="text-on-surface-variant text-body-sm">Uptime</p>
+<p class="text-primary-container text-title-md font-bold">14d 6h 22m</p>
+</div>
+<div class="glass-panel p-md rounded-xl">
+<p class="text-on-surface-variant text-body-sm">RAM Usage</p>
+<p class="text-on-surface text-title-md font-bold">248 MB</p>
+</div>
+</div>
+</section>
+</main>
+<div class="fixed bottom-lg left-1/2 -translate-x-1/2 z-50">
+<button class="flex items-center gap-sm bg-primary-container text-on-primary-container px-lg py-md rounded-full font-bold shadow-lg neon-glow-cyan hover:scale-105 active:scale-95 transition-all" onclick="handleRefresh(this)">
+<span class="material-symbols-outlined transition-transform duration-700" data-icon="refresh">refresh</span>
+<span>Refresh List</span>
+</button>
+</div>
+<script>
+        function handleRefresh(btn) {
+            const icon = btn.querySelector('.material-symbols-outlined');
+            icon.style.transform = 'rotate(360deg)';
+            
+            // Artificial delay for feedback
+            btn.style.opacity = '0.7';
+            btn.style.pointerEvents = 'none';
+            
+            setTimeout(() => {
+                icon.style.transition = 'none';
+                icon.style.transform = 'rotate(0deg)';
+                setTimeout(() => {
+                    icon.style.transition = 'transform 0.7s';
+                }, 50);
+                btn.style.opacity = '1';
+                btn.style.pointerEvents = 'auto';
+            }, 1000);
+        }
+
+        // Apply dark mode immediately
+        document.documentElement.classList.add('dark');
+    </script>
+<div class="fixed inset-0 pointer-events-none overflow-hidden -z-10">
+<div class="absolute -top-[20%] -left-[10%] size-[60%] rounded-full bg-primary-container/5 blur-[120px]"></div>
+<div class="absolute -bottom-[20%] -right-[10%] size-[60%] rounded-full bg-secondary-container/5 blur-[120px]"></div>
+</div>
+</body></html>

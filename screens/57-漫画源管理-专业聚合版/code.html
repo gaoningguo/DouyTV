@@ -1,0 +1,265 @@
+<!DOCTYPE html>
+
+<html class="dark" lang="en"><head>
+<meta charset="utf-8"/>
+<meta content="width=device-width, initial-scale=1.0" name="viewport"/>
+<title>Manga Source Management</title>
+<script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700;800&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<script id="tailwind-config">
+        tailwind.config = {
+            darkMode: "class",
+            theme: {
+                extend: {
+                    "colors": {
+                        "on-background": "#e5e2e1",
+                        "on-surface": "#e5e2e1",
+                        "inverse-surface": "#e5e2e1",
+                        "error": "#ffb4ab",
+                        "on-tertiary-container": "#5d5f5f",
+                        "on-secondary": "#67001b",
+                        "secondary-container": "#ff516a",
+                        "tertiary-fixed-dim": "#c6c6c7",
+                        "surface-container-lowest": "#0e0e0e",
+                        "surface-bright": "#3a3939",
+                        "primary-container": "#00f2ea",
+                        "primary": "#cffffb",
+                        "on-secondary-fixed": "#40000d",
+                        "tertiary-fixed": "#e2e2e2",
+                        "on-tertiary-fixed": "#1a1c1c",
+                        "on-tertiary": "#2f3131",
+                        "on-secondary-container": "#5b0016",
+                        "on-secondary-fixed-variant": "#920029",
+                        "on-primary-fixed-variant": "#00504d",
+                        "on-error": "#690005",
+                        "on-primary-container": "#006a66",
+                        "outline-variant": "#3a4a48",
+                        "inverse-on-surface": "#313030",
+                        "secondary-fixed-dim": "#ffb2b6",
+                        "surface-container-low": "#1c1b1b",
+                        "secondary-fixed": "#ffdadb",
+                        "tertiary": "#f5f5f5",
+                        "surface": "#131313",
+                        "on-primary-fixed": "#00201e",
+                        "inverse-primary": "#006a66",
+                        "surface-variant": "#353534",
+                        "on-tertiary-fixed-variant": "#454747",
+                        "on-primary": "#003735",
+                        "primary-fixed": "#29fcf3",
+                        "error-container": "#93000a",
+                        "background": "#131313",
+                        "outline": "#849492",
+                        "surface-dim": "#131313",
+                        "primary-fixed-dim": "#00ddd6",
+                        "surface-tint": "#00ddd6",
+                        "secondary": "#ffb2b6",
+                        "on-error-container": "#ffdad6",
+                        "surface-container-high": "#2a2a2a",
+                        "surface-container": "#201f1f",
+                        "surface-container-highest": "#353534",
+                        "tertiary-container": "#d9d9d9",
+                        "on-surface-variant": "#b9cac8"
+                    },
+                    "borderRadius": {
+                        "DEFAULT": "0.25rem",
+                        "lg": "0.5rem",
+                        "xl": "0.75rem",
+                        "full": "9999px"
+                    },
+                    "spacing": {
+                        "sm": "8px",
+                        "safe-area-inset": "max(16px, env(safe-area-inset-bottom))",
+                        "lg": "24px",
+                        "base": "4px",
+                        "xl": "32px",
+                        "md": "16px",
+                        "xs": "4px"
+                    },
+                    "fontFamily": {
+                        "body-sm": ["Inter"],
+                        "body-lg": ["Inter"],
+                        "label-caps": ["Inter"],
+                        "headline-lg-mobile": ["Inter"],
+                        "display-lg": ["Inter"],
+                        "title-md": ["Inter"],
+                        "headline-lg": ["Inter"]
+                    },
+                    "fontSize": {
+                        "body-sm": ["14px", { "lineHeight": "20px", "fontWeight": "400" }],
+                        "body-lg": ["16px", { "lineHeight": "24px", "fontWeight": "400" }],
+                        "label-caps": ["12px", { "lineHeight": "16px", "letterSpacing": "0.05em", "fontWeight": "700" }],
+                        "headline-lg-mobile": ["24px", { "lineHeight": "32px", "fontWeight": "700" }],
+                        "display-lg": ["48px", { "lineHeight": "52px", "letterSpacing": "-0.02em", "fontWeight": "800" }],
+                        "title-md": ["20px", { "lineHeight": "28px", "fontWeight": "600" }],
+                        "headline-lg": ["32px", { "lineHeight": "40px", "letterSpacing": "-0.01em", "fontWeight": "700" }]
+                    }
+                }
+            }
+        }
+    </script>
+<style>
+        body {
+            background-color: #050505;
+        }
+        .glass-card {
+            background: rgba(18, 18, 18, 0.8);
+            backdrop-filter: blur(20px);
+            -webkit-backdrop-filter: blur(20px);
+            border: 1px solid rgba(255, 255, 255, 0.1);
+        }
+        .neon-border-cyan {
+            box-shadow: 0 0 10px rgba(0, 242, 234, 0.3), inset 0 0 10px rgba(0, 242, 234, 0.1);
+            border: 1px solid rgba(0, 242, 234, 0.5);
+        }
+        .hide-scrollbar::-webkit-scrollbar {
+            display: none;
+        }
+        .hide-scrollbar {
+            -ms-overflow-style: none;
+            scrollbar-width: none;
+        }
+    </style>
+<style>
+    body {
+      min-height: max(884px, 100dvh);
+    }
+  </style>
+  </head>
+<body class="text-on-background bg-background font-body-lg min-h-screen pb-24 selection:bg-primary-container selection:text-on-primary-container">
+<!-- TopAppBar -->
+<header class="fixed top-0 w-full z-50 bg-surface/80 dark:bg-surface/80 backdrop-blur-xl border-b border-white/10 shadow-none flex items-center justify-between px-md h-16">
+<button class="text-on-surface-variant hover:text-primary transition-colors active:scale-95 duration-200">
+<span class="material-symbols-outlined">arrow_back</span>
+</button>
+<h1 class="font-headline-lg-mobile text-headline-lg-mobile font-display-lg text-display-lg-mobile tracking-tighter text-primary drop-shadow-[0_0_8px_rgba(0,221,214,0.6)]">NEON_STREAM</h1>
+<button class="text-on-surface-variant hover:text-primary transition-colors active:scale-95 duration-200">
+<span class="material-symbols-outlined">search</span>
+</button>
+</header>
+<!-- Main Content -->
+<main class="pt-24 px-md max-w-lg mx-auto w-full">
+<!-- Section Header -->
+<div class="mb-sm">
+<h2 class="font-title-md text-title-md text-on-surface">Manage Sources</h2>
+<p class="font-body-sm text-body-sm text-on-surface-variant mt-base">Add or configure your manga repositories.</p>
+</div>
+<!-- Action Cards Grid -->
+<div class="grid grid-cols-2 gap-sm mb-lg">
+<!-- Suwayomi -->
+<button class="glass-card neon-border-cyan rounded-xl p-md flex flex-col items-center justify-center gap-sm active:scale-95 transition-transform duration-200 aspect-square group">
+<div class="w-12 h-12 rounded-full bg-primary/10 flex items-center justify-center group-hover:bg-primary/20 transition-colors">
+<span class="material-symbols-outlined text-primary text-3xl drop-shadow-[0_0_8px_rgba(0,221,214,0.8)]">storage</span>
+</div>
+<span class="font-body-sm text-body-sm text-center font-semibold text-on-surface">Suwayomi Server</span>
+</button>
+<!-- Legado Import -->
+<button class="glass-card rounded-xl p-md flex flex-col items-center justify-center gap-sm active:scale-95 transition-transform duration-200 aspect-square hover:border-white/20">
+<div class="w-12 h-12 rounded-full bg-surface-container-high flex items-center justify-center">
+<span class="material-symbols-outlined text-on-surface-variant text-3xl">auto_stories</span>
+</div>
+<span class="font-body-sm text-body-sm text-center font-semibold text-on-surface-variant">Legado Import</span>
+</button>
+<!-- Text Import -->
+<button class="glass-card rounded-xl p-md flex flex-col items-center justify-center gap-sm active:scale-95 transition-transform duration-200 aspect-square hover:border-white/20">
+<div class="w-12 h-12 rounded-full bg-surface-container-high flex items-center justify-center">
+<span class="material-symbols-outlined text-on-surface-variant text-3xl">link</span>
+</div>
+<span class="font-body-sm text-body-sm text-center font-semibold text-on-surface-variant">Text Import</span>
+</button>
+<!-- Manual Add -->
+<button class="glass-card rounded-xl p-md flex flex-col items-center justify-center gap-sm active:scale-95 transition-transform duration-200 aspect-square hover:border-white/20 border-dashed border-2 border-white/20 bg-transparent">
+<div class="w-12 h-12 rounded-full flex items-center justify-center">
+<span class="material-symbols-outlined text-on-surface-variant text-4xl">add_circle</span>
+</div>
+<span class="font-body-sm text-body-sm text-center font-semibold text-on-surface-variant">Manual Add</span>
+</button>
+</div>
+<!-- Active Sources Header -->
+<div class="mb-sm mt-xl flex justify-between items-end border-b border-white/10 pb-base">
+<h3 class="font-title-md text-title-md text-on-surface">Active Sources</h3>
+<span class="font-label-caps text-label-caps text-primary">3 TOTAL</span>
+</div>
+<!-- Active Sources List -->
+<div class="flex flex-col gap-sm">
+<!-- Source Item 1 (Online) -->
+<div class="glass-card rounded-lg p-md flex items-center justify-between group cursor-pointer hover:bg-surface-container/50 transition-colors">
+<div class="flex items-center gap-md">
+<div class="w-10 h-10 rounded-full bg-surface-container-high flex items-center justify-center shrink-0">
+<span class="material-symbols-outlined text-primary" style="font-variation-settings: 'FILL' 1;">book</span>
+</div>
+<div>
+<h4 class="font-body-lg text-body-lg text-on-surface font-semibold">MangaDex</h4>
+<div class="flex items-center gap-base mt-xs">
+<div class="w-2 h-2 rounded-full bg-primary drop-shadow-[0_0_5px_rgba(0,221,214,0.8)] animate-pulse"></div>
+<span class="font-label-caps text-label-caps text-on-surface-variant">Online (Suwayomi)</span>
+</div>
+</div>
+</div>
+<button class="text-on-surface-variant hover:text-primary p-xs rounded-full hover:bg-white/5 transition-colors">
+<span class="material-symbols-outlined">more_vert</span>
+</button>
+</div>
+<!-- Source Item 2 (Online) -->
+<div class="glass-card rounded-lg p-md flex items-center justify-between group cursor-pointer hover:bg-surface-container/50 transition-colors">
+<div class="flex items-center gap-md">
+<div class="w-10 h-10 rounded-full bg-surface-container-high flex items-center justify-center shrink-0">
+<span class="material-symbols-outlined text-secondary-container" style="font-variation-settings: 'FILL' 1;">collections_bookmark</span>
+</div>
+<div>
+<h4 class="font-body-lg text-body-lg text-on-surface font-semibold">Legado Comic Pack</h4>
+<div class="flex items-center gap-base mt-xs">
+<div class="w-2 h-2 rounded-full bg-primary drop-shadow-[0_0_5px_rgba(0,221,214,0.8)] animate-pulse"></div>
+<span class="font-label-caps text-label-caps text-on-surface-variant">Online</span>
+</div>
+</div>
+</div>
+<button class="text-on-surface-variant hover:text-primary p-xs rounded-full hover:bg-white/5 transition-colors">
+<span class="material-symbols-outlined">more_vert</span>
+</button>
+</div>
+<!-- Source Item 3 (Offline) -->
+<div class="glass-card rounded-lg p-md flex items-center justify-between group cursor-pointer hover:bg-surface-container/50 transition-colors opacity-70 hover:opacity-100">
+<div class="flex items-center gap-md">
+<div class="w-10 h-10 rounded-full bg-surface-container-high flex items-center justify-center shrink-0">
+<span class="material-symbols-outlined text-on-surface-variant">folder_off</span>
+</div>
+<div>
+<h4 class="font-body-lg text-body-lg text-on-surface font-semibold">Local Parser</h4>
+<div class="flex items-center gap-base mt-xs">
+<div class="w-2 h-2 rounded-full bg-on-surface-variant"></div>
+<span class="font-label-caps text-label-caps text-on-surface-variant">Offline</span>
+</div>
+</div>
+</div>
+<button class="text-on-surface-variant hover:text-primary p-xs rounded-full hover:bg-white/5 transition-colors">
+<span class="material-symbols-outlined">more_vert</span>
+</button>
+</div>
+</div>
+</main>
+<!-- BottomNavBar -->
+<nav class="fixed bottom-0 w-full z-50 rounded-t-xl bg-surface-container/90 dark:bg-surface-container/90 backdrop-blur-2xl border-t border-white/5 shadow-[0_-4px_20px_rgba(0,0,0,0.5)] flex justify-around items-center pt-sm pb-safe-area-inset px-md md:hidden">
+<a class="flex flex-col items-center justify-center text-on-surface-variant opacity-70 hover:opacity-100 transition-opacity active:scale-90 duration-150" href="#">
+<span class="material-symbols-outlined">home</span>
+<span class="font-label-caps text-label-caps mt-xs">Home</span>
+</a>
+<a class="flex flex-col items-center justify-center text-on-surface-variant opacity-70 hover:opacity-100 transition-opacity active:scale-90 duration-150" href="#">
+<span class="material-symbols-outlined">menu_book</span>
+<span class="font-label-caps text-label-caps mt-xs">Read</span>
+</a>
+<a class="flex flex-col items-center justify-center text-on-surface-variant opacity-70 hover:opacity-100 transition-opacity active:scale-90 duration-150" href="#">
+<span class="material-symbols-outlined">sensors</span>
+<span class="font-label-caps text-label-caps mt-xs">Live</span>
+</a>
+<a class="flex flex-col items-center justify-center text-on-surface-variant opacity-70 hover:opacity-100 transition-opacity active:scale-90 duration-150" href="#">
+<span class="material-symbols-outlined">music_note</span>
+<span class="font-label-caps text-label-caps mt-xs">Music</span>
+</a>
+<a class="flex flex-col items-center justify-center text-primary drop-shadow-[0_0_5px_rgba(0,221,214,0.8)] hover:opacity-100 transition-opacity active:scale-90 duration-150" href="#">
+<span class="material-symbols-outlined" style="font-variation-settings: 'FILL' 1;">person</span>
+<span class="font-label-caps text-label-caps mt-xs">Profile</span>
+</a>
+</nav>
+</body></html>

@@ -1,0 +1,24 @@
+{
+  "projectId": "3391305001861538506",
+  "requestedId": "b79c8750bc97451eaaded20a6902bbc1",
+  "title": "直播首页 - 无顶栏版",
+  "stitchTitle": "直播首页 - 无顶栏版",
+  "resourceName": "projects/3391305001861538506/screens/b79c8750bc97451eaaded20a6902bbc1",
+  "deviceType": "MOBILE",
+  "width": "780",
+  "height": "1768",
+  "files": {
+    "screenshot": {
+      "path": "stitch-export/screens/16-直播首页-无顶栏版/screenshot.png",
+      "mimeType": "image/png",
+      "bytes": 1019181,
+      "resourceName": "projects/3391305001861538506/files/61f8ae576c7a41a88d1e7cf35d80b459"
+    },
+    "code": {
+      "path": "stitch-export/screens/16-直播首页-无顶栏版/code.html",
+      "mimeType": "text/html",
+      "bytes": 17179,
+      "resourceName": "projects/3391305001861538506/files/808264977b904dec940fe087f30e58c3"
+    }
+  }
+}

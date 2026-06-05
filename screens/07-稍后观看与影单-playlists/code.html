@@ -1,0 +1,317 @@
+<!DOCTYPE html>
+
+<html class="dark" lang="en"><head>
+<meta charset="utf-8"/>
+<meta content="width=device-width, initial-scale=1.0, viewport-fit=cover" name="viewport"/>
+<title>Watch Later &amp; Playlists - NEO-LINK</title>
+<script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700;800&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<script id="tailwind-config">
+      tailwind.config = {
+        darkMode: "class",
+        theme: {
+          extend: {
+            "colors": {
+                    "inverse-on-surface": "#313030",
+                    "surface": "#131313",
+                    "on-primary": "#003735",
+                    "on-tertiary": "#2f3131",
+                    "secondary-fixed": "#ffdadb",
+                    "primary-fixed-dim": "#00ddd6",
+                    "tertiary-container": "#d9d9d9",
+                    "surface-variant": "#353534",
+                    "tertiary-fixed-dim": "#c6c6c7",
+                    "primary-container": "#00f2ea",
+                    "on-error": "#690005",
+                    "secondary-container": "#ff516a",
+                    "on-primary-container": "#006a66",
+                    "on-tertiary-fixed-variant": "#454747",
+                    "on-background": "#e5e2e1",
+                    "primary": "#cffffb",
+                    "on-secondary-fixed": "#40000d",
+                    "surface-container-lowest": "#0e0e0e",
+                    "surface-container-low": "#1c1b1b",
+                    "on-surface-variant": "#b9cac8",
+                    "on-primary-fixed": "#00201e",
+                    "surface-dim": "#131313",
+                    "on-secondary-container": "#5b0016",
+                    "outline": "#849492",
+                    "tertiary": "#f5f5f5",
+                    "surface-container-high": "#2a2a2a",
+                    "error": "#ffb4ab",
+                    "tertiary-fixed": "#e2e2e2",
+                    "surface-container-highest": "#353534",
+                    "surface-container": "#201f1f",
+                    "on-tertiary-container": "#5d5f5f",
+                    "inverse-primary": "#006a66",
+                    "on-secondary": "#67001b",
+                    "background": "#131313",
+                    "surface-bright": "#3a3939",
+                    "surface-tint": "#00ddd6",
+                    "on-primary-fixed-variant": "#00504d",
+                    "on-error-container": "#ffdad6",
+                    "inverse-surface": "#e5e2e1",
+                    "on-tertiary-fixed": "#1a1c1c",
+                    "on-secondary-fixed-variant": "#920029",
+                    "secondary": "#ffb2b6",
+                    "primary-fixed": "#29fcf3",
+                    "error-container": "#93000a",
+                    "on-surface": "#e5e2e1",
+                    "outline-variant": "#3a4a48",
+                    "secondary-fixed-dim": "#ffb2b6"
+            },
+            "borderRadius": {
+                    "DEFAULT": "0.25rem",
+                    "lg": "0.5rem",
+                    "xl": "0.75rem",
+                    "full": "9999px"
+            },
+            "spacing": {
+                    "lg": "24px",
+                    "base": "4px",
+                    "xl": "32px",
+                    "md": "16px",
+                    "safe-area-inset": "max(16px, env(safe-area-inset-bottom))",
+                    "xs": "4px",
+                    "sm": "8px"
+            },
+            "fontFamily": {
+                    "headline-lg-mobile": ["Inter"],
+                    "body-lg": ["Inter"],
+                    "title-md": ["Inter"],
+                    "headline-lg": ["Inter"],
+                    "display-lg": ["Inter"],
+                    "body-sm": ["Inter"],
+                    "label-caps": ["Inter"]
+            },
+            "fontSize": {
+                    "headline-lg-mobile": ["24px", {"lineHeight": "32px", "fontWeight": "700"}],
+                    "body-lg": ["16px", {"lineHeight": "24px", "fontWeight": "400"}],
+                    "title-md": ["20px", {"lineHeight": "28px", "fontWeight": "600"}],
+                    "headline-lg": ["32px", {"lineHeight": "40px", "letterSpacing": "-0.01em", "fontWeight": "700"}],
+                    "display-lg": ["48px", {"lineHeight": "52px", "letterSpacing": "-0.02em", "fontWeight": "800"}],
+                    "body-sm": ["14px", {"lineHeight": "20px", "fontWeight": "400"}],
+                    "label-caps": ["12px", {"lineHeight": "16px", "letterSpacing": "0.05em", "fontWeight": "700"}]
+            }
+          }
+        }
+      }
+    </script>
+<style>
+        /* Hide scrollbar for Chrome, Safari and Opera */
+        .no-scrollbar::-webkit-scrollbar {
+            display: none;
+        }
+        /* Hide scrollbar for IE, Edge and Firefox */
+        .no-scrollbar {
+            -ms-overflow-style: none;  /* IE and Edge */
+            scrollbar-width: none;  /* Firefox */
+        }
+        
+        .material-symbols-outlined {
+          font-variation-settings:
+          'FILL' 0,
+          'wght' 400,
+          'GRAD' 0,
+          'opsz' 24
+        }
+        
+        .glow-effect {
+            box-shadow: 0 0 15px rgba(0, 242, 234, 0.3);
+        }
+    </style>
+<style>
+    body {
+      min-height: max(884px, 100dvh);
+    }
+  </style>
+  </head>
+<body class="bg-background text-on-background min-h-screen pb-[100px] pt-16">
+<!-- TopAppBar -->
+<header class="bg-surface/60 backdrop-blur-xl border-b border-outline-variant/20 fixed top-0 w-full z-50 flex justify-between items-center px-md h-16">
+<button class="text-on-surface-variant hover:text-primary-container transition-colors active:scale-95 duration-200">
+<span class="material-symbols-outlined" data-icon="menu">menu</span>
+</button>
+<h1 class="font-display-lg text-display-lg-mobile tracking-tighter text-primary-fixed-dim drop-shadow-[0_0_8px_rgba(0,221,214,0.5)]">NEO-LINK</h1>
+<button class="text-on-surface-variant hover:text-primary-container transition-colors active:scale-95 duration-200">
+<span class="material-symbols-outlined" data-icon="search">search</span>
+</button>
+</header>
+<main class="max-w-7xl mx-auto px-md md:px-lg space-y-xl pt-lg">
+<!-- Watch Later Section -->
+<section>
+<div class="flex items-center justify-between mb-md">
+<h2 class="font-headline-lg-mobile md:font-headline-lg text-headline-lg-mobile md:text-headline-lg text-on-surface flex items-center gap-sm">
+<span class="material-symbols-outlined text-primary-container" data-icon="schedule" style="font-variation-settings: 'FILL' 1;">schedule</span>
+                    Watch Later
+                </h2>
+<button class="font-label-caps text-label-caps text-primary-fixed-dim hover:text-primary transition-colors uppercase">See All</button>
+</div>
+<div class="flex overflow-x-auto gap-md pb-sm no-scrollbar snap-x snap-mandatory">
+<!-- Poster Card 1 -->
+<div class="min-w-[140px] md:min-w-[200px] snap-start group relative rounded-lg overflow-hidden cursor-pointer">
+<div class="aspect-[2/3] bg-surface-container-high relative">
+<img alt="Cyberpunk Cityscape" class="w-full h-full object-cover opacity-80 group-hover:opacity-100 transition-opacity duration-300" data-alt="A gritty, neon-lit cyberpunk cityscape at night, viewed from an alleyway. Rain slicked streets reflect vibrant cyan and magenta holographic signs. A lone figure in a dark trench coat stands in the middle distance, illuminated by the glow of a nearby noodle stand. The atmosphere is moody, cinematic, and deeply saturated in a high-contrast dark-room aesthetic." src="https://lh3.googleusercontent.com/aida-public/AB6AXuBrXAxmpJzmhpXf8u2mQKGrwyB6B1P3uthEK4UdikSTe7Ohz3B4OFaS0p2W5rer0xlZZiUxd5h9wnmB1LxPzZ-Dq7oD6V4lIjBy2G5GLJvcebOxdlNqb4Dffa5MlGRoqlm5oOBICn9BZK1LRvWrf5p9c-EQwH2LRGg8-miMfO_kANvI0eUOgwzCOuVqEMDIHiRWn17F-h_T0ewcQSRhjgk9ONp4Nd46CV7Yb0Y45W7QRlRVTy7RDPuLFgm-4qPY8Zf8QcYtIaDfIrg"/>
+<!-- Gradient Overlay for Text Readability -->
+<div class="absolute inset-0 bg-gradient-to-t from-background via-transparent to-transparent opacity-90"></div>
+<!-- Hover Action -->
+<div class="absolute inset-0 bg-black/40 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity duration-300 backdrop-blur-[2px]">
+<button class="bg-surface/80 backdrop-blur-md rounded-full p-2 border border-white/20 text-primary-container hover:scale-110 transition-transform">
+<span class="material-symbols-outlined" data-icon="play_arrow" style="font-variation-settings: 'FILL' 1;">play_arrow</span>
+</button>
+</div>
+<!-- Progress Bar (simulate partially watched) -->
+<div class="absolute bottom-0 left-0 w-full h-[4px] bg-surface-variant">
+<div class="h-full bg-primary-container w-[45%] glow-effect transition-all duration-300 group-hover:h-[6px]"></div>
+</div>
+</div>
+</div>
+<!-- Poster Card 2 -->
+<div class="min-w-[140px] md:min-w-[200px] snap-start group relative rounded-lg overflow-hidden cursor-pointer">
+<div class="aspect-[2/3] bg-surface-container-high relative">
+<img alt="Abstract Sci-Fi Corridor" class="w-full h-full object-cover opacity-80 group-hover:opacity-100 transition-opacity duration-300" data-alt="An abstract, endless sci-fi corridor composed of harsh, angular white and black geometric shapes. Strips of intense cyan LED lighting run along the floor and ceiling, providing the only illumination. The perspective draws the eye deep into the vanishing point, creating a sense of isolation and high-tech mystery. The visual style is crisp, glassmorphic, and high-contrast modern." src="https://lh3.googleusercontent.com/aida-public/AB6AXuDzv1gmDRvqk3NGCz_fTtmX8FICCM-YmkHLL6Bypcsfn6tqeBLdBzuDsQWpXF8FUtxEw0AMRO8wVjJ1ClwZoCv6xL5DiU5MYuN6_7-O-WxQC4bxk3p8s5pv2ayIeCmX_6T4Mnq-le306wWs7jtf65rxL3DyyVvUA56mK0Y5m1HiRZIMw-KvNCLT_0_65pFrfaOn7FsF7krw8EkEhnwfbQjdesgXjQloZxqL7Gy7gmqn7C5HJsJlrrYNDm-3wPibFqS8M8-tHZvlPLA"/>
+<div class="absolute inset-0 bg-gradient-to-t from-background via-transparent to-transparent opacity-90"></div>
+<div class="absolute inset-0 bg-black/40 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity duration-300 backdrop-blur-[2px]">
+<button class="bg-surface/80 backdrop-blur-md rounded-full p-2 border border-white/20 text-primary-container hover:scale-110 transition-transform">
+<span class="material-symbols-outlined" data-icon="play_arrow" style="font-variation-settings: 'FILL' 1;">play_arrow</span>
+</button>
+</div>
+<div class="absolute bottom-0 left-0 w-full h-[4px] bg-surface-variant">
+<div class="h-full bg-primary-container w-[10%] glow-effect transition-all duration-300 group-hover:h-[6px]"></div>
+</div>
+</div>
+</div>
+<!-- Poster Card 3 -->
+<div class="min-w-[140px] md:min-w-[200px] snap-start group relative rounded-lg overflow-hidden cursor-pointer">
+<div class="aspect-[2/3] bg-surface-container-high relative">
+<img alt="Neon Glitch Art" class="w-full h-full object-cover opacity-80 group-hover:opacity-100 transition-opacity duration-300" data-alt="A portrait of a woman fragmented by digital glitch art effects. Her features are partially obscured by shifting bands of pixelated noise in harsh pinks, cyans, and deep blacks. The background is a stark, absolute void, emphasizing the subject's digital decay. The overall feel is high-energy, unapologetically digital, and perfectly suited for a Gen-Z media platform." src="https://lh3.googleusercontent.com/aida-public/AB6AXuBq9uA9hNmTDqpF7DOjI8j_mF3D5BfIgEWsYapmjeqy8gBrYpNkOJrbHKHy11UThJ7XttDHA8wQbo8l5Royc9shm-URgWz9xFYh1yCCVlsk47cDxw7lu0jNdCNRZ_7KRKlU7sR_2gfO-iCxXWUo05Yx-bZqdu5P9m4BHRfZlX1qOnVc00Fg5wLm8iTiiRbBoqc9DohrhD8_w39K5Jd7ngDZj_15lj1gqG5jHQzx2t7uiiXmY9K4WTJ7_0yqqSS89Xv01lPs6lsvR4o"/>
+<div class="absolute inset-0 bg-gradient-to-t from-background via-transparent to-transparent opacity-90"></div>
+<div class="absolute inset-0 bg-black/40 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity duration-300 backdrop-blur-[2px]">
+<button class="bg-surface/80 backdrop-blur-md rounded-full p-2 border border-white/20 text-primary-container hover:scale-110 transition-transform">
+<span class="material-symbols-outlined" data-icon="play_arrow" style="font-variation-settings: 'FILL' 1;">play_arrow</span>
+</button>
+</div>
+</div>
+</div>
+<!-- Poster Card 4 -->
+<div class="min-w-[140px] md:min-w-[200px] snap-start group relative rounded-lg overflow-hidden cursor-pointer">
+<div class="aspect-[2/3] bg-surface-container-high relative">
+<img alt="Circuit Board Macro" class="w-full h-full object-cover opacity-80 group-hover:opacity-100 transition-opacity duration-300" data-alt="A macro photograph of a dense, complex computer circuit board. Glowing pathways in neon blue and vibrant pink pulse with energy against a dark, metallic background. The depth of field is shallow, blurring the edges and focusing intensely on a central processing node. The lighting suggests internal data transmission in a dark-room aesthetic environment." src="https://lh3.googleusercontent.com/aida-public/AB6AXuAmHCdJ2GDY_HylkGdylvkqm_FX9tGTS0J-Fi7Cc1vHOsWBa2cT8j0d71IQOBrt07kJiSbwl7h4aOz-hoQqh2SQpYJ9SLojVHmyzx6x1lRC88PRMGeX_dm9itocFlQ7i70x3hUYLUnGzhr5SShZEa8Rgoo5NVmbkb4o6W0SffQrB8Q2A-EXKWIAlqwA5mgw8U2yS6CLCzkyNSuGJDDGJH0KYVHJtxXh-BvQJiWI_b142FRQ-SumThef0vJccextt2-AhCffeSFFpCI"/>
+<div class="absolute inset-0 bg-gradient-to-t from-background via-transparent to-transparent opacity-90"></div>
+<div class="absolute inset-0 bg-black/40 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity duration-300 backdrop-blur-[2px]">
+<button class="bg-surface/80 backdrop-blur-md rounded-full p-2 border border-white/20 text-primary-container hover:scale-110 transition-transform">
+<span class="material-symbols-outlined" data-icon="play_arrow" style="font-variation-settings: 'FILL' 1;">play_arrow</span>
+</button>
+</div>
+<div class="absolute bottom-0 left-0 w-full h-[4px] bg-surface-variant">
+<div class="h-full bg-primary-container w-[80%] glow-effect transition-all duration-300 group-hover:h-[6px]"></div>
+</div>
+</div>
+</div>
+</div>
+</section>
+<!-- Collections Grid -->
+<section>
+<h2 class="font-headline-lg-mobile md:font-headline-lg text-headline-lg-mobile md:text-headline-lg text-on-surface mb-md flex items-center gap-sm">
+<span class="material-symbols-outlined text-secondary-container" data-icon="video_library" style="font-variation-settings: 'FILL' 1;">video_library</span>
+                Collections
+            </h2>
+<div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-md">
+<!-- Collection Card 1 -->
+<div class="bg-surface-container-low/80 backdrop-blur-lg rounded-xl overflow-hidden cursor-pointer group border border-outline-variant/30 hover:border-primary-fixed-dim/50 transition-colors">
+<!-- Collage Grid -->
+<div class="grid grid-cols-2 gap-xs p-xs h-[200px]">
+<img alt="Space Nebulae" class="w-full h-full object-cover rounded-sm" data-alt="A vibrant, deep space nebula bursting with vivid blues, purples, and pinks. Stars glitter like diamonds against the infinite black void. The cosmic clouds swirl in dynamic patterns, suggesting massive scale and immense energy. Designed to fit perfectly within a high-contrast, immersive dark-mode UI block." src="https://lh3.googleusercontent.com/aida-public/AB6AXuA1mW4b_W5EMSAhAkbOAYvYkQJ52RQuiFfDuVdUmOpbes7m4xUR0sb5ytdR-3NA3GlFR79yfrwvaqqs47vU7cXcuzYjJ9NXXXI0ku20zdj9IdF0m4G-ze3gYAJgeSWwbfVIq9GRiXY81-rkCuRqtmLLvNBWLiV37kMYxr1GnCmN5eiPXKLu59U11tsbFwZta7B8asPqS6KnrFrBpcF7raChTPhA1QrndJ1ZccfJTRJj6QW6mwkpkklzsHqEPNyoCf6y2YpWoqikJSc"/>
+<img alt="Earth from Space" class="w-full h-full object-cover rounded-sm" data-alt="A breathtaking view of Earth from low orbit at night. City lights map out continents in glowing golden webs, contrasted against the deep blues of the oceans and the absolute black of space. A thin, bright blue atmosphere line separates the planet from the cosmos. The image serves as a striking visual anchor in a glassmorphic design system." src="https://lh3.googleusercontent.com/aida-public/AB6AXuBm5Rq8xvUWqxeanVU3mvUZieVprXYEXFqmMfCHFKsEz2-mWFPiX8dP4kAGi2KmSQhIRGkJSnjHbr_4dyULQlYBbFd9Gvk_gzlGA1VfGs4B7Hb37awjE-bQDACe0IkesBB0sXeDLxJo2rPCM2BLWF80Mozu7_wVGV-sn5IE-pX18uIhH28aPMzlMWDYmFOokHr7Tug-UoxKPwlID0WywX-PYvFIVg77pMguV1b2oAb9X7GA6QkszbxwWpqNfKZ_Tu4NCt9Mc0z9dl0"/>
+<img alt="Futuristic Space Station" class="w-full h-full object-cover rounded-sm" data-alt="A sleek, highly detailed metallic space station orbiting an alien world. The station features glowing blue engine ports and intricate structural details. Harsh, directional sunlight casts deep, pitch-black shadows across its surface. The aesthetic is heavily influenced by modern sci-fi cinema, fitting seamlessly into a high-energy digital brand identity." src="https://lh3.googleusercontent.com/aida-public/AB6AXuAnbJ3TKrCdPzsxjGRurAS3_t1Ez7luLby0r6jDORT9Nob_2sMogbwC0vktF3z7vjs33tYeS2tbO4VKmXBD9t0DgIL2iOitztPDJfQiCZuOfm3m-Aal8nyQb_95CEkatbH9BAYr7hbJhczVEEianhzxS757O5dJsOk4khMlsEM9qSQYx1ylp4QnPuXx_ILmRyhFodEmEHcT5U5Din0ecmcsBiMHnJNn9RFjsgfaoE1K9oXCmAwGqF2W6egwGaddjLqvTeP0ZA7LYAE"/>
+<div class="bg-surface-container-highest rounded-sm flex items-center justify-center relative overflow-hidden">
+<img alt="Astronaut Helmet" class="w-full h-full object-cover opacity-50 mix-blend-luminosity" data-alt="A close-up shot of an astronaut's helmet visor reflecting a harsh, brilliant white star against the blackness of space. The image is treated with a monochromatic filter and reduced opacity to serve as a background element. It evokes a sense of exploration and the stark reality of the cosmos, tailored for a dark-room media interface." src="https://lh3.googleusercontent.com/aida-public/AB6AXuCvP7PgRdKgpMDiditVnMZ2MBYC9-g_WSadP2wip96NLNeCAXj1F7rTC9Qa_HPqA42Cjt4qz0woCCSwu2jhAdaK7JVPpljZSVWxee8waBKRpk9-0V6NrdhN2ziXiesigN_6msTesKSGF7a09U8AjOMIeuA1sFnBHHt0qf-ev48N_7fDFEKw3HqGB-4w-9RYMBzZLm3LS5dHL5V5uKmuRFZOgPGdPoJXUuA9K7ZMgKnKeUAGjdlwHZd98YK-mmbmQoQmJUwNK8-v_S8"/>
+<div class="absolute inset-0 bg-black/60 flex flex-col items-center justify-center">
+<span class="font-title-md text-title-md text-primary">+12</span>
+</div>
+</div>
+</div>
+<div class="p-md flex justify-between items-center bg-gradient-to-t from-surface-container-low to-transparent">
+<div>
+<h3 class="font-title-md text-title-md text-on-surface group-hover:text-primary transition-colors">Sci-Fi Hits</h3>
+<p class="font-body-sm text-body-sm text-on-surface-variant">16 Videos • Last updated today</p>
+</div>
+<button class="w-10 h-10 rounded-full bg-surface-container-highest flex items-center justify-center text-primary-container hover:bg-surface-bright transition-colors">
+<span class="material-symbols-outlined" data-icon="play_arrow">play_arrow</span>
+</button>
+</div>
+</div>
+<!-- Collection Card 2 -->
+<div class="bg-surface-container-low/80 backdrop-blur-lg rounded-xl overflow-hidden cursor-pointer group border border-outline-variant/30 hover:border-secondary-container/50 transition-colors">
+<div class="grid grid-cols-2 gap-xs p-xs h-[200px]">
+<img alt="Cyberpunk Server Room" class="w-full h-full object-cover rounded-sm" data-alt="A dimly lit, high-tech server room bathed in aggressive neon pink and cyan lights. Rows of black server racks stretch into the distance, cables snaking across the floor. The environment feels oppressive, secretive, and intensely digital. This scene is designed to reinforce a 'dark-room' philosophy, where vibrant colors punch through deep shadows." src="https://lh3.googleusercontent.com/aida-public/AB6AXuD8Jb3pYoCyN6CgHmWGmQj63WYjXbK7NM4PQQcyrlFiWLLI2fiagyq2k4Pne16T2m90BfdaMPLaetPdeETwz2JoyNChS4AxexPtVLPOy_gvZQRiYnS1ZeS972hdBPjp7pxPTBm3Xpb2sRdst-yotVmw5WFt4p0800n39spIvKxb182X51OOtLPPqOhfu-pzZeycSgUEBWNFGo9xbRWJJboNYGgrZbJAkw2NPT8nwHSgL5vNxGa6m4saH33J0atn5kDXGhuWCqQBQCo"/>
+<img alt="Holographic Display" class="w-full h-full object-cover rounded-sm" data-alt="A complex, glowing cyan holographic data display floating in thin air against a pitch-black background. Abstract graphs, alien text, and geometric wireframes rotate and shift dynamically. The visual style is crisp, with no drop shadows, relying entirely on the luminance of the 'light' elements against the dark void to convey depth." src="https://lh3.googleusercontent.com/aida-public/AB6AXuC2-ss_qTQ7IAiuTNPVbtDZM2IK14HGAV9ve3DDa21mSRXUWumAQRYwXKch4gtSX9cMWP6aUosBQ7MfrBymLuglCAdX3BxB0KDGiHPo53d8RpqLQ0_sombCA86LI0CAav1YkyD3dLOElVRw55MEws2BSM54_9pmr0P9amdzf3xhVy8XYJ81x2jrfOxOIXfPzYXU-ucioGw9ULQ4TCGOg0QZZV2kVD8Qv82lEDG24ajSWRXsAoUVBgLlJz3RccnW491Itj_A002kpnc"/>
+<img alt="Neon Synthwave Road" class="w-full h-full object-cover rounded-sm" data-alt="A stylized, synthwave-inspired endless grid road leading towards a massive, glowing magenta sun setting over a dark horizon. Palm tree silhouettes frame the sides. The colors are highly saturated, leaning heavily into classic 80s retrowave aesthetics but modernized for a Gen-Z media consumption platform." src="https://lh3.googleusercontent.com/aida-public/AB6AXuDWL_s7gaP63uvvyRGRHwM425sxt7ixmJLI0C8u_3ymnH564MJs0cKhoBMcKVKFaSKi6UKVU0hipCEfQu8_O6F7QoTOXAMLTf1UopckCIOYg3j2iz8afo3BKiSUOqS-Opw2o0Lh6T0gkF5e6j-odpNQlraY71_ytshtKgTWjT3ni7T7Q0WevBj_haBWCLVZrV8NSwDg0prWE_PmNOqYY1VA97Pw7irui22ycndBXQ41T_BSW-T7zoqTPOAL6XK0M1qOYsIUxnk93yQ"/>
+<div class="bg-surface-container-highest rounded-sm flex items-center justify-center relative overflow-hidden">
+<img alt="Matrix Code Rain" class="w-full h-full object-cover opacity-40" data-alt="Classic green digital 'rain' falling vertically down a completely black screen, reminiscent of iconic hacker visuals. The characters are blurred slightly to indicate motion. The image is darkened to serve as a subtle texture behind an interface element, maintaining the overall unapologetically digital brand personality." src="https://lh3.googleusercontent.com/aida-public/AB6AXuD0LL-_Y6ZXI7E9mpN8o6CF4QDiQyLnjPt6KoHlDr6f-f0CBDcc5EnoaJWhwHkz89F87qHXvSYZzkbBZ4aZg6rKhY5rU1X_oYmi415hz327VQb4yHa15dUJfzkfqgJa7-cs3S5St-NIOAk7XKIUTwkZlPbOI4-wvL5WrjyscHE-NwddXdvsrnbtty4-zniPZrJehYih3lHcd2JbMR3TnK3LV6qQ-WY9s1GDeoYbS49Vp_2G0V6RKRBDuNHZm0NPQEL7jVUkguIbVVw"/>
+<div class="absolute inset-0 bg-black/60 flex flex-col items-center justify-center">
+<span class="font-title-md text-title-md text-secondary-container">+4</span>
+</div>
+</div>
+</div>
+<div class="p-md flex justify-between items-center bg-gradient-to-t from-surface-container-low to-transparent">
+<div>
+<h3 class="font-title-md text-title-md text-on-surface group-hover:text-secondary-container transition-colors">Cyberpunk Anthology</h3>
+<p class="font-body-sm text-body-sm text-on-surface-variant">8 Videos • 2 hrs total</p>
+</div>
+<button class="w-10 h-10 rounded-full bg-surface-container-highest flex items-center justify-center text-secondary-container hover:bg-surface-bright transition-colors">
+<span class="material-symbols-outlined" data-icon="play_arrow">play_arrow</span>
+</button>
+</div>
+</div>
+<!-- Collection Card 3 -->
+<div class="bg-surface-container-low/80 backdrop-blur-lg rounded-xl overflow-hidden cursor-pointer group border border-outline-variant/30 hover:border-primary-fixed/50 transition-colors md:col-span-2 lg:col-span-1">
+<div class="grid grid-cols-2 gap-xs p-xs h-[200px]">
+<img alt="Cinematic Movie Theater" class="w-full h-full object-cover rounded-sm col-span-2 h-[98px]" data-alt="An empty, high-end private movie screening room. The seats are plush black leather, and the screen at the front is glowing with a faint, neutral blue light. The lighting is very low, designed to let the screen be the sole focus. The image conveys a premium, immersive media consumption experience suitable for a 'dark-room' aesthetic." src="https://lh3.googleusercontent.com/aida-public/AB6AXuA6753bWAdO9Q6JH-wH8EfTaaZVbTK0oQfKT7qxxEZ8rPYmZCtxsGZkAsWiSUcH4-540fexl8BWt1RymXg7suN4AijFc3hJvBUqUt8tAi7byUgPwZPYGsmW0oCfsO_Uo-mQXHLdM60l-qYUhsMUxtrgBCI73P0BrulgF2j4b8iOFnZdmpiB672j3_QCLwiI82t3gx9xBMvre81FBOnOvuTj8pEPixNhkaITAa4j9WZ-xtWU80BNnPGvgGXy2sWp6U8kok8zTdPLRyU"/>
+<img alt="Popcorn and Film Reel" class="w-full h-full object-cover rounded-sm" data-alt="A stylized, close-up shot of an old-school metal film reel next to spilled popcorn. The lighting is dramatic, casting deep shadows and highlighting the metallic sheen of the reel. The color grading leans towards a gritty, high-contrast look, avoiding overly bright or cheerful tones to fit a more mature, edge-driven design language." src="https://lh3.googleusercontent.com/aida-public/AB6AXuCelA9OOq5BnN22UJdbO3_oJY4ZtOTaYKKYckAF5zvZl9DGYafYu4cLtoRVZGNaySjZYdW_ADxCvo-Br1nbcUjsJwngsg8uyiwkrg7pejf7c0LAScRuCPFM67NtLvnIikOFnvBvItdwK3p2aOce5MyeOlvIHlxSz9KdE0TNm5GXOwmiOBt7mw-k9K3522XKbpHwgeTmSdDei1kfyqAn1Rklwk1lEKtZzeyNECvxqOD2B1QP2KkNoeFH53hewTSHY7ZloWeK3Tv0z8A"/>
+<div class="bg-surface-container-highest rounded-sm flex items-center justify-center relative overflow-hidden">
+<img alt="Clapperboard" class="w-full h-full object-cover opacity-50 mix-blend-luminosity" data-alt="A classic black and white film clapperboard resting on a dark surface. The image is shot with a shallow depth of field, blurring out the background entirely into blackness. It serves as a monochromatic, textural background element for UI overlays, reinforcing a cinematic theme without overwhelming the viewer." src="https://lh3.googleusercontent.com/aida-public/AB6AXuAJXxLJrg6DKbjmZ5k309FXnjC32RutfhYyyiWupRLX01BcCNxvvHM6YZ27PTBsMDNh0xgWBbbxeUIabx2F8iVrQt6_5yS_Jf0ZPq7f4kjRN3Kd5VSUVyioFDXVY-Rx9RS7dm0R2Hy-D7tRRAbSblp_kSwrZfUArs-AO7NwAQlFs8ZxW3O2UV33P8gUMojfj_qCc5l-6H88btoMs_MlsQBg906kuDx4Pom0A5rtpNHqg_5SvMW9bl2Snkzp5uQoyH5K_1D4O7Xqh28"/>
+<div class="absolute inset-0 bg-black/60 flex flex-col items-center justify-center">
+<span class="font-title-md text-title-md text-on-surface">+24</span>
+</div>
+</div>
+</div>
+<div class="p-md flex justify-between items-center bg-gradient-to-t from-surface-container-low to-transparent">
+<div>
+<h3 class="font-title-md text-title-md text-on-surface group-hover:text-primary-fixed transition-colors">Weekend Movies</h3>
+<p class="font-body-sm text-body-sm text-on-surface-variant">28 Videos • Mixed Genres</p>
+</div>
+<button class="w-10 h-10 rounded-full bg-surface-container-highest flex items-center justify-center text-primary-fixed hover:bg-surface-bright transition-colors">
+<span class="material-symbols-outlined" data-icon="play_arrow">play_arrow</span>
+</button>
+</div>
+</div>
+</div>
+</section>
+</main>
+<!-- BottomNavBar -->
+<nav class="bg-surface-container-low/80 backdrop-blur-lg fixed bottom-0 w-full z-50 rounded-t-xl shadow-[0_-4px_20px_rgba(0,0,0,0.5)] flex justify-around items-center h-20 pb-safe-area-inset px-md md:hidden">
+<a class="flex flex-col items-center justify-center text-outline hover:text-primary/80 active:scale-90 transition-transform duration-150" href="#">
+<span class="material-symbols-outlined mb-1" data-icon="home">home</span>
+<span class="font-label-caps text-label-caps">Home</span>
+</a>
+<a class="flex flex-col items-center justify-center text-outline hover:text-primary/80 active:scale-90 transition-transform duration-150" href="#">
+<span class="material-symbols-outlined mb-1" data-icon="sensors">sensors</span>
+<span class="font-label-caps text-label-caps">Live</span>
+</a>
+<a class="flex flex-col items-center justify-center text-outline hover:text-primary/80 active:scale-90 transition-transform duration-150" href="#">
+<span class="material-symbols-outlined mb-1" data-icon="music_note">music_note</span>
+<span class="font-label-caps text-label-caps">Music</span>
+</a>
+<a class="flex flex-col items-center justify-center text-outline hover:text-primary/80 active:scale-90 transition-transform duration-150" href="#">
+<span class="material-symbols-outlined mb-1" data-icon="auto_stories">auto_stories</span>
+<span class="font-label-caps text-label-caps">Manga</span>
+</a>
+<a class="flex flex-col items-center justify-center text-primary-container drop-shadow-[0_0_10px_#00f2ea] hover:text-primary/80 active:scale-90 transition-transform duration-150" href="#">
+<span class="material-symbols-outlined mb-1" data-icon="person" style="font-variation-settings: 'FILL' 1;">person</span>
+<span class="font-label-caps text-label-caps">Profile</span>
+</a>
+</nav>
+</body></html>

@@ -1,0 +1,24 @@
+{
+  "projectId": "3391305001861538506",
+  "requestedId": "8b57e423e3944bb497f82d14332479ba",
+  "title": "歌单详情 - 赛博脉冲",
+  "stitchTitle": "歌单详情 - 赛博脉冲",
+  "resourceName": "projects/3391305001861538506/screens/8b57e423e3944bb497f82d14332479ba",
+  "deviceType": "MOBILE",
+  "width": "780",
+  "height": "1940",
+  "files": {
+    "screenshot": {
+      "path": "stitch-export/screens/22-歌单详情-赛博脉冲/screenshot.png",
+      "mimeType": "image/png",
+      "bytes": 584361,
+      "resourceName": "projects/3391305001861538506/files/d51b204b58ad4c58b1193befb7dc0205"
+    },
+    "code": {
+      "path": "stitch-export/screens/22-歌单详情-赛博脉冲/code.html",
+      "mimeType": "text/html",
+      "bytes": 23382,
+      "resourceName": "projects/3391305001861538506/files/af3884bd626042c5b08b80c5ccce899c"
+    }
+  }
+}

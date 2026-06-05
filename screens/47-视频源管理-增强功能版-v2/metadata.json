@@ -1,0 +1,24 @@
+{
+  "projectId": "3391305001861538506",
+  "requestedId": "845e1c5953cc4098aaf8bafaff10a2ba",
+  "title": "视频源管理 - 增强功能版 (v2)",
+  "stitchTitle": "视频源管理 - 增强功能版 (v2)",
+  "resourceName": "projects/3391305001861538506/screens/845e1c5953cc4098aaf8bafaff10a2ba",
+  "deviceType": "MOBILE",
+  "width": "780",
+  "height": "1768",
+  "files": {
+    "screenshot": {
+      "path": "stitch-export/screens/47-视频源管理-增强功能版-v2/screenshot.png",
+      "mimeType": "image/png",
+      "bytes": 87939,
+      "resourceName": "projects/3391305001861538506/files/87bd096683094d188136dbfa201cb8a3"
+    },
+    "code": {
+      "path": "stitch-export/screens/47-视频源管理-增强功能版-v2/code.html",
+      "mimeType": "text/html",
+      "bytes": 14942,
+      "resourceName": "projects/3391305001861538506/files/c348c8a76bf842e491712d845d1d171d"
+    }
+  }
+}

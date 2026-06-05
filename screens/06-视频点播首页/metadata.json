@@ -1,0 +1,24 @@
+{
+  "projectId": "3391305001861538506",
+  "requestedId": "a4ad6bc90e49431a896ef934a997b3a7",
+  "title": "视频点播首页",
+  "stitchTitle": "视频点播首页",
+  "resourceName": "projects/3391305001861538506/screens/a4ad6bc90e49431a896ef934a997b3a7",
+  "deviceType": "MOBILE",
+  "width": "780",
+  "height": "2872",
+  "files": {
+    "screenshot": {
+      "path": "stitch-export/screens/06-视频点播首页/screenshot.png",
+      "mimeType": "image/png",
+      "bytes": 1679617,
+      "resourceName": "projects/3391305001861538506/files/efbbe3b6dbf041a4a1d09e414542f321"
+    },
+    "code": {
+      "path": "stitch-export/screens/06-视频点播首页/code.html",
+      "mimeType": "text/html",
+      "bytes": 22412,
+      "resourceName": "projects/3391305001861538506/files/19bbea5d77534ccab8ce0113c794f63f"
+    }
+  }
+}

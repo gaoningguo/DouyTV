@@ -1,0 +1,236 @@
+<!DOCTYPE html>
+
+<html class="dark" lang="en"><head>
+<meta charset="utf-8"/>
+<meta content="width=device-width, initial-scale=1.0" name="viewport"/>
+<title>Configuration Modal - Immersive Aggregator</title>
+<!-- Google Fonts & Material Symbols -->
+<link href="https://fonts.googleapis.com" rel="preconnect"/>
+<link crossorigin="" href="https://fonts.gstatic.com" rel="preconnect"/>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700;800&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<!-- Tailwind CSS -->
+<script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
+<!-- Theme Configuration -->
+<script id="tailwind-config">
+      tailwind.config = {
+        darkMode: "class",
+        theme: {
+          extend: {
+            "colors": {
+                    "surface-container-lowest": "#0e0e0e",
+                    "on-secondary-fixed": "#40000d",
+                    "surface-container-low": "#1c1b1b",
+                    "primary": "#cffffb",
+                    "primary-fixed": "#29fcf3",
+                    "secondary": "#ffb2b6",
+                    "surface-container-highest": "#353534",
+                    "on-surface": "#e5e2e1",
+                    "tertiary-fixed-dim": "#c6c6c7",
+                    "surface-tint": "#00ddd6",
+                    "surface-container-high": "#2a2a2a",
+                    "tertiary-fixed": "#e2e2e2",
+                    "on-secondary": "#67001b",
+                    "surface-bright": "#3a3939",
+                    "on-tertiary-fixed": "#1a1c1c",
+                    "outline-variant": "#3a4a48",
+                    "on-tertiary": "#2f3131",
+                    "on-primary-fixed-variant": "#00504d",
+                    "on-error": "#690005",
+                    "outline": "#849492",
+                    "inverse-surface": "#e5e2e1",
+                    "on-tertiary-fixed-variant": "#454747",
+                    "on-primary": "#003735",
+                    "surface-container": "#201f1f",
+                    "on-primary-fixed": "#00201e",
+                    "error-container": "#93000a",
+                    "inverse-primary": "#006a66",
+                    "secondary-fixed-dim": "#ffb2b6",
+                    "on-tertiary-container": "#5d5f5f",
+                    "on-error-container": "#ffdad6",
+                    "inverse-on-surface": "#313030",
+                    "tertiary": "#f5f5f5",
+                    "surface": "#131313",
+                    "on-secondary-fixed-variant": "#920029",
+                    "surface-dim": "#131313",
+                    "primary-container": "#00f2ea",
+                    "error": "#ffb4ab",
+                    "secondary-fixed": "#ffdadb",
+                    "primary-fixed-dim": "#00ddd6",
+                    "on-primary-container": "#006a66",
+                    "background": "#131313",
+                    "secondary-container": "#ff516a",
+                    "on-surface-variant": "#b9cac8",
+                    "surface-variant": "#353534",
+                    "on-secondary-container": "#5b0016",
+                    "tertiary-container": "#d9d9d9",
+                    "on-background": "#e5e2e1"
+            },
+            "borderRadius": {
+                    "DEFAULT": "0.25rem",
+                    "lg": "0.5rem",
+                    "xl": "0.75rem",
+                    "full": "9999px"
+            },
+            "spacing": {
+                    "sm": "8px",
+                    "lg": "24px",
+                    "base": "4px",
+                    "xs": "4px",
+                    "xl": "32px",
+                    "safe-area-inset": "max(16px, env(safe-area-inset-bottom))",
+                    "md": "16px"
+            },
+            "fontFamily": {
+                    "display-lg": ["Inter"],
+                    "headline-lg-mobile": ["Inter"],
+                    "body-sm": ["Inter"],
+                    "title-md": ["Inter"],
+                    "body-lg": ["Inter"],
+                    "label-caps": ["Inter"],
+                    "headline-lg": ["Inter"]
+            },
+            "fontSize": {
+                    "display-lg": ["48px", {"lineHeight": "52px", "letterSpacing": "-0.02em", "fontWeight": "800"}],
+                    "headline-lg-mobile": ["24px", {"lineHeight": "32px", "fontWeight": "700"}],
+                    "body-sm": ["14px", {"lineHeight": "20px", "fontWeight": "400"}],
+                    "title-md": ["20px", {"lineHeight": "28px", "fontWeight": "600"}],
+                    "body-lg": ["16px", {"lineHeight": "24px", "fontWeight": "400"}],
+                    "label-caps": ["12px", {"lineHeight": "16px", "letterSpacing": "0.05em", "fontWeight": "700"}],
+                    "headline-lg": ["32px", {"lineHeight": "40px", "letterSpacing": "-0.01em", "fontWeight": "700"}]
+            }
+          }
+        }
+      }
+    </script>
+<style>
+        /* Custom styles for immersive scrollbar and utility */
+        ::-webkit-scrollbar { width: 6px; }
+        ::-webkit-scrollbar-track { background: transparent; }
+        ::-webkit-scrollbar-thumb { background: rgba(255, 255, 255, 0.1); border-radius: 9999px; }
+        ::-webkit-scrollbar-thumb:hover { background: rgba(255, 255, 255, 0.2); }
+        
+        .material-symbols-outlined {
+            font-variation-settings: 'FILL' 0, 'wght' 400, 'GRAD' 0, 'opsz' 24;
+        }
+        .icon-fill {
+            font-variation-settings: 'FILL' 1, 'wght' 400, 'GRAD' 0, 'opsz' 24;
+        }
+    </style>
+<style>
+    body {
+      min-height: max(884px, 100dvh);
+    }
+  </style>
+  </head>
+<body class="bg-background text-on-background min-h-screen font-sans selection:bg-primary-container selection:text-on-primary-container relative">
+<!-- Mock App Background Context (to show off the glassmorphism) -->
+<div class="absolute inset-0 z-0 overflow-hidden opacity-50 flex items-center justify-center">
+<!-- Abstract gradient blobs simulating underlying app content -->
+<div class="absolute top-1/4 left-1/4 w-96 h-96 bg-primary-container/20 rounded-full blur-[100px]"></div>
+<div class="absolute bottom-1/4 right-1/4 w-[500px] h-[500px] bg-secondary-container/20 rounded-full blur-[120px]"></div>
+<div class="grid grid-cols-2 md:grid-cols-4 gap-md p-md w-full h-full opacity-30">
+<div class="bg-surface-container rounded-lg h-48"></div>
+<div class="bg-surface-container rounded-lg h-48"></div>
+<div class="bg-surface-container rounded-lg h-48 hidden md:block"></div>
+<div class="bg-surface-container rounded-lg h-48 hidden md:block"></div>
+</div>
+</div>
+<!-- Modal Overlay -->
+<div class="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-md px-md py-xl sm:p-lg">
+<!-- Modal Container: Glassmorphism Card -->
+<div class="w-full max-w-md bg-surface/85 backdrop-blur-2xl rounded-xl border border-white/10 shadow-2xl overflow-hidden flex flex-col transform transition-all shadow-[0_10px_40px_rgba(0,0,0,0.5)]">
+<!-- Header -->
+<div class="px-lg py-md flex items-center justify-between border-b border-white/5 bg-surface-container-lowest/30">
+<div class="flex items-center gap-sm">
+<span aria-hidden="true" class="material-symbols-outlined text-primary-fixed-dim">settings_input_component</span>
+<h2 class="font-title-md text-title-md text-on-surface tracking-tight">Built-in (lx-music)</h2>
+</div>
+<button aria-label="Close dialog" class="w-8 h-8 flex items-center justify-center rounded-full text-on-surface-variant hover:text-on-surface hover:bg-white/10 transition-colors">
+<span class="material-symbols-outlined">close</span>
+</button>
+</div>
+<!-- Content Body -->
+<div class="p-lg flex flex-col gap-xl overflow-y-auto max-h-[530px]">
+<!-- Master Toggle -->
+<div class="flex items-center justify-between">
+<div class="pr-md">
+<label class="font-title-md text-title-md text-on-surface cursor-pointer block" for="enable-source">Enable Source</label>
+<p class="font-body-sm text-body-sm text-on-surface-variant mt-xs">Activate this module to include it in global aggregator searches.</p>
+</div>
+<!-- Custom Toggle Switch -->
+<label class="relative inline-flex items-center cursor-pointer shrink-0" for="enable-source">
+<input checked="" class="sr-only peer" id="enable-source" type="checkbox"/>
+<div class="w-11 h-6 bg-surface-container-highest rounded-full peer peer-checked:bg-primary-container peer-focus:outline-none peer-focus:ring-2 peer-focus:ring-primary-container/50 transition-colors duration-300"></div>
+<div class="absolute left-[2px] top-[2px] bg-white w-5 h-5 rounded-full transition-transform duration-300 peer-checked:translate-x-5 shadow-sm"></div>
+</label>
+</div>
+<hr class="border-white/5 border-t-1"/>
+<!-- Engine Selection Dropdown -->
+<div class="flex flex-col gap-sm">
+<label class="font-label-caps text-label-caps text-on-surface-variant uppercase tracking-widest" for="engine-select">Engine Selection</label>
+<div class="relative group">
+<select class="w-full appearance-none bg-surface-container-low/50 border border-white/10 hover:border-white/20 text-on-surface font-body-lg text-body-lg rounded-lg py-sm pl-md pr-xl focus:bg-surface-container-high focus:outline-none focus:border-primary-fixed focus:ring-1 focus:ring-primary-fixed transition-all cursor-pointer" id="engine-select">
+<option class="bg-surface text-on-surface" value="standard">Standard (Stable API)</option>
+<option class="bg-surface text-on-surface" value="experimental">Experimental (Fast API)</option>
+<option class="bg-surface text-on-surface-variant" value="legacy">Legacy (Fallback)</option>
+</select>
+<span class="material-symbols-outlined absolute right-md top-1/2 -translate-y-1/2 pointer-events-none text-on-surface-variant group-hover:text-on-surface transition-colors">expand_more</span>
+</div>
+<p class="font-body-sm text-body-sm text-outline-variant mt-base">Experimental engine provides faster results but may be less stable.</p>
+</div>
+<!-- Platform Checkboxes -->
+<div class="flex flex-col gap-sm">
+<div class="flex items-center justify-between">
+<span class="font-label-caps text-label-caps text-on-surface-variant uppercase tracking-widest">Supported Platforms</span>
+<span class="font-label-caps text-label-caps text-primary-fixed-dim">3 Selected</span>
+</div>
+<div class="flex flex-col bg-surface-container-lowest/50 rounded-lg border border-white/5 overflow-hidden">
+<!-- Platform Item: QQ -->
+<label class="flex items-center gap-md p-sm hover:bg-white/5 cursor-pointer transition-colors border-b border-white/5 group relative">
+<div class="relative flex items-center justify-center shrink-0">
+<input checked="" class="peer appearance-none w-5 h-5 rounded-[4px] border border-outline bg-transparent checked:bg-primary-container checked:border-primary-container transition-all cursor-pointer focus:outline-none focus:ring-2 focus:ring-primary-container/30" type="checkbox"/>
+<span class="material-symbols-outlined icon-fill absolute text-[16px] text-on-primary-container opacity-0 peer-checked:opacity-100 pointer-events-none scale-50 peer-checked:scale-100 transition-all duration-200">check</span>
+</div>
+<div class="flex-1 flex items-center gap-sm">
+<span class="font-body-lg text-body-lg text-on-surface group-hover:text-white transition-colors">QQ Music</span>
+</div>
+<!-- Neon Pulse Indicator for active high-quality source -->
+<div class="w-1.5 h-1.5 rounded-full bg-primary-container shadow-[0_0_8px_rgba(0,242,234,0.8)] mr-sm" title="High-res audio available"></div>
+</label>
+<!-- Platform Item: NetEase -->
+<label class="flex items-center gap-md p-sm hover:bg-white/5 cursor-pointer transition-colors border-b border-white/5 group">
+<div class="relative flex items-center justify-center shrink-0">
+<input checked="" class="peer appearance-none w-5 h-5 rounded-[4px] border border-outline bg-transparent checked:bg-primary-container checked:border-primary-container transition-all cursor-pointer focus:outline-none focus:ring-2 focus:ring-primary-container/30" type="checkbox"/>
+<span class="material-symbols-outlined icon-fill absolute text-[16px] text-on-primary-container opacity-0 peer-checked:opacity-100 pointer-events-none scale-50 peer-checked:scale-100 transition-all duration-200">check</span>
+</div>
+<div class="flex-1 flex items-center gap-sm">
+<span class="font-body-lg text-body-lg text-on-surface group-hover:text-white transition-colors">NetEase Cloud</span>
+</div>
+</label>
+<!-- Platform Item: Kugou -->
+<label class="flex items-center gap-md p-sm hover:bg-white/5 cursor-pointer transition-colors group">
+<div class="relative flex items-center justify-center shrink-0">
+<input checked="" class="peer appearance-none w-5 h-5 rounded-[4px] border border-outline bg-transparent checked:bg-primary-container checked:border-primary-container transition-all cursor-pointer focus:outline-none focus:ring-2 focus:ring-primary-container/30" type="checkbox"/>
+<span class="material-symbols-outlined icon-fill absolute text-[16px] text-on-primary-container opacity-0 peer-checked:opacity-100 pointer-events-none scale-50 peer-checked:scale-100 transition-all duration-200">check</span>
+</div>
+<div class="flex-1 flex items-center gap-sm">
+<span class="font-body-lg text-body-lg text-on-surface group-hover:text-white transition-colors">Kugou</span>
+</div>
+</label>
+</div>
+</div>
+</div>
+<!-- Footer Actions -->
+<div class="p-md px-lg bg-surface-container-lowest/80 border-t border-white/5 flex items-center justify-end gap-md shrink-0">
+<button class="px-md py-sm rounded-lg font-title-md text-title-md text-on-surface bg-transparent hover:bg-white/10 transition-colors focus:outline-none focus:ring-2 focus:ring-white/20">
+                    Cancel
+                </button>
+<button class="px-lg py-sm rounded-lg font-title-md text-title-md text-on-primary-container bg-primary-container hover:bg-primary-fixed shadow-[0_0_15px_rgba(0,242,234,0.2)] hover:shadow-[0_0_20px_rgba(0,242,234,0.4)] transition-all active:scale-95 focus:outline-none focus:ring-2 focus:ring-primary-fixed focus:ring-offset-2 focus:ring-offset-surface">
+                    Save Changes
+                </button>
+</div>
+</div>
+</div>
+</body></html>

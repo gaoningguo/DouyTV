@@ -1,0 +1,250 @@
+<!DOCTYPE html>
+
+<html class="dark" lang="en"><head>
+<meta charset="utf-8"/>
+<meta content="width=device-width, initial-scale=1.0" name="viewport"/>
+<title>Import MusicFree Plugins</title>
+<script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700;800&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<script id="tailwind-config">
+        tailwind.config = {
+            darkMode: "class",
+            theme: {
+                extend: {
+                    "colors": {
+                        "surface-container-lowest": "#0e0e0e",
+                        "on-secondary-fixed": "#40000d",
+                        "surface-container-low": "#1c1b1b",
+                        "primary": "#cffffb",
+                        "primary-fixed": "#29fcf3",
+                        "secondary": "#ffb2b6",
+                        "surface-container-highest": "#353534",
+                        "on-surface": "#e5e2e1",
+                        "tertiary-fixed-dim": "#c6c6c7",
+                        "surface-tint": "#00ddd6",
+                        "surface-container-high": "#2a2a2a",
+                        "tertiary-fixed": "#e2e2e2",
+                        "on-secondary": "#67001b",
+                        "surface-bright": "#3a3939",
+                        "on-tertiary-fixed": "#1a1c1c",
+                        "outline-variant": "#3a4a48",
+                        "on-tertiary": "#2f3131",
+                        "on-primary-fixed-variant": "#00504d",
+                        "on-error": "#690005",
+                        "outline": "#849492",
+                        "inverse-surface": "#e5e2e1",
+                        "on-tertiary-fixed-variant": "#454747",
+                        "on-primary": "#003735",
+                        "surface-container": "#201f1f",
+                        "on-primary-fixed": "#00201e",
+                        "error-container": "#93000a",
+                        "inverse-primary": "#006a66",
+                        "secondary-fixed-dim": "#ffb2b6",
+                        "on-tertiary-container": "#5d5f5f",
+                        "on-error-container": "#ffdad6",
+                        "inverse-on-surface": "#313030",
+                        "tertiary": "#f5f5f5",
+                        "surface": "#131313",
+                        "on-secondary-fixed-variant": "#920029",
+                        "surface-dim": "#131313",
+                        "primary-container": "#00f2ea",
+                        "error": "#ffb4ab",
+                        "secondary-fixed": "#ffdadb",
+                        "primary-fixed-dim": "#00ddd6",
+                        "on-primary-container": "#006a66",
+                        "background": "#131313",
+                        "secondary-container": "#ff516a",
+                        "on-surface-variant": "#b9cac8",
+                        "surface-variant": "#353534",
+                        "on-secondary-container": "#5b0016",
+                        "tertiary-container": "#d9d9d9",
+                        "on-background": "#e5e2e1"
+                    },
+                    "borderRadius": {
+                        "DEFAULT": "0.25rem",
+                        "lg": "0.5rem",
+                        "xl": "0.75rem",
+                        "full": "9999px"
+                    },
+                    "spacing": {
+                        "sm": "8px",
+                        "lg": "24px",
+                        "base": "4px",
+                        "xs": "4px",
+                        "xl": "32px",
+                        "safe-area-inset": "max(16px, env(safe-area-inset-bottom))",
+                        "md": "16px"
+                    },
+                    "fontFamily": {
+                        "display-lg": ["Inter"],
+                        "headline-lg-mobile": ["Inter"],
+                        "body-sm": ["Inter"],
+                        "title-md": ["Inter"],
+                        "body-lg": ["Inter"],
+                        "label-caps": ["Inter"],
+                        "headline-lg": ["Inter"]
+                    },
+                    "fontSize": {
+                        "display-lg": ["48px", {"lineHeight": "52px", "letterSpacing": "-0.02em", "fontWeight": "800"}],
+                        "headline-lg-mobile": ["24px", {"lineHeight": "32px", "fontWeight": "700"}],
+                        "body-sm": ["14px", {"lineHeight": "20px", "fontWeight": "400"}],
+                        "title-md": ["20px", {"lineHeight": "28px", "fontWeight": "600"}],
+                        "body-lg": ["16px", {"lineHeight": "24px", "fontWeight": "400"}],
+                        "label-caps": ["12px", {"lineHeight": "16px", "letterSpacing": "0.05em", "fontWeight": "700"}],
+                        "headline-lg": ["32px", {"lineHeight": "40px", "letterSpacing": "-0.01em", "fontWeight": "700"}]
+                    }
+                }
+            }
+        }
+    </script>
+<style>
+        .material-symbols-outlined {
+            font-variation-settings: 'FILL' 0, 'wght' 200, 'GRAD' 0, 'opsz' 24;
+        }
+        .material-symbols-outlined.fill {
+            font-variation-settings: 'FILL' 1, 'wght' 400;
+        }
+        /* Custom scrollbar for immersive dark mode */
+        ::-webkit-scrollbar { width: 4px; }
+        ::-webkit-scrollbar-track { background: transparent; }
+        ::-webkit-scrollbar-thumb { background: #353534; border-radius: 4px; }
+        ::-webkit-scrollbar-thumb:hover { background: #00f2ea; }
+    </style>
+<style>
+    body {
+      min-height: max(884px, 100dvh);
+    }
+  </style>
+  </head>
+<body class="bg-background text-on-surface font-body-lg min-h-screen overflow-hidden antialiased flex flex-col selection:bg-primary-container selection:text-on-primary-container">
+<!-- Immersive Background simulating the underlying app context -->
+<div class="absolute inset-0 z-0 bg-cover bg-center opacity-40 mix-blend-screen" data-alt="An abstract, high-energy digital background featuring glowing, neon cyan and magenta sound waves floating in an infinite dark void. The scene utilizes a dark-room philosophy, with deep blacks dominating the negative space. The light sources are strictly the neon accents, creating a moody, glassmorphic, Gen-Z aesthetic suitable for a modern music streaming application." style="background-image: url('https://lh3.googleusercontent.com/aida-public/AB6AXuBh3i_xFPrkD8uXO2ohkSIDrrwCEZ74ITuMfA2J3wRAdrMn18xeHZCWSUoAiBr1GaIr6I25MjZ76fXT9PKFi3J6t8AoGSz46ZP0BB8wCbEjJ2_cbR0-RjZXo4-KgXMaugnnB6VCgD3uWRFI7oMooDtAvSdHv9eL--vyBz2F2JoEHAAq7ZkWh6zd_kgxbssAK9J4VFhY2WAL6JIbfIXVySgGOubGmxY-J7UA9dChi_ksHT4VSEZcoJPguie9XkOsWhvWtyPgzJBzZUw');">
+</div>
+<!-- Modal Backdrop / Container -->
+<main class="fixed inset-0 z-50 flex items-end md:items-center justify-center bg-black/60 backdrop-blur-md p-0 md:p-lg transition-opacity duration-300">
+<!-- Modal Dialog Sheet -->
+<article class="w-full max-w-[480px] bg-surface-container/90 backdrop-blur-2xl border border-outline-variant/30 rounded-t-xl md:rounded-xl shadow-[0_10px_40px_rgba(0,0,0,0.8)] flex flex-col max-h-[795px] md:max-h-[751px] animate-slide-up md:animate-fade-in relative z-10 overflow-hidden">
+<!-- Header -->
+<header class="flex justify-between items-center px-lg py-md border-b border-outline-variant/20 sticky top-0 bg-surface-container/50 backdrop-blur-md z-20">
+<h1 class="font-title-md text-title-md text-on-surface tracking-tight">Import MusicFree Plugins</h1>
+<button class="text-on-surface-variant hover:text-primary-fixed transition-colors p-xs rounded-full hover:bg-surface-bright active:scale-95 flex items-center justify-center">
+<span class="material-symbols-outlined text-[20px]">close</span>
+</button>
+</header>
+<!-- Scrollable Content -->
+<section class="flex-1 overflow-y-auto p-lg flex flex-col gap-xl">
+<!-- Import Actions Block -->
+<div class="flex flex-col gap-md">
+<div class="relative group">
+<span class="material-symbols-outlined absolute left-sm top-1/2 -translate-y-1/2 text-on-surface-variant group-focus-within:text-primary-fixed transition-colors">link</span>
+<input class="w-full bg-surface-container-high focus:bg-surface-bright text-on-surface font-body-sm text-body-sm border-none rounded-lg py-sm pl-xl pr-[60px] outline-none transition-all placeholder:text-on-surface-variant/50 focus:ring-1 focus:ring-primary-fixed/50" placeholder="Import from URL (e.g. .json)" type="text"/>
+<button class="absolute right-xs top-1/2 -translate-y-1/2 px-sm py-[4px] font-label-caps text-label-caps text-primary-fixed hover:bg-primary-fixed/10 rounded transition-colors uppercase">
+                            Load
+                        </button>
+</div>
+<!-- Glass Button for File Upload -->
+<button class="w-full relative flex items-center justify-center gap-sm py-sm px-md rounded-lg bg-surface-bright/40 backdrop-blur-md border border-outline-variant/50 hover:bg-surface-bright/80 hover:border-outline transition-all active:scale-[0.98] group overflow-hidden">
+<div class="absolute inset-0 bg-gradient-to-r from-transparent via-white/5 to-transparent -translate-x-full group-hover:animate-[shimmer_1.5s_infinite]"></div>
+<span class="material-symbols-outlined text-primary-fixed-dim group-hover:text-primary-fixed transition-colors text-[20px]">upload_file</span>
+<span class="font-title-md text-[14px] leading-[20px] font-semibold text-on-surface">Import from File</span>
+</button>
+</div>
+<!-- Active Downloads Tracker -->
+<div class="flex flex-col gap-sm">
+<h2 class="font-label-caps text-label-caps text-on-surface-variant flex items-center justify-between uppercase">
+                        Active Downloads
+                        <span class="w-2 h-2 rounded-full bg-secondary-container animate-pulse shadow-[0_0_8px_rgba(255,81,106,0.6)]"></span>
+</h2>
+<div class="bg-surface-container-lowest/50 rounded-lg p-sm border border-outline-variant/20 flex flex-col gap-sm">
+<div class="flex justify-between items-center">
+<span class="font-body-sm text-body-sm text-on-surface flex items-center gap-xs">
+<span class="material-symbols-outlined text-[16px] text-tertiary-fixed-dim">download</span>
+                                Lo-Fi Beats Aggregator
+                            </span>
+<span class="font-label-caps text-label-caps text-primary-fixed tracking-wider">64%</span>
+</div>
+<!-- Progress Bar Component -->
+<div class="w-full bg-surface-variant rounded-full h-0.5 hover:h-1.5 transition-all duration-300 cursor-pointer overflow-hidden group">
+<div class="bg-primary-fixed h-full rounded-full w-[64%] relative group-hover:shadow-[0_0_8px_rgba(41,252,243,0.8)] transition-all">
+<div class="absolute right-0 top-0 bottom-0 w-10 bg-gradient-to-r from-transparent to-white/30 animate-pulse"></div>
+</div>
+</div>
+</div>
+</div>
+<!-- Installed Plugins List -->
+<div class="flex flex-col gap-sm">
+<h2 class="font-label-caps text-label-caps text-on-surface-variant uppercase">Installed Plugins</h2>
+<ul class="flex flex-col gap-xs">
+<!-- List Item 1 -->
+<li class="flex items-center justify-between p-sm rounded-lg hover:bg-surface-container-high transition-colors group">
+<div class="flex items-center gap-md">
+<div class="w-10 h-10 rounded-lg bg-surface-container-lowest flex items-center justify-center text-primary-fixed-dim border border-outline-variant/20 shadow-inner">
+<span class="material-symbols-outlined">library_music</span>
+</div>
+<div class="flex flex-col">
+<span class="font-body-sm text-body-sm text-on-surface font-semibold">SoundCloud Scraper</span>
+<span class="font-label-caps text-label-caps text-on-surface-variant">v2.1.0 • Audio</span>
+</div>
+</div>
+<button aria-label="Delete plugin" class="p-sm text-on-surface-variant md:opacity-0 group-hover:opacity-100 hover:text-error transition-all active:scale-90">
+<span class="material-symbols-outlined text-[20px]">delete</span>
+</button>
+</li>
+<!-- List Item 2 -->
+<li class="flex items-center justify-between p-sm rounded-lg hover:bg-surface-container-high transition-colors group">
+<div class="flex items-center gap-md">
+<div class="w-10 h-10 rounded-lg bg-surface-container-lowest flex items-center justify-center text-secondary border border-outline-variant/20 shadow-inner">
+<span class="material-symbols-outlined">menu_book</span>
+</div>
+<div class="flex flex-col">
+<span class="font-body-sm text-body-sm text-on-surface font-semibold">MangaDex Connector</span>
+<span class="font-label-caps text-label-caps text-on-surface-variant">v1.0.4 • Manga</span>
+</div>
+</div>
+<button aria-label="Delete plugin" class="p-sm text-on-surface-variant md:opacity-0 group-hover:opacity-100 hover:text-error transition-all active:scale-90">
+<span class="material-symbols-outlined text-[20px]">delete</span>
+</button>
+</li>
+<!-- List Item 3 -->
+<li class="flex items-center justify-between p-sm rounded-lg hover:bg-surface-container-high transition-colors group">
+<div class="flex items-center gap-md">
+<div class="w-10 h-10 rounded-lg bg-surface-container-lowest flex items-center justify-center text-tertiary-fixed border border-outline-variant/20 shadow-inner">
+<span class="material-symbols-outlined">sensors</span>
+</div>
+<div class="flex flex-col">
+<span class="font-body-sm text-body-sm text-on-surface font-semibold">Twitch Live Core</span>
+<span class="font-label-caps text-label-caps text-on-surface-variant">v3.4.1 • Live</span>
+</div>
+</div>
+<button aria-label="Delete plugin" class="p-sm text-on-surface-variant md:opacity-0 group-hover:opacity-100 hover:text-error transition-all active:scale-90">
+<span class="material-symbols-outlined text-[20px]">delete</span>
+</button>
+</li>
+</ul>
+</div>
+</section>
+<!-- Footer Action -->
+<footer class="p-md pt-sm border-t border-outline-variant/20 bg-surface-container pb-safe-area-inset">
+<button class="w-full py-sm rounded-lg bg-primary-fixed text-on-primary-fixed font-title-md text-title-md hover:bg-primary transition-all shadow-[0_0_15px_rgba(41,252,243,0.15)] hover:shadow-[0_0_20px_rgba(41,252,243,0.3)] active:scale-[0.98]">
+                    Done
+                </button>
+</footer>
+</article>
+</main>
+<script>
+        // Inline JS for simple interactions
+        document.addEventListener('DOMContentLoaded', () => {
+            const fileUploadBtn = document.querySelector('button:has(span:contains("upload_file"))');
+            if(fileUploadBtn) {
+                fileUploadBtn.addEventListener('click', () => {
+                    // Visual feedback for click
+                    const icon = fileUploadBtn.querySelector('.material-symbols-outlined');
+                    icon.style.transform = 'translateY(-2px)';
+                    setTimeout(() => icon.style.transform = 'translateY(0)', 150);
+                });
+            }
+        });
+    </script>
+</body></html>

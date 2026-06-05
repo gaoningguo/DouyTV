@@ -1,0 +1,183 @@
+<!DOCTYPE html>
+
+<html class="dark" lang="zh-CN"><head>
+<meta charset="utf-8"/>
+<meta content="width=device-width, initial-scale=1.0" name="viewport"/>
+<title>文本导入 - 漫画源</title>
+<script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700;800&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<script id="tailwind-config">
+        tailwind.config = {
+            darkMode: "class",
+            theme: {
+                extend: {
+                    "colors": {
+                        "on-secondary-fixed-variant": "#920029",
+                        "on-secondary": "#67001b",
+                        "error": "#ffb4ab",
+                        "surface-dim": "#131313",
+                        "secondary-fixed": "#ffdadb",
+                        "inverse-surface": "#e5e2e1",
+                        "secondary": "#ffb2b6",
+                        "primary-container": "#00f2ea",
+                        "on-primary-fixed-variant": "#00504d",
+                        "surface-bright": "#3a3939",
+                        "on-surface-variant": "#b9cac8",
+                        "surface-container": "#201f1f",
+                        "on-error-container": "#ffdad6",
+                        "surface-container-high": "#2a2a2a",
+                        "on-tertiary": "#2f3131",
+                        "on-background": "#e5e2e1",
+                        "background": "#131313",
+                        "on-error": "#690005",
+                        "on-primary-container": "#006a66",
+                        "surface": "#131313",
+                        "on-secondary-fixed": "#40000d",
+                        "tertiary-fixed-dim": "#c6c6c7",
+                        "error-container": "#93000a",
+                        "primary-fixed-dim": "#00ddd6",
+                        "surface-container-highest": "#353534",
+                        "on-primary-fixed": "#00201e",
+                        "surface-container-lowest": "#0e0e0e",
+                        "tertiary": "#f5f5f5",
+                        "on-surface": "#e5e2e1",
+                        "surface-tint": "#00ddd6",
+                        "inverse-primary": "#006a66",
+                        "on-secondary-container": "#5b0016",
+                        "outline": "#849492",
+                        "outline-variant": "#3a4a48",
+                        "on-tertiary-fixed-variant": "#454747",
+                        "inverse-on-surface": "#313030",
+                        "primary": "#cffffb",
+                        "on-tertiary-fixed": "#1a1c1c",
+                        "on-tertiary-container": "#5d5f5f",
+                        "secondary-container": "#ff516a",
+                        "tertiary-container": "#d9d9d9",
+                        "on-primary": "#003735",
+                        "surface-variant": "#353534",
+                        "secondary-fixed-dim": "#ffb2b6",
+                        "tertiary-fixed": "#e2e2e2",
+                        "primary-fixed": "#29fcf3",
+                        "surface-container-low": "#1c1b1b"
+                    },
+                    "borderRadius": {
+                        "DEFAULT": "0.25rem",
+                        "lg": "0.5rem",
+                        "xl": "0.75rem",
+                        "full": "9999px"
+                    },
+                    "spacing": {
+                        "safe-area-inset": "max(16px, env(safe-area-inset-bottom))",
+                        "lg": "24px",
+                        "base": "4px",
+                        "md": "16px",
+                        "xs": "4px",
+                        "xl": "32px",
+                        "sm": "8px"
+                    },
+                    "fontFamily": {
+                        "headline-lg": ["Inter"],
+                        "display-lg": ["Inter"],
+                        "headline-lg-mobile": ["Inter"],
+                        "title-md": ["Inter"],
+                        "label-caps": ["Inter"],
+                        "body-sm": ["Inter"],
+                        "body-lg": ["Inter"]
+                    },
+                    "fontSize": {
+                        "headline-lg": ["32px", { "lineHeight": "40px", "letterSpacing": "-0.01em", "fontWeight": "700" }],
+                        "display-lg": ["48px", { "lineHeight": "52px", "letterSpacing": "-0.02em", "fontWeight": "800" }],
+                        "headline-lg-mobile": ["24px", { "lineHeight": "32px", "fontWeight": "700" }],
+                        "title-md": ["20px", { "lineHeight": "28px", "fontWeight": "600" }],
+                        "label-caps": ["12px", { "lineHeight": "16px", "letterSpacing": "0.05em", "fontWeight": "700" }],
+                        "body-sm": ["14px", { "lineHeight": "20px", "fontWeight": "400" }],
+                        "body-lg": ["16px", { "lineHeight": "24px", "fontWeight": "400" }]
+                    }
+                }
+            }
+        }
+    </script>
+<style>
+        body {
+            background-color: #050505; /* Level 0 Background */
+        }
+        .glass-panel {
+            background: rgba(18, 18, 18, 0.8);
+            backdrop-filter: blur(20px);
+            -webkit-backdrop-filter: blur(20px);
+        }
+        .neon-border {
+            box-shadow: 0 0 15px rgba(0, 242, 234, 0.3), inset 0 0 10px rgba(0, 242, 234, 0.1);
+            border: 1px solid rgba(0, 242, 234, 0.2);
+        }
+        .immersive-input {
+            background: rgba(255, 255, 255, 0.12);
+            transition: background 0.3s ease;
+        }
+        .immersive-input:focus {
+            background: rgba(255, 255, 255, 0.2);
+            outline: none;
+            box-shadow: 0 0 10px rgba(0, 242, 234, 0.2);
+        }
+    </style>
+<style>
+    body {
+      min-height: max(884px, 100dvh);
+    }
+  </style>
+  </head>
+<body class="text-on-surface h-screen w-screen flex items-center justify-center p-md overflow-hidden relative">
+<!-- Background Texture/Atmosphere -->
+<div class="absolute inset-0 z-0 pointer-events-none opacity-20" style="background-image: radial-gradient(circle at 50% 50%, #00f2ea 0%, transparent 60%); blur(100px);"></div>
+<!-- Modal Container -->
+<div class="glass-panel neon-border rounded-xl w-full max-w-[600px] flex flex-col z-10 relative overflow-hidden transform transition-all shadow-2xl">
+<!-- Header -->
+<div class="flex justify-between items-center px-lg py-md border-b border-white/10">
+<h2 class="font-title-md text-title-md text-primary-fixed-dim">文本导入</h2>
+<button class="text-on-surface-variant hover:text-primary transition-colors active:scale-95">
+<span class="material-symbols-outlined" style="font-variation-settings: 'FILL' 0;">close</span>
+</button>
+</div>
+<!-- Content Area -->
+<div class="p-lg flex-grow flex flex-col gap-sm">
+<label class="font-label-caps text-label-caps text-on-surface-variant mb-xs" for="import-text">源规则或链接列表</label>
+<textarea class="immersive-input w-full rounded-lg p-md font-body-sm text-body-sm text-on-surface placeholder-on-surface-variant/50 border-none resize-none focus:ring-0" id="import-text" placeholder="在此粘贴 JSON 格式的源规则或链接列表..." rows="10"></textarea>
+</div>
+<!-- Footer / Action Area -->
+<div class="px-lg py-md border-t border-white/10 flex justify-end gap-md">
+<button class="px-lg py-sm rounded-lg font-title-md text-title-md text-on-surface-variant bg-surface-container hover:bg-surface-container-high transition-colors active:scale-95 border border-white/10">
+                取消
+            </button>
+<button class="px-lg py-sm rounded-lg font-title-md text-title-md text-primary-fixed-dim bg-primary-fixed-dim/20 hover:bg-primary-fixed-dim/30 border border-primary-fixed-dim/50 shadow-[0_0_15px_rgba(0,221,214,0.4)] transition-all active:scale-95 flex items-center gap-xs">
+<span class="material-symbols-outlined text-[20px]" style="font-variation-settings: 'FILL' 1;">download</span>
+                解析并导入
+            </button>
+</div>
+</div>
+<!-- JavaScript for subtle interactions -->
+<script>
+        document.addEventListener('DOMContentLoaded', () => {
+            const textarea = document.getElementById('import-text');
+            const modal = document.querySelector('.glass-panel');
+
+            // Subtle glow effect following cursor on the modal border
+            modal.addEventListener('mousemove', (e) => {
+                const rect = modal.getBoundingClientRect();
+                const x = e.clientX - rect.left;
+                const y = e.clientY - rect.top;
+                
+                modal.style.boxShadow = `
+                    0 0 15px rgba(0, 242, 234, 0.3), 
+                    inset 0 0 10px rgba(0, 242, 234, 0.1),
+                    inset ${x - rect.width/2}px ${y - rect.height/2}px 50px rgba(0, 242, 234, 0.05)
+                `;
+            });
+
+            modal.addEventListener('mouseleave', () => {
+                modal.style.boxShadow = '0 0 15px rgba(0, 242, 234, 0.3), inset 0 0 10px rgba(0, 242, 234, 0.1)';
+            });
+        });
+    </script>
+</body></html>

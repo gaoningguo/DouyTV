@@ -1,0 +1,24 @@
+{
+  "projectId": "3391305001861538506",
+  "requestedId": "9fdef8fcc07246a598721210aa475b03",
+  "title": "沉浸式歌词 (中文版)",
+  "stitchTitle": "沉浸式歌词 (中文版)",
+  "resourceName": "projects/3391305001861538506/screens/9fdef8fcc07246a598721210aa475b03",
+  "deviceType": "MOBILE",
+  "width": "780",
+  "height": "1768",
+  "files": {
+    "screenshot": {
+      "path": "stitch-export/screens/28-沉浸式歌词-中文版/screenshot.png",
+      "mimeType": "image/png",
+      "bytes": 380744,
+      "resourceName": "projects/3391305001861538506/files/9d37f5ec8c204fc1a8b4d19d9f2b796a"
+    },
+    "code": {
+      "path": "stitch-export/screens/28-沉浸式歌词-中文版/code.html",
+      "mimeType": "text/html",
+      "bytes": 11153,
+      "resourceName": "projects/3391305001861538506/files/ca22f50da97e4a9bbacdb1c2b6e6a591"
+    }
+  }
+}

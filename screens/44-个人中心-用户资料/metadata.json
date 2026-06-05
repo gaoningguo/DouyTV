@@ -1,0 +1,24 @@
+{
+  "projectId": "3391305001861538506",
+  "requestedId": "ef93832fe7f94eaf89283f0c48e19cad",
+  "title": "个人中心 (用户资料)",
+  "stitchTitle": "个人中心 (用户资料)",
+  "resourceName": "projects/3391305001861538506/screens/ef93832fe7f94eaf89283f0c48e19cad",
+  "deviceType": "MOBILE",
+  "width": "780",
+  "height": "2126",
+  "files": {
+    "screenshot": {
+      "path": "stitch-export/screens/44-个人中心-用户资料/screenshot.jpg",
+      "mimeType": "image/jpeg",
+      "bytes": 36135,
+      "resourceName": "projects/3391305001861538506/files/2753973733360559683"
+    },
+    "code": {
+      "path": "stitch-export/screens/44-个人中心-用户资料/code.html",
+      "mimeType": "text/html",
+      "bytes": 18792,
+      "resourceName": "projects/3391305001861538506/files/2753973733360561107"
+    }
+  }
+}

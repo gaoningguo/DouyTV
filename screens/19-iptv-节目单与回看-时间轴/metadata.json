@@ -1,0 +1,24 @@
+{
+  "projectId": "3391305001861538506",
+  "requestedId": "df9aee39ae724957a99e821be7f395c5",
+  "title": "IPTV 节目单与回看 (时间轴)",
+  "stitchTitle": "IPTV 节目单与回看 (时间轴)",
+  "resourceName": "projects/3391305001861538506/screens/df9aee39ae724957a99e821be7f395c5",
+  "deviceType": "MOBILE",
+  "width": "780",
+  "height": "1768",
+  "files": {
+    "screenshot": {
+      "path": "stitch-export/screens/19-iptv-节目单与回看-时间轴/screenshot.png",
+      "mimeType": "image/png",
+      "bytes": 366853,
+      "resourceName": "projects/3391305001861538506/files/5522ebbf381447509bb5445c3d8be5ff"
+    },
+    "code": {
+      "path": "stitch-export/screens/19-iptv-节目单与回看-时间轴/code.html",
+      "mimeType": "text/html",
+      "bytes": 16556,
+      "resourceName": "projects/3391305001861538506/files/7a8f6eb16c3b4ebbbc109e5e7551d157"
+    }
+  }
+}

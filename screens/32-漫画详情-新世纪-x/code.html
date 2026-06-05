@@ -1,0 +1,231 @@
+<!DOCTYPE html>
+
+<html class="dark" lang="zh"><head>
+<meta charset="utf-8"/>
+<meta content="width=device-width, initial-scale=1.0" name="viewport"/>
+<title>新世纪 X - Details</title>
+<script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
+<script id="tailwind-config">
+        tailwind.config = {
+            darkMode: "class",
+            theme: {
+                extend: {
+                    "colors": {
+                        "on-background": "#e5e2e1",
+                        "tertiary-fixed-dim": "#c6c6c7",
+                        "on-primary": "#003735",
+                        "error-container": "#93000a",
+                        "inverse-on-surface": "#313030",
+                        "surface-container-high": "#2a2a2a",
+                        "error": "#ffb4ab",
+                        "surface-bright": "#3a3939",
+                        "secondary-container": "#ff516a",
+                        "primary-fixed": "#29fcf3",
+                        "inverse-surface": "#e5e2e1",
+                        "tertiary-container": "#d9d9d9",
+                        "secondary-fixed-dim": "#ffb2b6",
+                        "on-primary-fixed": "#00201e",
+                        "on-surface-variant": "#b9cac8",
+                        "on-secondary-fixed": "#40000d",
+                        "on-surface": "#e5e2e1",
+                        "on-error": "#690005",
+                        "surface-container-low": "#1c1b1b",
+                        "primary": "#cffffb",
+                        "on-primary-container": "#006a66",
+                        "secondary-fixed": "#ffdadb",
+                        "on-primary-fixed-variant": "#00504d",
+                        "surface-tint": "#00ddd6",
+                        "secondary": "#ffb2b6",
+                        "surface-variant": "#353534",
+                        "surface-dim": "#131313",
+                        "surface-container-highest": "#353534",
+                        "primary-container": "#00f2ea",
+                        "on-secondary": "#67001b",
+                        "inverse-primary": "#006a66",
+                        "on-tertiary": "#2f3131",
+                        "surface": "#131313",
+                        "on-tertiary-fixed-variant": "#454747",
+                        "on-tertiary-fixed": "#1a1c1c",
+                        "on-secondary-fixed-variant": "#920029",
+                        "on-tertiary-container": "#5d5f5f",
+                        "surface-container-lowest": "#0e0e0e",
+                        "tertiary": "#f5f5f5",
+                        "on-secondary-container": "#5b0016",
+                        "outline-variant": "#3a4a48",
+                        "primary-fixed-dim": "#00ddd6",
+                        "background": "#131313",
+                        "tertiary-fixed": "#e2e2e2",
+                        "surface-container": "#201f1f",
+                        "outline": "#849492",
+                        "on-error-container": "#ffdad6"
+                    },
+                    "borderRadius": {
+                        "DEFAULT": "0.25rem",
+                        "lg": "0.5rem",
+                        "xl": "0.75rem",
+                        "full": "9999px"
+                    },
+                    "spacing": {
+                        "lg": "24px",
+                        "safe-area-inset": "max(16px, env(safe-area-inset-bottom))",
+                        "base": "4px",
+                        "xs": "4px",
+                        "xl": "32px",
+                        "sm": "8px",
+                        "md": "16px"
+                    },
+                    "fontFamily": {
+                        "title-md": ["Inter"],
+                        "body-sm": ["Inter"],
+                        "label-caps": ["Inter"],
+                        "headline-lg": ["Inter"],
+                        "display-lg": ["Inter"],
+                        "headline-lg-mobile": ["Inter"],
+                        "body-lg": ["Inter"]
+                    },
+                    "fontSize": {
+                        "title-md": ["20px", { "lineHeight": "28px", "fontWeight": "600" }],
+                        "body-sm": ["14px", { "lineHeight": "20px", "fontWeight": "400" }],
+                        "label-caps": ["12px", { "lineHeight": "16px", "letterSpacing": "0.05em", "fontWeight": "700" }],
+                        "headline-lg": ["32px", { "lineHeight": "40px", "letterSpacing": "-0.01em", "fontWeight": "700" }],
+                        "display-lg": ["48px", { "lineHeight": "52px", "letterSpacing": "-0.02em", "fontWeight": "800" }],
+                        "headline-lg-mobile": ["24px", { "lineHeight": "32px", "fontWeight": "700" }],
+                        "body-lg": ["16px", { "lineHeight": "24px", "fontWeight": "400" }]
+                    }
+                }
+            }
+        }
+    </script>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700;800&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<style>
+        .material-symbols-outlined {
+            font-variation-settings: 'FILL' 0, 'wght' 400, 'GRAD' 0, 'opsz' 24;
+        }
+        .text-glow-primary {
+            text-shadow: 0 0 10px rgba(0, 242, 234, 0.5);
+        }
+        .box-glow-primary {
+            box-shadow: 0 0 15px rgba(0, 242, 234, 0.3);
+        }
+        .glass-panel {
+            background: rgba(18, 18, 18, 0.7);
+            backdrop-filter: blur(20px);
+            -webkit-backdrop-filter: blur(20px);
+            border: 1px solid rgba(255, 255, 255, 0.05);
+        }
+    </style>
+<style>
+    body {
+      min-height: max(884px, 100dvh);
+    }
+  </style>
+  </head>
+<body class="bg-background text-on-background font-body-sm antialiased overflow-x-hidden min-h-screen pb-24 relative">
+<!-- TopAppBar -->
+<header class="fixed top-0 w-full z-50 bg-surface/80 backdrop-blur-xl dark:bg-surface/80 flex justify-between items-center px-md h-16 transition-all duration-300">
+<button aria-label="Go Back" class="w-10 h-10 flex items-center justify-center rounded-full bg-surface-container-high/50 text-on-surface hover:opacity-80 transition-opacity active:scale-95" onclick="window.history.back()">
+<span class="material-symbols-outlined">arrow_back</span>
+</button>
+<div class="font-headline-lg-mobile text-headline-lg-mobile font-display-lg text-primary dark:text-primary-fixed italic tracking-tighter">
+            STREAM
+        </div>
+<button aria-label="Settings" class="w-10 h-10 flex items-center justify-center text-on-surface-variant hover:opacity-80 transition-opacity active:scale-95">
+<span class="material-symbols-outlined">more_vert</span>
+</button>
+</header>
+<main class="pt-16 px-md md:px-lg max-w-7xl mx-auto space-y-lg relative z-10">
+<!-- Hero Header -->
+<section class="relative rounded-xl overflow-hidden mt-md">
+<!-- Blur Background for depth -->
+<div class="absolute inset-0 z-0">
+<img alt="Background Blur" class="w-full h-full object-cover opacity-30 blur-3xl scale-110" data-alt="Abstract neon digital background, cyberpunk aesthetic, high contrast dark environment with cyan and pink glowing elements, futuristic data streams." src="https://lh3.googleusercontent.com/aida-public/AB6AXuC_KMddlqLQ9OZk07Q_vZgMIz94d0Lnx66TzMlEgFb8NvUnMn31zCUGfAoT3E5GeYtsT2rQJjOsMjFn9i47nSF83L-Gqt0tl0rbFbqd8H64m6YA0CPmD1VNEUwCfODk1NPn0ohO-LP6Nr_5RnATxc_GcWXkFIncRDdjOYbPuYiOF3s0GgmrljWX72Wz2nMnNdQMpr9oSHDc7GEicNbjZhbr2_c0a5we3hegfhtU8BQxSFSRqHKZwEA1ZuBrvbGYpsgL8OdGFtKeHXc"/>
+<div class="absolute inset-0 bg-gradient-to-t from-background via-background/80 to-transparent"></div>
+</div>
+<div class="relative z-10 flex flex-col md:flex-row gap-lg p-md md:p-lg items-center md:items-start">
+<!-- Cover Image -->
+<div class="w-48 md:w-64 flex-shrink-0 relative group">
+<div class="absolute -inset-1 bg-gradient-to-r from-primary-container to-secondary-container rounded-xl blur opacity-25 group-hover:opacity-50 transition duration-1000 group-hover:duration-200"></div>
+<img alt="新世纪 X Cover" class="relative w-full aspect-[2/3] object-cover rounded-xl shadow-2xl border border-white/10" data-alt="Detailed cyberpunk character portrait, glowing neon tattoos, high-tech visor, set in a rain-slicked dark futuristic city, vivid cyan and magenta lighting, high energy dark room style." src="https://lh3.googleusercontent.com/aida-public/AB6AXuC6MRKytimXAV3a116tLv1wtqvwodlCH6MRlCeUvGRGTFKPKHRF5HQZ5YB-gd_DQtfNpRPpRoa4thrjhwooNNxWlUz398lpZLkYludbhVpaWIMiFx7_-LF-nfERNZhJLM_51qdRsWK_J4uELynRoMfWeGe-lejyDfGpICVww_lXruqQgRQkVUYZhKXlwycMuPq2F2JCIv_l3X4RC6kKuKFP7Aiba2yZKbZQaYYygMOe2wkFlcInxHiYZcR1pQGJQ3G7F4KTeJJ0lrg"/>
+</div>
+<!-- Info -->
+<div class="flex-1 flex flex-col items-center md:items-start text-center md:text-left space-y-sm">
+<h1 class="font-headline-lg-mobile text-headline-lg-mobile md:font-headline-lg md:text-headline-lg text-on-background text-glow-primary">新世纪 X</h1>
+<p class="font-body-lg text-body-lg text-on-surface-variant">作者: 赛博漫步者</p>
+<div class="flex items-center gap-xs text-primary-fixed">
+<span class="material-symbols-outlined" style="font-variation-settings: 'FILL' 1;">star</span>
+<span class="font-title-md text-title-md">4.9</span>
+<span class="font-body-sm text-body-sm text-on-surface-variant ml-xs">(12.5k 评分)</span>
+</div>
+<!-- Tags -->
+<div class="flex flex-wrap gap-xs justify-center md:justify-start mt-sm">
+<span class="px-sm py-[2px] rounded-sm bg-surface-container-high/80 text-on-surface font-label-caps text-label-caps">科幻</span>
+<span class="px-sm py-[2px] rounded-sm bg-surface-container-high/80 text-on-surface font-label-caps text-label-caps">赛博朋克</span>
+<span class="px-sm py-[2px] rounded-sm bg-surface-container-high/80 text-on-surface font-label-caps text-label-caps">热血</span>
+</div>
+<!-- Action Buttons -->
+<div class="flex flex-col sm:flex-row gap-sm w-full mt-lg md:mt-xl">
+<button class="flex-1 py-sm px-md bg-primary-container text-on-primary-container font-title-md text-title-md rounded-lg box-glow-primary hover:bg-primary transition-colors flex justify-center items-center gap-xs">
+<span class="material-symbols-outlined">play_arrow</span>
+                            立即阅读
+                        </button>
+<div class="flex gap-sm w-full sm:w-auto">
+<button class="flex-1 sm:flex-none py-sm px-md glass-panel text-on-surface font-title-md text-title-md rounded-lg hover:bg-surface-bright transition-colors flex justify-center items-center gap-xs">
+<span class="material-symbols-outlined">bookmark_add</span>
+<span class="sr-only sm:not-sr-only">加入书架</span>
+</button>
+<button class="flex-1 sm:flex-none py-sm px-md glass-panel text-on-surface font-title-md text-title-md rounded-lg hover:bg-surface-bright transition-colors flex justify-center items-center gap-xs">
+<span class="material-symbols-outlined">download</span>
+<span class="sr-only sm:not-sr-only">下载</span>
+</button>
+</div>
+</div>
+</div>
+</div>
+</section>
+<!-- Plot Summary -->
+<section class="space-y-sm">
+<h2 class="font-title-md text-title-md text-on-surface border-l-2 border-primary-fixed pl-sm">简介</h2>
+<div class="glass-panel rounded-lg p-md">
+<p class="font-body-sm text-body-sm text-on-surface-variant leading-relaxed">
+                    在公元2150年的新东京，财阀垄断了所有的能源与网络接入。底层黑客“零”意外获得了一串来自旧时代的神秘代码，这串代码不仅能解锁被封禁的记忆，更隐藏着颠覆现有秩序的终极武器。面对财阀武装和机械清道夫的无尽追杀，“零”必须在霓虹闪烁的钢铁丛林中寻找真相，开启属于他的“新世纪”。
+                </p>
+<button class="text-primary mt-sm font-label-caps text-label-caps hover:underline flex items-center">
+                    展开全部 <span class="material-symbols-outlined text-[16px]">expand_more</span>
+</button>
+</div>
+</section>
+<!-- Chapter List -->
+<section class="space-y-sm pb-lg">
+<div class="flex justify-between items-end">
+<h2 class="font-title-md text-title-md text-on-surface border-l-2 border-primary-fixed pl-sm">目录</h2>
+<span class="font-body-sm text-body-sm text-on-surface-variant">共 50 章</span>
+</div>
+<div class="grid grid-cols-1 md:grid-cols-2 gap-xs">
+<!-- Chapter items -->
+<a class="flex justify-between items-center p-sm rounded-lg glass-panel hover:bg-surface-container-high transition-colors group" href="#">
+<span class="font-body-sm text-body-sm text-on-surface group-hover:text-primary transition-colors">第 1 章：霓虹下的阴影</span>
+<span class="font-label-caps text-label-caps text-on-surface-variant">免费</span>
+</a>
+<a class="flex justify-between items-center p-sm rounded-lg glass-panel hover:bg-surface-container-high transition-colors group" href="#">
+<span class="font-body-sm text-body-sm text-on-surface group-hover:text-primary transition-colors">第 2 章：代号“零”</span>
+<span class="font-label-caps text-label-caps text-on-surface-variant">免费</span>
+</a>
+<a class="flex justify-between items-center p-sm rounded-lg glass-panel hover:bg-surface-container-high transition-colors group" href="#">
+<span class="font-body-sm text-body-sm text-on-surface group-hover:text-primary transition-colors">第 3 章：非法接入</span>
+<span class="font-label-caps text-label-caps text-on-surface-variant">免费</span>
+</a>
+<a class="flex justify-between items-center p-sm rounded-lg glass-panel hover:bg-surface-container-high transition-colors group" href="#">
+<span class="font-body-sm text-body-sm text-on-surface group-hover:text-primary transition-colors text-on-surface-variant">第 4 章：机械清道夫 <span class="material-symbols-outlined text-[14px] align-middle ml-xs">lock</span></span>
+</a>
+<a class="flex justify-between items-center p-sm rounded-lg glass-panel hover:bg-surface-container-high transition-colors group" href="#">
+<span class="font-body-sm text-body-sm text-on-surface group-hover:text-primary transition-colors text-on-surface-variant">第 5 章：深网坠落 <span class="material-symbols-outlined text-[14px] align-middle ml-xs">lock</span></span>
+</a>
+</div>
+<button class="w-full py-sm mt-sm glass-panel text-on-surface font-title-md text-title-md rounded-lg hover:bg-surface-bright transition-colors text-center">
+                查看全部章节
+            </button>
+</section>
+</main>
+</body></html>

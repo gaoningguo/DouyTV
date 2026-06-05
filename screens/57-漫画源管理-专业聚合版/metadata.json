@@ -1,0 +1,24 @@
+{
+  "projectId": "3391305001861538506",
+  "requestedId": "0f7ca3268ae8484b83c8b18c558c7391",
+  "title": "漫画源管理 - 专业聚合版",
+  "stitchTitle": "漫画源管理 - 专业聚合版",
+  "resourceName": "projects/3391305001861538506/screens/0f7ca3268ae8484b83c8b18c558c7391",
+  "deviceType": "MOBILE",
+  "width": "780",
+  "height": "1866",
+  "files": {
+    "screenshot": {
+      "path": "stitch-export/screens/57-漫画源管理-专业聚合版/screenshot.png",
+      "mimeType": "image/png",
+      "bytes": 152873,
+      "resourceName": "projects/3391305001861538506/files/cf72fd6bf8cf4a4cb6436ab0e5c2543b"
+    },
+    "code": {
+      "path": "stitch-export/screens/57-漫画源管理-专业聚合版/code.html",
+      "mimeType": "text/html",
+      "bytes": 14552,
+      "resourceName": "projects/3391305001861538506/files/57ba342b2bce43efba2645e1256f264c"
+    }
+  }
+}

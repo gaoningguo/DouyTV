@@ -1,0 +1,253 @@
+<!DOCTYPE html>
+
+<html class="dark" lang="zh-CN"><head>
+<meta charset="utf-8"/>
+<meta content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover" name="viewport"/>
+<title>AGGREGATOR - My Music</title>
+<script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700;800&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<script id="tailwind-config">
+        tailwind.config = {
+            darkMode: "class",
+            theme: {
+                extend: {
+                    "colors": {
+                        "inverse-surface": "#e5e2e1",
+                        "tertiary-container": "#d9d9d9",
+                        "secondary-fixed-dim": "#ffb2b6",
+                        "on-primary-fixed": "#00201e",
+                        "on-surface-variant": "#b9cac8",
+                        "on-secondary-fixed": "#40000d",
+                        "on-surface": "#e5e2e1",
+                        "on-error": "#690005",
+                        "surface-container-low": "#1c1b1b",
+                        "primary": "#cffffb",
+                        "on-primary-container": "#006a66",
+                        "secondary-fixed": "#ffdadb",
+                        "on-primary-fixed-variant": "#00504d",
+                        "on-background": "#e5e2e1",
+                        "tertiary-fixed-dim": "#c6c6c7",
+                        "on-primary": "#003735",
+                        "error-container": "#93000a",
+                        "inverse-on-surface": "#313030",
+                        "surface-container-high": "#2a2a2a",
+                        "error": "#ffb4ab",
+                        "surface-bright": "#3a3939",
+                        "secondary-container": "#ff516a",
+                        "primary-fixed": "#29fcf3",
+                        "on-tertiary-container": "#5d5f5f",
+                        "surface-container-lowest": "#0e0e0e",
+                        "tertiary": "#f5f5f5",
+                        "on-secondary-container": "#5b0016",
+                        "outline-variant": "#3a4a48",
+                        "primary-fixed-dim": "#00ddd6",
+                        "background": "#131313",
+                        "tertiary-fixed": "#e2e2e2",
+                        "surface-container": "#201f1f",
+                        "outline": "#849492",
+                        "on-error-container": "#ffdad6",
+                        "surface-tint": "#00ddd6",
+                        "secondary": "#ffb2b6",
+                        "surface-variant": "#353534",
+                        "surface-dim": "#131313",
+                        "surface-container-highest": "#353534",
+                        "primary-container": "#00f2ea",
+                        "on-secondary": "#67001b",
+                        "inverse-primary": "#006a66",
+                        "on-tertiary": "#2f3131",
+                        "surface": "#131313",
+                        "on-tertiary-fixed-variant": "#454747",
+                        "on-tertiary-fixed": "#1a1c1c",
+                        "on-secondary-fixed-variant": "#920029"
+                    },
+                    "borderRadius": {
+                        "DEFAULT": "0.25rem",
+                        "lg": "0.5rem",
+                        "xl": "0.75rem",
+                        "full": "9999px"
+                    },
+                    "spacing": {
+                        "xs": "4px",
+                        "xl": "32px",
+                        "lg": "24px",
+                        "safe-area-inset": "max(16px, env(safe-area-inset-bottom))",
+                        "base": "4px",
+                        "sm": "8px",
+                        "md": "16px"
+                    },
+                    "fontFamily": {
+                        "headline-lg-mobile": ["Inter"],
+                        "body-lg": ["Inter"],
+                        "headline-lg": ["Inter"],
+                        "display-lg": ["Inter"],
+                        "label-caps": ["Inter"],
+                        "title-md": ["Inter"],
+                        "body-sm": ["Inter"]
+                    },
+                    "fontSize": {
+                        "headline-lg-mobile": ["24px", { "lineHeight": "32px", "fontWeight": "700" }],
+                        "body-lg": ["16px", { "lineHeight": "24px", "fontWeight": "400" }],
+                        "headline-lg": ["32px", { "lineHeight": "40px", "letterSpacing": "-0.01em", "fontWeight": "700" }],
+                        "display-lg": ["48px", { "lineHeight": "52px", "letterSpacing": "-0.02em", "fontWeight": "800" }],
+                        "label-caps": ["12px", { "lineHeight": "16px", "letterSpacing": "0.05em", "fontWeight": "700" }],
+                        "title-md": ["20px", { "lineHeight": "28px", "fontWeight": "600" }],
+                        "body-sm": ["14px", { "lineHeight": "20px", "fontWeight": "400" }]
+                    }
+                }
+            }
+        }
+    </script>
+<style>
+        body {
+            background-color: #050505;
+            color: #e5e2e1;
+            -webkit-tap-highlight-color: transparent;
+        }
+        /* Custom Scrollbar for horizontal lists */
+        .hide-scrollbar::-webkit-scrollbar {
+            display: none;
+        }
+        .hide-scrollbar {
+            -ms-overflow-style: none;
+            scrollbar-width: none;
+        }
+        .glass-panel {
+            background: rgba(18, 18, 18, 0.6);
+            backdrop-filter: blur(20px);
+            -webkit-backdrop-filter: blur(20px);
+            border: 1px solid rgba(255, 255, 255, 0.05);
+        }
+        .neon-text-primary {
+            text-shadow: 0 0 8px rgba(0, 221, 214, 0.6);
+        }
+        .neon-border-primary {
+            box-shadow: 0 0 10px rgba(0, 221, 214, 0.4);
+            border-color: rgba(0, 221, 214, 0.8);
+        }
+    </style>
+<style>
+    body {
+      min-height: max(884px, 100dvh);
+    }
+  </style>
+  </head>
+<body class="antialiased pb-[80px] md:pb-0 pt-[72px] md:pt-[88px] selection:bg-primary-fixed-dim selection:text-black">
+<!-- TopAppBar -->
+<header class="fixed top-0 w-full z-50 bg-transparent bg-gradient-to-b from-black/80 to-transparent flex justify-between items-center px-md py-sm h-[72px] md:h-[88px]">
+<button class="active:scale-95 transition-transform p-sm">
+<span class="material-symbols-outlined text-primary-fixed-dim" data-icon="search">search</span>
+</button>
+<div class="font-headline-lg-mobile text-headline-lg-mobile uppercase tracking-tighter text-primary-fixed-dim drop-shadow-[0_0_8px_rgba(0,221,214,0.6)]">
+            AGGREGATOR
+        </div>
+<button class="active:scale-95 transition-transform p-sm">
+<span class="material-symbols-outlined text-primary-fixed-dim" data-icon="more_vert">more_vert</span>
+</button>
+<!-- Desktop Navigation (Hidden on Mobile) -->
+<nav class="hidden md:flex absolute top-full left-0 w-full bg-surface-container/90 backdrop-blur-md justify-center gap-xl py-sm border-b border-white/5">
+<a class="text-on-surface-variant font-medium hover:text-primary transition-colors duration-200" href="#">发现</a>
+<a class="text-on-surface-variant font-medium hover:text-primary transition-colors duration-200" href="#">直播</a>
+<a class="text-primary font-bold border-b-2 border-primary pb-1" href="#">我的音乐</a>
+<a class="text-on-surface-variant font-medium hover:text-primary transition-colors duration-200" href="#">阅读</a>
+</nav>
+</header>
+<main class="w-full max-w-7xl mx-auto px-md md:px-lg flex flex-col gap-lg md:gap-xl">
+<!-- Profile Header -->
+<section class="flex flex-col items-center mt-md gap-sm">
+<div class="relative">
+<div class="w-24 h-24 rounded-full overflow-hidden neon-border-primary border-2 p-1">
+<img alt="Profile Avatar" class="w-full h-full object-cover rounded-full" data-alt="A close up portrait of an edgy young woman with neon pink hair and cybernetic implants, set against a dark background with subtle cyan rim lighting, giving a high-contrast modern digital aesthetic." src="https://lh3.googleusercontent.com/aida-public/AB6AXuARvWbuZezyhNDaZzEc42WuCb79I58dWWL7lS_cHSPToO_6Tifl4WTN00DyFUJg4Rg5dMyld5GtM5cspOnzJydafTsqc-A1anyx7b6jbFeDBbQQMAtjNBK0w21TsM7mQq1EUrePJGz1_Hb6gIQ8Jnmh1YceQwID94ziM89410_G5fPxA7FoqNRfJG2uavmys3Ck4HHtWHUt3xrxYFXqE041wztEZIvu-1vc0_VR1RMK9DXpX7dFhLK5yE1yl84ETjQJSMJvyCD1l8Q"/>
+</div>
+<div class="absolute bottom-0 right-0 bg-secondary-container w-6 h-6 rounded-full flex items-center justify-center border-2 border-black">
+<span class="material-symbols-outlined text-white text-[14px]" data-icon="edit" style="font-variation-settings: 'FILL' 1;">edit</span>
+</div>
+</div>
+<h1 class="font-title-md text-title-md text-on-surface mt-xs">Cyber_Nova_99</h1>
+<div class="flex gap-lg font-body-sm text-body-sm text-on-surface-variant">
+<div class="flex flex-col items-center"><span class="font-bold text-on-surface">1.2K</span>关注</div>
+<div class="flex flex-col items-center"><span class="font-bold text-on-surface">8.5K</span>粉丝</div>
+<div class="flex flex-col items-center"><span class="font-bold text-on-surface">42K</span>获赞</div>
+</div>
+</section>
+<!-- Navigation Tabs -->
+<div class="flex w-full border-b border-white/10 mt-sm">
+<button class="flex-1 pb-sm text-primary-fixed-dim font-bold border-b-2 border-primary-fixed-dim text-center">我喜欢的</button>
+<button class="flex-1 pb-sm text-on-surface-variant hover:text-on-surface transition-colors text-center">歌单</button>
+<button class="flex-1 pb-sm text-on-surface-variant hover:text-on-surface transition-colors text-center">最近播放</button>
+<button class="flex-1 pb-sm text-on-surface-variant hover:text-on-surface transition-colors text-center">已下载</button>
+</div>
+<!-- Favorite Songs Hero Card -->
+<section class="glass-panel rounded-xl p-md flex items-center justify-between relative overflow-hidden group">
+<div class="absolute inset-0 bg-gradient-to-r from-primary-fixed-dim/20 to-transparent opacity-50"></div>
+<div class="relative z-10 flex gap-md items-center w-full">
+<div class="w-20 h-20 rounded-lg overflow-hidden flex-shrink-0 bg-surface-container flex items-center justify-center">
+<span class="material-symbols-outlined text-primary-fixed-dim text-[40px]" data-icon="favorite" style="font-variation-settings: 'FILL' 1;">favorite</span>
+</div>
+<div class="flex-1 min-w-0">
+<h2 class="font-title-md text-title-md text-on-surface truncate">我喜欢的音乐</h2>
+<p class="font-body-sm text-body-sm text-on-surface-variant mt-xs">342 首歌曲</p>
+</div>
+<button class="w-12 h-12 rounded-full bg-primary-fixed-dim text-black flex items-center justify-center flex-shrink-0 hover:scale-105 active:scale-95 transition-transform shadow-[0_0_15px_rgba(0,221,214,0.5)]">
+<span class="material-symbols-outlined" data-icon="play_arrow" style="font-variation-settings: 'FILL' 1;">play_arrow</span>
+</button>
+</div>
+</section>
+<!-- Custom Playlists Grid -->
+<section>
+<h3 class="font-title-md text-title-md text-on-surface mb-md">我的歌单</h3>
+<div class="grid grid-cols-2 md:grid-cols-4 gap-sm md:gap-md">
+<!-- Playlist Item 1 -->
+<div class="flex flex-col gap-xs group cursor-pointer">
+<div class="relative aspect-square rounded-lg overflow-hidden bg-surface-container">
+<img alt="Playlist Cover" class="w-full h-full object-cover transition-transform duration-500 group-hover:scale-110" data-alt="A stylized abstract 3D rendering of floating geometric shapes in vibrant neon cyan and pink colors against a pitch black void, creating a high-energy electronic music album cover aesthetic." src="https://lh3.googleusercontent.com/aida-public/AB6AXuAcS5Plm9D_V0LcEKprb4aSLQjT4k6PydJdMEYhrK_9RYUo6I2NDkqwaM6UeunYukZEECzHKFUTXytZliPB9TTZKobE750LApWBeuzKhi2g6q8Ebw7WOXRKkb5_w10UERAqlkh3tVHUaJeupOvK_e51QWEdBqlLVa9mLSZXKcObZh3kcxpzZZwG6OdzVgvNCIyZ2IwL192NYMLTOad2OxH2qcDpfZLHeTyMoabtDWmhmTcqTvHI3QdA8zY8K83MRiTpc3ZUutryKV4"/>
+<div class="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center backdrop-blur-[2px]">
+<span class="material-symbols-outlined text-white text-[32px]" data-icon="play_circle" style="font-variation-settings: 'FILL' 1;">play_circle</span>
+</div>
+</div>
+<div class="font-body-lg text-body-lg text-on-surface truncate">Cyberpunk Vibes</div>
+<div class="font-body-sm text-body-sm text-on-surface-variant">45 首歌曲</div>
+</div>
+<!-- Playlist Item 2 -->
+<div class="flex flex-col gap-xs group cursor-pointer">
+<div class="relative aspect-square rounded-lg overflow-hidden bg-surface-container">
+<img alt="Playlist Cover" class="w-full h-full object-cover transition-transform duration-500 group-hover:scale-110" data-alt="A dark, moody abstract background featuring flowing waves of deep blue and purple light, reminiscent of a late-night lo-fi or synthwave music mix visual, set in a digital environment." src="https://lh3.googleusercontent.com/aida-public/AB6AXuBwtIfi9Popd-e5AVMjgiUhJb7xPmV027iiO7h5Dl3CKXXMTHMVaHMOqcfGvLWGbLrQm87E7tn5E5jx8KYbyRbwdialms97CRz2Yi4xXhOu-LIimk-v7cEm8cynUjeJLSfP1qnpJtVf5Uwgh2VEu2ZA3Wt8LwG0QGs11zn7lf-mszpdzJzPxZf1q5BDOm1RSib4LbAXIa8KgqUNmqUrI1bkxGDn9hGeWdP2x5Nun_lTfsAFjmBOka8NMIEDCNP0usnm-hVWNXH0o1M"/>
+<div class="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center backdrop-blur-[2px]">
+<span class="material-symbols-outlined text-white text-[32px]" data-icon="play_circle" style="font-variation-settings: 'FILL' 1;">play_circle</span>
+</div>
+</div>
+<div class="font-body-lg text-body-lg text-on-surface truncate">Night Drive 2077</div>
+<div class="font-body-sm text-body-sm text-on-surface-variant">28 首歌曲</div>
+</div>
+<!-- Playlist Item 3 -->
+<div class="flex flex-col gap-xs group cursor-pointer">
+<div class="relative aspect-square rounded-lg overflow-hidden bg-surface-container flex items-center justify-center border border-dashed border-white/20 hover:border-primary-fixed-dim/50 transition-colors">
+<span class="material-symbols-outlined text-on-surface-variant text-[32px]" data-icon="add">add</span>
+</div>
+<div class="font-body-lg text-body-lg text-on-surface truncate text-center mt-1">新建歌单</div>
+</div>
+</div>
+</section>
+<!-- Spacer for Bottom Nav -->
+<div class="h-8 md:hidden"></div>
+</main>
+<!-- BottomNavBar (Mobile Only) -->
+<nav class="md:hidden fixed bottom-0 w-full z-50 backdrop-blur-xl bg-black/80 border-t border-white/10 flex justify-around items-center h-16 px-md pb-safe-area-inset">
+<a class="flex flex-col items-center justify-center text-on-surface-variant hover:text-primary transition-all active:scale-90 duration-150 w-[20%]" href="#">
+<span class="material-symbols-outlined" data-icon="movie">movie</span>
+</a>
+<a class="flex flex-col items-center justify-center text-on-surface-variant hover:text-primary transition-all active:scale-90 duration-150 w-[20%]" href="#">
+<span class="material-symbols-outlined" data-icon="live_tv">live_tv</span>
+</a>
+<a class="flex flex-col items-center justify-center text-primary-fixed-dim drop-shadow-[0_0_5px_rgba(0,221,214,0.8)] w-[20%]" href="#">
+<span class="material-symbols-outlined" data-icon="music_note" style="font-variation-settings: 'FILL' 1;">music_note</span>
+</a>
+<a class="flex flex-col items-center justify-center text-on-surface-variant hover:text-primary transition-all active:scale-90 duration-150 w-[20%]" href="#">
+<span class="material-symbols-outlined" data-icon="auto_stories">auto_stories</span>
+</a>
+<a class="flex flex-col items-center justify-center text-on-surface-variant hover:text-primary transition-all active:scale-90 duration-150 w-[20%]" href="#">
+<span class="material-symbols-outlined" data-icon="person">person</span>
+</a>
+</nav>
+</body></html>
