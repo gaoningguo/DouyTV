@@ -421,33 +421,6 @@ export const IconDanmaku = (p: Props) => (
   </svg>
 );
 
-export const IconMusic = (p: Props) => (
-  <svg {...base(p)}>
-    {/* 音符 + 音轨 */}
-    <path d="M9 18V5l11-2v13" />
-    <circle cx="6" cy="18" r="3" />
-    <circle cx="17" cy="16" r="3" />
-  </svg>
-);
-
-export const IconBook = (p: Props) => (
-  <svg {...base(p)}>
-    {/* 翻开的书 */}
-    <path d="M3 4h7a3 3 0 013 3v13a2 2 0 00-2-2H3V4z" />
-    <path d="M21 4h-7a3 3 0 00-3 3v13a2 2 0 012-2h8V4z" />
-  </svg>
-);
-
-export const IconManga = (p: Props) => (
-  <svg {...base(p)}>
-    {/* 漫画分镜：四宫格 */}
-    <rect x="3" y="3" width="8" height="8" rx="1.5" />
-    <rect x="13" y="3" width="8" height="8" rx="1.5" />
-    <rect x="3" y="13" width="8" height="8" rx="1.5" />
-    <rect x="13" y="13" width="8" height="8" rx="1.5" />
-  </svg>
-);
-
 export const IconGrid = (p: Props) => (
   <svg {...base(p)}>
     <rect x="3" y="3" width="7" height="7" rx="1" />

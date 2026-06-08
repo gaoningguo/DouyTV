@@ -166,7 +166,11 @@ async fn script_http(req: HttpRequest) -> Result<HttpResponse, String> {
                 headers.insert(name, value.to_string());
             }
         }
-        let body = response.into_string().map_err(|e| format!("{e}"))?;
+        let mut body = String::new();
+        response
+            .into_reader()
+            .read_to_string(&mut body)
+            .map_err(|e| format!("body read error: {e}"))?;
         Ok(HttpResponse {
             url,
             status,
@@ -993,60 +997,6 @@ fn inject_psch_pkey(url: &str, pkey: &str) -> String {
     format!("{}{}psch=v2&pkey={}", url, sep, pkey)
 }
 
-/// 打开桌面歌词独立窗口 — 桌面端专用，无边框 + always-on-top + 透明。
-///
-/// 通过 hash route 加载 `#/music/desktop-lyric`，让 React 路由匹配到 DesktopLyric 页面。
-/// 主窗口通过 Tauri event 把 `music-state` 广播给该窗口。
-#[cfg(desktop)]
-#[tauri::command]
-async fn open_lyric_window(app: tauri::AppHandle) -> Result<(), String> {
-    use tauri::{LogicalPosition, LogicalSize, Manager, WebviewUrl, WebviewWindowBuilder};
-
-    if let Some(win) = app.get_webview_window("lyric") {
-        let _ = win.set_focus();
-        return Ok(());
-    }
-
-    let win = WebviewWindowBuilder::new(
-        &app,
-        "lyric",
-        WebviewUrl::App("index.html#/music/desktop-lyric".into()),
-    )
-    .title("歌词")
-    .inner_size(560.0, 120.0)
-    .min_inner_size(320.0, 80.0)
-    .decorations(false)
-    .always_on_top(true)
-    .resizable(true)
-    .skip_taskbar(false)
-    .build()
-    .map_err(|e| e.to_string())?;
-
-    // 默认放在屏幕底部居中区域
-    if let Ok(Some(monitor)) = win.current_monitor() {
-        let size = monitor.size();
-        let scale = monitor.scale_factor();
-        let logical_w = size.width as f64 / scale;
-        let logical_h = size.height as f64 / scale;
-        let x = (logical_w - 560.0) / 2.0;
-        let y = logical_h - 200.0;
-        let _ = win.set_position(LogicalPosition::new(x.max(0.0), y.max(0.0)));
-        let _ = win.set_size(LogicalSize::new(560.0, 120.0));
-    }
-
-    Ok(())
-}
-
-#[cfg(desktop)]
-#[tauri::command]
-fn close_lyric_window(app: tauri::AppHandle) -> Result<(), String> {
-    use tauri::Manager;
-    if let Some(win) = app.get_webview_window("lyric") {
-        win.close().map_err(|e| e.to_string())?;
-    }
-    Ok(())
-}
-
 /// 打开 Cloudflare 人机验证独立窗口。
 ///
 /// 流程:
@@ -1496,139 +1446,6 @@ pub fn run() {
             sql: "ALTER TABLE history ADD COLUMN episodes_watched TEXT NOT NULL DEFAULT '[]';",
             kind: MigrationKind::Up,
         },
-        Migration {
-            version: 3,
-            description: "music: history + playlists + playlist items",
-            sql: "
-                CREATE TABLE IF NOT EXISTS music_history (
-                    song_id TEXT NOT NULL,
-                    source TEXT NOT NULL,
-                    name TEXT NOT NULL,
-                    artist TEXT,
-                    album TEXT,
-                    cover TEXT,
-                    duration_sec REAL NOT NULL DEFAULT 0,
-                    position_sec REAL NOT NULL DEFAULT 0,
-                    last_played_at INTEGER NOT NULL,
-                    play_count INTEGER NOT NULL DEFAULT 1,
-                    PRIMARY KEY (song_id, source)
-                );
-                CREATE INDEX IF NOT EXISTS idx_music_history_recent
-                    ON music_history(last_played_at DESC);
-
-                CREATE TABLE IF NOT EXISTS music_playlists (
-                    id TEXT PRIMARY KEY,
-                    name TEXT NOT NULL,
-                    description TEXT,
-                    cover TEXT,
-                    song_count INTEGER NOT NULL DEFAULT 0,
-                    created_at INTEGER NOT NULL,
-                    updated_at INTEGER NOT NULL
-                );
-
-                CREATE TABLE IF NOT EXISTS music_playlist_items (
-                    playlist_id TEXT NOT NULL,
-                    song_id TEXT NOT NULL,
-                    source TEXT NOT NULL,
-                    position INTEGER NOT NULL,
-                    name TEXT NOT NULL,
-                    artist TEXT,
-                    album TEXT,
-                    cover TEXT,
-                    duration_sec REAL NOT NULL DEFAULT 0,
-                    added_at INTEGER NOT NULL,
-                    PRIMARY KEY (playlist_id, song_id, source)
-                );
-                CREATE INDEX IF NOT EXISTS idx_music_playlist_items_pos
-                    ON music_playlist_items(playlist_id, position ASC);
-            ",
-            kind: MigrationKind::Up,
-        },
-        Migration {
-            version: 4,
-            description: "books: shelf + reading progress",
-            sql: "
-                CREATE TABLE IF NOT EXISTS book_shelf (
-                    source_id TEXT NOT NULL,
-                    book_id TEXT NOT NULL,
-                    title TEXT NOT NULL,
-                    author TEXT,
-                    cover TEXT,
-                    summary TEXT,
-                    acquisition_links TEXT NOT NULL DEFAULT '[]',
-                    saved_at INTEGER NOT NULL,
-                    PRIMARY KEY (source_id, book_id)
-                );
-                CREATE INDEX IF NOT EXISTS idx_book_shelf_saved
-                    ON book_shelf(saved_at DESC);
-
-                CREATE TABLE IF NOT EXISTS book_progress (
-                    source_id TEXT NOT NULL,
-                    book_id TEXT NOT NULL,
-                    locator_type TEXT NOT NULL,
-                    locator_value TEXT NOT NULL,
-                    chapter_title TEXT,
-                    percent REAL NOT NULL DEFAULT 0,
-                    updated_at INTEGER NOT NULL,
-                    PRIMARY KEY (source_id, book_id)
-                );
-            ",
-            kind: MigrationKind::Up,
-        },
-        Migration {
-            version: 5,
-            description: "manga: shelf + reading history",
-            sql: "
-                CREATE TABLE IF NOT EXISTS manga_shelf (
-                    source_id TEXT NOT NULL,
-                    manga_id TEXT NOT NULL,
-                    title TEXT NOT NULL,
-                    cover TEXT,
-                    author TEXT,
-                    status TEXT,
-                    last_chapter_id TEXT,
-                    last_chapter_name TEXT,
-                    saved_at INTEGER NOT NULL,
-                    PRIMARY KEY (source_id, manga_id)
-                );
-                CREATE INDEX IF NOT EXISTS idx_manga_shelf_saved
-                    ON manga_shelf(saved_at DESC);
-
-                CREATE TABLE IF NOT EXISTS manga_history (
-                    source_id TEXT NOT NULL,
-                    manga_id TEXT NOT NULL,
-                    chapter_id TEXT NOT NULL,
-                    chapter_name TEXT,
-                    page_index INTEGER NOT NULL DEFAULT 0,
-                    page_count INTEGER NOT NULL DEFAULT 0,
-                    updated_at INTEGER NOT NULL,
-                    PRIMARY KEY (source_id, manga_id, chapter_id)
-                );
-                CREATE INDEX IF NOT EXISTS idx_manga_history_recent
-                    ON manga_history(updated_at DESC);
-            ",
-            kind: MigrationKind::Up,
-        },
-        Migration {
-            version: 6,
-            description: "music: favorites table",
-            sql: "
-                CREATE TABLE IF NOT EXISTS music_favorites (
-                    song_id TEXT NOT NULL,
-                    source TEXT NOT NULL,
-                    name TEXT NOT NULL,
-                    artist TEXT,
-                    album TEXT,
-                    cover TEXT,
-                    duration_sec REAL NOT NULL DEFAULT 0,
-                    favorited_at INTEGER NOT NULL,
-                    PRIMARY KEY (song_id, source)
-                );
-                CREATE INDEX IF NOT EXISTS idx_music_favorites_recent
-                    ON music_favorites(favorited_at DESC);
-            ",
-            kind: MigrationKind::Up,
-        },
     ];
 
     tauri::Builder::default()
@@ -1945,11 +1762,7 @@ pub fn run() {
             fc2_resolve_hls,
             fc2_diagnose,
             mfc_list_online,
-            mfc_diagnose,
-            #[cfg(desktop)]
-            open_lyric_window,
-            #[cfg(desktop)]
-            close_lyric_window
+            mfc_diagnose
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

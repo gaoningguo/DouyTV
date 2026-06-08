@@ -1,6 +1,6 @@
 import type { ScriptEpisode } from "@/source-script/types";
 
-export type MediaKind = "video" | "live" | "manga" | "book";
+export type MediaKind = "video" | "live";
 
 export interface MediaItem {
   id: string;

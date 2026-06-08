@@ -2,8 +2,7 @@
  * 数据同步 store —— 通过 WebDAV 把 localStorage 数据 push/pull 到用户自部署服务。
  *
  * 同步范围：所有以 `douytv:` 前缀的 localStorage 键（与"导出备份"一致）。
- * 不同步：SQLite (favorites/history/music_history/...) —— 体量大且高频写，
- * 后续若有需要可单独做"历史同步"。
+ * 不同步：SQLite favorites/history —— 体量大且高频写，后续若有需要可单独做“历史同步”。
  *
  * 冲突策略 (MVP)：以 exportedAt 时间戳为准，远端较新 → 本地覆盖；本地较新 → push 时
  * 直接覆盖远端。pull 前如检测到本地有更新但未推送会提示用户。

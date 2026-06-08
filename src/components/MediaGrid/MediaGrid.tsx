@@ -7,7 +7,7 @@ import type { ReactNode } from "react";
 export interface MediaGridProps {
   children: ReactNode;
   className?: string;
-  /** dense=true 时列数更多更密，对应直播 grid；dense=false 时列数更少，给漫画 / 视频 cover 用 */
+  /** dense=true 时列数更多更密，对应直播 grid；dense=false 时列数更少，给视频 cover 用 */
   dense?: boolean;
 }
 

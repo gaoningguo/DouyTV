@@ -1,21 +1,26 @@
 /**
- * DetailHero —— 书 / 漫画 / 视频详情页顶部 hero。
+ * DetailHero —— 视频详情页顶部 hero。
  *
- * 复刻 mihon `MangaScreen` + legado `BookInfo` 的视觉骨架：
- *   - 顶部背景：cover 模糊放大 + 50% 黑色蒙板（沉浸感）
+ * 通用详情页视觉骨架：
+ *   - 顶部背景：cover 模糊放大 + 50% 黑色蒙板
  *   - 内容：左大封面 (w-32 / sm:w-40) | 右元信息 (title / subtitle / chip row / actions)
  *   - 下方 description 区（可省略，由调用方决定是否传入）
  *
  * 给所有 Detail 页用，避免每页重复手写。
  */
 import { useState, type ReactNode } from "react";
-import { IconArrowLeft, IconBook, IconChevronDown, IconChevronUp } from "@/components/Icon";
+import {
+  IconArrowLeft,
+  IconChevronDown,
+  IconChevronUp,
+  IconFilm,
+} from "@/components/Icon";
 import { wrapImage } from "@/lib/proxy";
 
 export interface DetailHeroProps {
   cover?: string;
   title: string;
-  /** 作者 / 主播 */
+  /** 主标题下方的补充信息 */
   subtitle?: string;
   /** chip row：来源 / 语言 / 状态等。传入 ReactNode 自由组合 */
   metaChips?: ReactNode;
@@ -23,7 +28,7 @@ export interface DetailHeroProps {
   description?: string;
   /** 右下角自定义徽标，例如进度百分比 */
   badge?: ReactNode;
-  /** action 按钮行（继续阅读 / 加入书架 / 缓存 等） */
+  /** action 按钮行 */
   actions?: ReactNode;
   onBack?: () => void;
   proxyCover?: boolean;
@@ -116,7 +121,7 @@ export function DetailHero({
                 />
               ) : (
                 <div className="absolute inset-0 flex items-center justify-center text-cream-faint">
-                  <IconBook size={36} />
+                  <IconFilm size={36} />
                 </div>
               )}
             </div>

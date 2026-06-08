@@ -4,29 +4,21 @@ import {
   IconHome,
   IconSearch,
   IconLive,
-  IconMusic,
-  IconBook,
-  IconManga,
   IconLibrary,
   IconSettings,
 } from "@/components/Icon";
 
-// 顺序与 PC SideNav 一致，保证手机用户能直接看到全部入口（包括「直播」「设置」）。
-// 8 个 tab 在窄屏会溢出 —— 容器允许横向滚 + 右侧渐变 fade 提示可滑。
+// 顺序与 PC SideNav 一致，窄屏仍允许横向滚动。
 const TABS = [
   { to: "/", Icon: IconHome, label: "首页", end: true },
   { to: "/search", Icon: IconSearch, label: "点播", end: false },
   { to: "/live", Icon: IconLive, label: "直播", end: false },
-  { to: "/music", Icon: IconMusic, label: "音乐", end: false },
-  { to: "/books", Icon: IconBook, label: "电子书", end: false },
-  { to: "/manga", Icon: IconManga, label: "漫画", end: false },
   { to: "/library", Icon: IconLibrary, label: "我的", end: false },
   { to: "/settings", Icon: IconSettings, label: "设置", end: false },
 ];
 
 export default function BottomTabBar() {
-  // 把底栏总高度同步成 CSS var，让 MusicMiniPlayer 等浮层能正确避让，
-  // 否则 MiniPlayer 会落在 bottom:0 把底栏盖住（user-reported bug）。
+  // 把底栏总高度同步成 CSS var，供沉浸页和浮层布局避让。
   useEffect(() => {
     document.documentElement.style.setProperty(
       "--bottom-tab-h",

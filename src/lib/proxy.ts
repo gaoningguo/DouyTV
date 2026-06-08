@@ -279,18 +279,12 @@ export function wrapImage(
   if (!imgUrl) return imgUrl;
   if (!isTauri) return imgUrl;
   return buildProxyUrl("image", imgUrl, {
+    ua: getHeader(headers, "User-Agent"),
     referer: getHeader(headers, "Referer"),
   });
 }
 
 /** 平台 → Referer 默认值（NetEase MP3 CDN 等节点对盗链有 host 校验）。 */
-const SOURCE_REFERER: Record<string, string> = {
-  wy: "https://music.163.com/",
-  kw: "http://www.kuwo.cn/",
-  tx: "https://y.qq.com/",
-  kg: "http://www.kugou.com/",
-  mg: "http://music.migu.cn/",
-};
 
 /**
  * 包装音频 URL 走 dyproxy 的 segment 端点 ——
@@ -300,20 +294,3 @@ const SOURCE_REFERER: Record<string, string> = {
  *
  * 非 Tauri 环境（dev 浏览器）直接返回原始 URL（受 CORS 限制，多数会失败）。
  */
-export function wrapAudio(
-  audioUrl: string | undefined,
-  source: string | undefined,
-  extraHeaders?: Record<string, string>
-): string {
-  if (!audioUrl) return "";
-  if (!isTauri) return audioUrl;
-  const referer =
-    getHeader(extraHeaders, "Referer") ||
-    (source ? SOURCE_REFERER[source] : "") ||
-    "https://music.163.com/";
-  const ua = getHeader(extraHeaders, "User-Agent");
-  return buildProxyUrl("segment", audioUrl, {
-    ua: ua || undefined,
-    referer,
-  });
-}
