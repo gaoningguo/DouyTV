@@ -199,9 +199,34 @@ function IPTVLive() {
     hydrateEpg();
   }, [hydrate, hydrateSubs, hydrateEpg]);
 
+  const enabledSourceIds = useMemo(
+    () => new Set(subscriptions.filter((s) => s.enabled !== false).map((s) => s.id)),
+    [subscriptions]
+  );
+
+  const visibleChannels = useMemo(
+    () =>
+      channels.filter((c) => !c.sourceId || enabledSourceIds.has(c.sourceId)),
+    [channels, enabledSourceIds]
+  );
+
   useEffect(() => {
-    if (!activeId && channels.length > 0) setActiveId(channels[0].id);
-  }, [channels.length, activeId]);
+    if (
+      activeSource !== ALL_SOURCE &&
+      activeSource !== NO_SOURCE &&
+      !enabledSourceIds.has(activeSource)
+    ) {
+      setActiveSource(ALL_SOURCE);
+    }
+  }, [activeSource, enabledSourceIds]);
+
+  useEffect(() => {
+    if (activeId && !visibleChannels.some((c) => c.id === activeId)) {
+      setActiveId(visibleChannels[0]?.id);
+      return;
+    }
+    if (!activeId && visibleChannels.length > 0) setActiveId(visibleChannels[0].id);
+  }, [visibleChannels, activeId]);
 
   useEffect(() => {
     const t = setInterval(() => setNow(Math.floor(Date.now() / 1000)), 30_000);
@@ -218,7 +243,7 @@ function IPTVLive() {
     return () => window.removeEventListener("keydown", onKey);
   }, [panelOpen]);
 
-  const active = channels.find((c) => c.id === activeId);
+  const active = visibleChannels.find((c) => c.id === activeId);
   const epgKey = active?.epgId || active?.name;
   const channelProgs = epgKey ? programmes[epgKey] : undefined;
   const currentProg = findCurrent(channelProgs, now);
@@ -244,17 +269,17 @@ function IPTVLive() {
   const sourceCounts = useMemo(() => {
     const m = new Map<string, number>();
     let noneCount = 0;
-    for (const c of channels) {
+    for (const c of visibleChannels) {
       if (c.sourceId) m.set(c.sourceId, (m.get(c.sourceId) || 0) + 1);
       else noneCount += 1;
     }
     return { bySource: m, none: noneCount };
-  }, [channels]);
+  }, [visibleChannels]);
 
   // 按 activeSource + 搜索 过滤
   const filtered = useMemo(() => {
     const kw = filter.trim().toLowerCase();
-    return channels.filter((c) => {
+    return visibleChannels.filter((c) => {
       if (activeSource === NO_SOURCE) {
         if (c.sourceId) return false;
       } else if (activeSource !== ALL_SOURCE) {
@@ -269,7 +294,7 @@ function IPTVLive() {
       }
       return true;
     });
-  }, [channels, activeSource, filter]);
+  }, [visibleChannels, activeSource, filter]);
 
   useEffect(() => {
     setExpandedGroups(new Set());
@@ -357,7 +382,7 @@ function IPTVLive() {
             直播
             <span className="rec-dot" />
             <span className="font-mono text-[10px] text-cream-faint">
-              {String(channels.length).padStart(2, "0")}
+              {String(visibleChannels.length).padStart(2, "0")}
             </span>
           </h1>
         </div>
@@ -575,11 +600,11 @@ function IPTVLive() {
                 <div className="flex gap-2 overflow-x-auto no-scrollbar">
                   <SourcePill
                     label="全部"
-                    count={channels.length}
+                    count={visibleChannels.length}
                     active={activeSource === ALL_SOURCE}
                     onClick={() => setActiveSource(ALL_SOURCE)}
                   />
-                  {subscriptions.map((sub) => {
+                  {subscriptions.filter((sub) => sub.enabled !== false).map((sub) => {
                     const count = sourceCounts.bySource.get(sub.id) || 0;
                     return (
                       <SourcePill
@@ -600,7 +625,7 @@ function IPTVLive() {
                     />
                   )}
                 </div>
-                {subscriptions.length === 0 && sourceCounts.none === 0 && (
+                {subscriptions.filter((sub) => sub.enabled !== false).length === 0 && sourceCounts.none === 0 && (
                   <p className="text-[10px] text-cream-faint mt-1">
                     还没有订阅源
                     <Link to="/settings/live-hub" className="text-ember ml-1">
@@ -611,7 +636,7 @@ function IPTVLive() {
               </div>
 
               {/* 搜索 */}
-              {channels.length > 0 && (
+              {visibleChannels.length > 0 && (
                 <div className="px-3 pt-3 shrink-0">
                   <input
                     type="text"
@@ -629,7 +654,7 @@ function IPTVLive() {
 
               {/* 频道列表（垂直滚动） */}
               <div className="flex-1 overflow-y-auto p-3 min-h-0">
-                {channels.length === 0 ? (
+                {visibleChannels.length === 0 ? (
                   <EmptyState
                     icon={<IconAntenna size={48} />}
                     title="还没有频道"

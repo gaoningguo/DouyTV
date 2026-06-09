@@ -7,12 +7,16 @@ export interface MediaItem {
   kind: MediaKind;
   title: string;
   poster?: string;
-  url: string;
+  url?: string;
   streamType?: "auto" | "mp4" | "hls" | "dash" | "flv" | "chunked-mp4" | "sample-aes-mp4" | "agora-rtc";
   headers?: Record<string, string>;
   duration?: number;
   sourceId?: string;
   sourceName?: string;
+  /** NetLive 平台 id。直播推荐流透传给播放器，用于按平台应用代理策略。 */
+  netlivePlatform?: string;
+  /** NetLive 房间 id。直播推荐流按需 resolve 实际播放地址。 */
+  netliveRoomId?: string;
   author?: string;
   description?: string;
   year?: string;

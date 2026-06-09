@@ -89,6 +89,7 @@ function IptvTab() {
   const removeSub = useLiveSubStore((s) => s.remove);
   const refreshSub = useLiveSubStore((s) => s.refresh);
   const refreshAllSubs = useLiveSubStore((s) => s.refreshAll);
+  const setEnabled = useLiveSubStore((s) => s.setEnabled);
   const setAuto = useLiveSubStore((s) => s.setAutoRefresh);
 
   const [dialog, setDialog] = useState<IptvDialog>(undefined);
@@ -156,7 +157,7 @@ function IptvTab() {
 
       <div className="space-y-1.5 mb-6">
         {subscriptions.map((sub) => (
-          <div key={sub.id} className="flex items-center gap-2 p-2.5 rounded-lg" style={{ background: "var(--ink-2)", border: "1px solid var(--cream-line)" }}>
+          <div key={sub.id} className="flex items-center gap-2 p-2.5 rounded-lg" style={{ background: "var(--ink-2)", border: "1px solid var(--cream-line)", opacity: sub.enabled === false ? 0.58 : 1 }}>
             <div className="flex-1 min-w-0">
               <p className="text-[11px] font-display font-semibold text-cream truncate">{sub.name}</p>
               <p className="font-mono text-[8px] text-cream-faint truncate">{sub.url}</p>
@@ -166,6 +167,9 @@ function IptvTab() {
                 {sub.error && <span style={{ color: "#FF6B6B" }}>!</span>}
               </div>
             </div>
+            <button type="button" onClick={() => setEnabled(sub.id, sub.enabled === false)} className="px-2 py-1 rounded text-[9px] font-mono font-bold tap shrink-0" style={{ background: sub.enabled === false ? "var(--ink-3)" : "var(--ember-soft)", color: sub.enabled === false ? "var(--cream-faint)" : "var(--ember)" }}>
+              {sub.enabled === false ? "OFF" : "ON"}
+            </button>
             <label className="flex items-center gap-1 text-[8px] text-cream-faint shrink-0">
               <input type="checkbox" checked={sub.autoRefresh} onChange={(e) => setAuto(sub.id, e.target.checked)} className="accent-ember w-3 h-3" />
               自动

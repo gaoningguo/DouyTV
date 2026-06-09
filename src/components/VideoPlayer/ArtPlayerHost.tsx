@@ -93,9 +93,11 @@ export interface VideoPlayerProps {
   hotkeys?: boolean;
   /**
    * `true` = 长片模式（Play 页），显示完整控件 + 设置菜单 + 全屏
-   * `false` = 紧凑模式（Home 短视频流），仅保留弹幕层，所有 chrome 隐藏
+   * `false` = Feed 模式，铺满内容区，控件显隐由 feedChrome 对应 CSS 控制
    */
   controls?: boolean;
+  /** Feed 模式的控制层策略：视频默认露出进度条，直播默认全隐藏。 */
+  feedChrome?: "video" | "live";
   startPosition?: number;
   onMutedChange?: (muted: boolean) => void;
   onProgress?: (position: number, duration: number) => void;
@@ -182,7 +184,7 @@ function detectArtType(item: MediaItem): string | undefined {
   // agora-rtc = ManyVids 系 Agora WebRTC SFU。走 customType.agorartc 接管,
   // SDK 懒加载 + join 频道 + subscribe 远端 track,绕开 ArtPlayer 的 URL 加载机制。
   if (item.streamType === "agora-rtc") return "agorartc";
-  const u = item.url.toLowerCase();
+  const u = (item.url ?? "").toLowerCase();
   if (u.includes(".m3u8")) return "m3u8";
   if (u.includes(".flv")) return "flv";
   if (u.includes(".mpd")) return "mpd";
@@ -314,6 +316,7 @@ const ArtPlayerHost = forwardRef<VideoPlayerHandle, VideoPlayerProps>(
       muted: mutedProp,
       hotkeys = true,
       controls = false,
+      feedChrome: feedChromeProp,
       startPosition,
       onMutedChange,
       onProgress,
@@ -325,6 +328,7 @@ const ArtPlayerHost = forwardRef<VideoPlayerHandle, VideoPlayerProps>(
       danmakuVisible = true,
       netlivePlatform,
     } = props;
+    const feedChrome = feedChromeProp ?? (item.kind === "live" ? "live" : "video");
 
     const containerRef = useRef<HTMLDivElement>(null);
     const artRef = useRef<Artplayer | null>(null);
@@ -345,6 +349,7 @@ const ArtPlayerHost = forwardRef<VideoPlayerHandle, VideoPlayerProps>(
     // schedule leave。
     const agoraContainerRef = useRef<HTMLElement | null>(null);
     const lastProgressTs = useRef(0);
+    const feedChromeTimerRef = useRef<number | null>(null);
     const proxyEnabled = useProxyStore((s) => s.mode !== "off");
     const proxyUrl = useProxyStore((s) =>
       s.mode === "manual"
@@ -367,6 +372,7 @@ const ArtPlayerHost = forwardRef<VideoPlayerHandle, VideoPlayerProps>(
 
     const [filterAds, setFilterAds] = useState<boolean>(readFilterAds);
     const [error, setError] = useState<string | null>(null);
+    const [feedChromeActive, setFeedChromeActive] = useState(false);
     // 视频实际宽高比 —— loadedmetadata 后读 videoWidth/Height 算出，
     // 让播放器容器自适应贴合视频画面，工具栏自然落在视频底部而非屏幕底部。
     // 默认 16/9 占位避免初次挂载时的 layout shift。仅 controls=true 时生效。
@@ -1243,13 +1249,61 @@ const ArtPlayerHost = forwardRef<VideoPlayerHandle, VideoPlayerProps>(
       []
     );
 
+    useEffect(() => {
+      if (controls || !feedChromeActive) return;
+      if (feedChromeTimerRef.current) {
+        window.clearTimeout(feedChromeTimerRef.current);
+      }
+      feedChromeTimerRef.current = window.setTimeout(() => {
+        setFeedChromeActive(false);
+        feedChromeTimerRef.current = null;
+      }, 2800);
+      return () => {
+        if (feedChromeTimerRef.current) {
+          window.clearTimeout(feedChromeTimerRef.current);
+          feedChromeTimerRef.current = null;
+        }
+      };
+    }, [controls, feedChromeActive]);
+
+    const revealFeedChromeFromBottom = useCallback(
+      (clientY: number) => {
+        if (controls) return;
+        const host = containerRef.current;
+        if (!host) return;
+        const rect = host.getBoundingClientRect();
+        const bottomTab =
+          typeof window !== "undefined" &&
+          window.matchMedia?.("(max-width: 767px)").matches
+            ? Number.parseFloat(
+                getComputedStyle(document.documentElement)
+                  .getPropertyValue("--bottom-tab-h")
+                  .replace("px", "")
+              ) || 56
+            : 0;
+        const hotBottom = rect.bottom - bottomTab;
+        if (clientY >= hotBottom - 96 && clientY <= hotBottom + 16) {
+          setFeedChromeActive(true);
+        }
+      },
+      [controls]
+    );
+
     return (
-      <div className="relative w-full h-full bg-black flex items-center justify-center overflow-hidden">
+      <div
+        className="relative w-full h-full bg-black flex items-center justify-center overflow-hidden"
+        onPointerDown={(e) => revealFeedChromeFromBottom(e.clientY)}
+        onPointerMove={(e) => {
+          if (e.pointerType === "mouse") return;
+          revealFeedChromeFromBottom(e.clientY);
+        }}
+      >
         <div
           ref={containerRef}
-          // `art-host-feed` 触发 styles.css 里的 hover-to-show 规则，
-          // Feed 模式下底栏默认不可见，鼠标进入 .art-bottom 区域才浮现
-          className={`art-host ${controls ? "" : "art-host-feed"}`}
+          // `art-host-feed-*` 触发 styles.css 里的首页 Feed 控制层规则。
+          className={`art-host ${
+            controls ? "" : `art-host-feed art-host-feed-${feedChrome}`
+          } ${feedChromeActive ? "art-host-feed-active" : ""}`}
           style={
             controls
               ? {

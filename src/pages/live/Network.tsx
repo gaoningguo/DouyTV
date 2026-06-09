@@ -31,6 +31,7 @@ import {
 } from "@/lib/netlive/types";
 import { createDouyuDanmaku } from "@/lib/netlive/danmaku/douyu";
 import type { DanmakuClient, DanmakuMessage } from "@/lib/netlive/danmaku/types";
+import { netLiveRoomToMediaItem } from "@/lib/netlive/playback";
 import VideoPlayer from "@/components/VideoPlayer";
 import { RoomCard, SkeletonCard } from "@/components/RoomCard";
 import { MediaGrid } from "@/components/MediaGrid";
@@ -361,19 +362,7 @@ export default function NetworkLivePanel() {
   /* ───────────── MediaItem 给 VideoPlayer ───────────── */
   const mediaItem = useMemo<MediaItem | undefined>(() => {
     if (!resolved || !activeRoom) return undefined;
-    const headers: Record<string, string> = {};
-    if (resolved.ua) headers["User-Agent"] = resolved.ua;
-    if (resolved.referer) headers["Referer"] = resolved.referer;
-    return {
-      id: `netlive:${activeRoom.platform}:${activeRoom.roomId}`,
-      kind: "live",
-      title: activeRoom.title,
-      url: resolved.url,
-      streamType: resolved.streamType ?? "hls",
-      poster: activeRoom.cover,
-      headers: Object.keys(headers).length > 0 ? headers : undefined,
-      agora: resolved.agora,
-    };
+    return netLiveRoomToMediaItem(activeRoom, resolved);
   }, [resolved, activeRoom]);
 
   /* ───────────── 优先品类排序 + 默认推荐加塞 ───────────── */

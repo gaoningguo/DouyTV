@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState, type ReactNode } from "react";
 import {
   motion,
   useAnimationControls,
@@ -9,22 +9,21 @@ import type { MediaItem } from "@/types/media";
 
 interface Props {
   items: MediaItem[];
+  active?: boolean;
   initialIndex?: number;
   onIndexChange?: (index: number) => void;
   onLoadMore?: () => void;
   onProgress?: (item: MediaItem, position: number, duration: number) => void;
-  /** 当前 active 视频播放结束。Home 用来触发自动下一集（合集情况）或翻到下个视频 */
   onItemEnded?: (item: MediaItem) => void;
   loadMoreThreshold?: number;
-  renderOverlay?: (item: MediaItem, index: number) => React.ReactNode;
-  /** 是否给当前视频显示完整控制条（播放/暂停/进度/音量/全屏...） */
+  renderOverlay?: (item: MediaItem, index: number) => ReactNode;
   controls?: boolean;
-  /** 视频无法播放时，错误页「换源」按钮回调（VideoFeed 透传给 VideoPlayer） */
+  feedChrome?: "video" | "live";
   onRequestReresolve?: (item: MediaItem) => Promise<void> | void;
-  /** ArtPlayer 设置菜单「换源 / 测速」回调（VideoFeed 透传给 VideoPlayer） */
   onRequestSwitchSource?: (item: MediaItem) => void;
-  /** 合集换集 — VideoFeed 内部根据 item.episodes / currentEpisodeIndex 决定 prev/next 是否启用 */
   onChangeEpisode?: (item: MediaItem, episodeIndex: number) => void | Promise<void>;
+  heightMode?: "viewport" | "container";
+  className?: string;
 }
 
 const SNAP_DISTANCE_RATIO = 0.18;
@@ -32,6 +31,7 @@ const SNAP_VELOCITY = 500;
 
 export default function VideoFeed({
   items,
+  active = true,
   initialIndex = 0,
   onIndexChange,
   onLoadMore,
@@ -40,9 +40,12 @@ export default function VideoFeed({
   loadMoreThreshold = 3,
   renderOverlay,
   controls = false,
+  feedChrome,
   onRequestReresolve,
   onRequestSwitchSource,
   onChangeEpisode,
+  heightMode = "viewport",
+  className,
 }: Props) {
   const [index, setIndex] = useState(initialIndex);
   const [viewportH, setViewportH] = useState(() =>
@@ -54,10 +57,29 @@ export default function VideoFeed({
   const lastWheelTs = useRef(0);
 
   useEffect(() => {
-    const onResize = () => setViewportH(window.innerHeight);
-    window.addEventListener("resize", onResize);
-    return () => window.removeEventListener("resize", onResize);
-  }, []);
+    const readHeight = () => {
+      if (heightMode === "container") {
+        const h = containerRef.current?.clientHeight;
+        setViewportH(h && h > 0 ? h : window.innerHeight);
+        return;
+      }
+      setViewportH(window.innerHeight);
+    };
+    readHeight();
+    if (heightMode === "container" && typeof ResizeObserver !== "undefined") {
+      const el = containerRef.current;
+      if (!el) return;
+      const ro = new ResizeObserver(readHeight);
+      ro.observe(el);
+      window.addEventListener("resize", readHeight);
+      return () => {
+        ro.disconnect();
+        window.removeEventListener("resize", readHeight);
+      };
+    }
+    window.addEventListener("resize", readHeight);
+    return () => window.removeEventListener("resize", readHeight);
+  }, [heightMode]);
 
   useEffect(() => {
     animControls.start({
@@ -65,12 +87,12 @@ export default function VideoFeed({
       transition: { type: "spring", stiffness: 350, damping: 35 },
     });
     onIndexChange?.(index);
-    if (
-      onLoadMore &&
-      items.length - index <= loadMoreThreshold
-    ) {
+    if (onLoadMore && items.length - index <= loadMoreThreshold) {
       onLoadMore();
     }
+    // Only react to feed position changes here; parent callbacks are often
+    // recreated during item updates and would otherwise repeatedly load pages.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [index, viewportH]);
 
   const jumpTo = useCallback(
@@ -97,7 +119,7 @@ export default function VideoFeed({
         });
       }
     },
-    [index, viewportH, jumpTo]
+    [animControls, index, jumpTo, viewportH]
   );
 
   useEffect(() => {
@@ -116,10 +138,9 @@ export default function VideoFeed({
           t.tagName === "TEXTAREA" ||
           t.tagName === "SELECT" ||
           t.isContentEditable)
-      )
+      ) {
         return;
-      // ↑↓ / PageUp/Down / j/k 仅用于翻页；其它键（←→/Space/F/P/M）由
-      // 当前 active 视频的 ArtPlayerHost 处理（capture 阶段，已先触发）
+      }
       if (e.key === "ArrowDown" || e.key === "PageDown" || e.key === "j") {
         e.preventDefault();
         jumpTo(index + 1);
@@ -139,7 +160,11 @@ export default function VideoFeed({
 
   if (items.length === 0) {
     return (
-      <div className="h-screen w-screen flex items-center justify-center bg-black text-white/60">
+      <div
+        className={`flex items-center justify-center bg-black text-white/60 ${
+          heightMode === "container" ? "h-full w-full" : "h-screen w-screen"
+        } ${className ?? ""}`}
+      >
         暂无内容
       </div>
     );
@@ -148,7 +173,9 @@ export default function VideoFeed({
   return (
     <div
       ref={containerRef}
-      className="h-screen w-full overflow-hidden bg-black touch-none"
+      className={`${
+        heightMode === "container" ? "h-full" : "h-screen"
+      } w-full overflow-hidden bg-black touch-none ${className ?? ""}`}
     >
       <motion.div
         drag="y"
@@ -165,7 +192,6 @@ export default function VideoFeed({
       >
         {items.map((item, i) => {
           const distance = Math.abs(i - index);
-          // 当前 + 前后各 1 个 mount, 让 hls.js 预解析 manifest 实现秒播
           const shouldMount = distance <= 1;
           const curEp = item.currentEpisodeIndex ?? 0;
           const totalEp = item.episodes?.length ?? 0;
@@ -178,43 +204,48 @@ export default function VideoFeed({
             >
               {shouldMount ? (
                 <>
-                  <VideoPlayer
-                    item={item}
-                    active={i === index}
-                    muted={globalMuted}
-                    onMutedChange={setGlobalMuted}
-                    preload={distance === 0 ? "auto" : "auto"}
-                    // 合集视频不能 loop，否则 onEnded 永远不触发 → 无法自动播下一集
-                    loop={!(item.episodes && item.episodes.length > 1)}
-                    onProgress={(pos, dur) => onProgress?.(item, pos, dur)}
-                    onEnded={
-                      i === index && onItemEnded
-                        ? () => onItemEnded(item)
-                        : undefined
-                    }
-                    hotkeys={i === index}
-                    controls={controls && i === index}
-                    onPrevEpisode={
-                      hasEps && curEp > 0 && onChangeEpisode
-                        ? () => void onChangeEpisode(item, curEp - 1)
-                        : undefined
-                    }
-                    onNextEpisode={
-                      hasEps && curEp < totalEp - 1 && onChangeEpisode
-                        ? () => void onChangeEpisode(item, curEp + 1)
-                        : undefined
-                    }
-                    onRequestReresolve={
-                      onRequestReresolve
-                        ? () => onRequestReresolve(item)
-                        : undefined
-                    }
-                    onRequestSwitchSource={
-                      onRequestSwitchSource
-                        ? () => onRequestSwitchSource(item)
-                        : undefined
-                    }
-                  />
+                  {item.url ? (
+                    <VideoPlayer
+                      item={item}
+                      active={active && i === index}
+                      muted={globalMuted}
+                      onMutedChange={setGlobalMuted}
+                      preload={distance === 0 ? "auto" : "auto"}
+                      loop={!(item.episodes && item.episodes.length > 1)}
+                      onProgress={(pos, dur) => onProgress?.(item, pos, dur)}
+                      onEnded={
+                        i === index && onItemEnded
+                          ? () => onItemEnded(item)
+                          : undefined
+                      }
+                      hotkeys={active && i === index}
+                      controls={active && controls && i === index}
+                      feedChrome={feedChrome ?? (item.kind === "live" ? "live" : "video")}
+                      netlivePlatform={item.netlivePlatform}
+                      onPrevEpisode={
+                        hasEps && curEp > 0 && onChangeEpisode
+                          ? () => void onChangeEpisode(item, curEp - 1)
+                          : undefined
+                      }
+                      onNextEpisode={
+                        hasEps && curEp < totalEp - 1 && onChangeEpisode
+                          ? () => void onChangeEpisode(item, curEp + 1)
+                          : undefined
+                      }
+                      onRequestReresolve={
+                        onRequestReresolve
+                          ? () => onRequestReresolve(item)
+                          : undefined
+                      }
+                      onRequestSwitchSource={
+                        onRequestSwitchSource
+                          ? () => onRequestSwitchSource(item)
+                          : undefined
+                      }
+                    />
+                  ) : (
+                    <LiveResolvingPlaceholder poster={item.poster} />
+                  )}
                   {renderOverlay?.(item, i)}
                 </>
               ) : (
@@ -224,6 +255,29 @@ export default function VideoFeed({
           );
         })}
       </motion.div>
+    </div>
+  );
+}
+
+function LiveResolvingPlaceholder({ poster }: { poster?: string }) {
+  return (
+    <div className="absolute inset-0 flex flex-col items-center justify-center bg-black text-cream-faint">
+      {poster && (
+        <img
+          src={poster}
+          alt=""
+          className="absolute inset-0 h-full w-full object-cover opacity-30 blur-sm"
+          referrerPolicy="no-referrer"
+        />
+      )}
+      <div className="relative z-10 signal-bars mb-4" style={{ height: 24 }}>
+        <span />
+        <span />
+        <span />
+      </div>
+      <p className="relative z-10 font-mono text-[10px] tracking-[0.25em]">
+        RESOLVING LIVE...
+      </p>
     </div>
   );
 }

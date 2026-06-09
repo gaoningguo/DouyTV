@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { Route, Routes, useLocation } from "react-router-dom";
+import { Route, Routes, useLocation, type Location } from "react-router-dom";
 import Home from "@/pages/Home";
 import Library from "@/pages/Library";
 import Search from "@/pages/Search";
@@ -37,10 +37,20 @@ import { useViewport } from "@/hooks/useViewport";
 const HIDE_NAV_PREFIXES = ["/play", "/detail", "/live/room"];
 const ONBOARDED_KEY = "douytv:onboarded";
 
+interface RouteState {
+  backgroundLocation?: Location;
+}
+
 export default function App() {
   const location = useLocation();
+  const routeState = location.state as RouteState | null;
+  const backgroundLocation = routeState?.backgroundLocation;
+  const routeLocation = backgroundLocation ?? location;
   const hideNav = HIDE_NAV_PREFIXES.some((p) =>
     location.pathname.startsWith(p)
+  );
+  const layoutHideNav = HIDE_NAV_PREFIXES.some((p) =>
+    routeLocation.pathname.startsWith(p)
   );
   const { isDesktop } = useViewport();
   const [sideExpanded, setSideExpanded] = useState<boolean>(() => {
@@ -104,9 +114,11 @@ export default function App() {
 
   const showSideNav = isDesktop && !hideNav;
   const showBottomBar = !isDesktop && !hideNav;
-  const sideNavWidth = showSideNav ? (sideExpanded ? 192 : 56) : 0;
-  const isFeedPage = location.pathname === "/";
-  const skipTopSafeArea = isFeedPage || hideNav;
+  const reserveSideNavSpace = isDesktop && !layoutHideNav;
+  const reserveBottomBarSpace = !isDesktop && !layoutHideNav;
+  const sideNavWidth = reserveSideNavSpace ? (sideExpanded ? 192 : 56) : 0;
+  const isFeedPage = routeLocation.pathname === "/";
+  const skipTopSafeArea = isFeedPage || layoutHideNav;
   const mainPadTop = skipTopSafeArea ? 0 : "env(safe-area-inset-top)";
   const mainPadLeft = showSideNav
     ? `calc(${sideNavWidth}px + env(safe-area-inset-left))`
@@ -114,9 +126,11 @@ export default function App() {
   const mainPadRight = "env(safe-area-inset-right)";
   const mainPadBottom = isFeedPage
     ? 0
-    : showBottomBar
+    : reserveBottomBarSpace
       ? "var(--bottom-tab-h, calc(56px + env(safe-area-inset-bottom)))"
       : 0;
+  const hasOverlayLiveRoom =
+    !!backgroundLocation && location.pathname.startsWith("/live/room/");
 
   return (
     <>
@@ -133,8 +147,8 @@ export default function App() {
           flexDirection: "column",
         }}
       >
-        <Routes>
-          <Route path="/" element={<Home />} />
+        <Routes location={routeLocation}>
+          <Route path="/" element={<Home feedPaused={hasOverlayLiveRoom} />} />
           <Route path="/library" element={<Library />} />
           <Route path="/settings" element={<Settings />} />
           <Route path="/settings/video-hub" element={<SettingsVideoHub />} />
@@ -163,6 +177,16 @@ export default function App() {
           />
         </Routes>
       </div>
+      {hasOverlayLiveRoom && (
+        <div className="fixed inset-0 z-50 bg-ink">
+          <Routes>
+            <Route
+              path="/live/room/:platform/:roomId"
+              element={<NetworkRoom />}
+            />
+          </Routes>
+        </div>
+      )}
       {showSideNav && <SideNav />}
       {showBottomBar && <BottomTabBar />}
       {showWelcome && <WelcomeModal onDismiss={dismissWelcome} />}

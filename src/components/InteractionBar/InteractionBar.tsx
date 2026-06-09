@@ -1,10 +1,12 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { createPortal } from "react-dom";
 import { useLibraryStore } from "@/stores/library";
 import type { MediaItem } from "@/types/media";
 import {
   IconHeart,
   IconHeartFill,
+  IconBookmark,
+  IconBookmarkFill,
   IconShare,
   IconEpisodes,
   IconClose,
@@ -39,14 +41,12 @@ function IconBtn({
         e.stopPropagation();
         onClick();
       }}
-      className="group flex flex-col items-center gap-1 pointer-events-auto tap select-none"
+      className={`feed-action-button group flex flex-col items-center gap-1 pointer-events-auto select-none ${
+        active ? "feed-action-button-active" : ""
+      }`}
     >
       <span
-        className={`w-12 h-12 rounded-full flex items-center justify-center backdrop-blur-md transition-all border ${
-          active
-            ? "bg-ember text-ink border-ember/0 shadow-ember"
-            : "bg-ink-2/70 text-cream border-cream-line hover:border-cream-dim/40"
-        }`}
+        className="feed-action-icon w-12 h-12 rounded-full flex items-center justify-center backdrop-blur-md"
       >
         {children}
       </span>
@@ -62,6 +62,7 @@ function IconBtn({
 export default function InteractionBar({ item, onShare, onSelectEpisode }: Props) {
   const isFav = useLibraryStore((s) => s.isFavorite(item.id));
   const toggleFavorite = useLibraryStore((s) => s.toggleFavorite);
+  const [liked, setLiked] = useState(() => loadLiked(item.id));
   const [toast, setToast] = useState<string | undefined>(undefined);
   const [epSheetOpen, setEpSheetOpen] = useState(false);
   const [switching, setSwitching] = useState(false);
@@ -70,15 +71,26 @@ export default function InteractionBar({ item, onShare, onSelectEpisode }: Props
   const currentEp = item.currentEpisodeIndex ?? 0;
   const totalEp = item.episodes?.length ?? 0;
 
+  useEffect(() => {
+    setLiked(loadLiked(item.id));
+  }, [item.id]);
+
   const showToast = (msg: string) => {
     setToast(msg);
     window.setTimeout(() => setToast(undefined), 1400);
   };
 
+  const handleLike = () => {
+    const next = !liked;
+    setLiked(next);
+    saveLiked(item.id, next);
+    showToast(next ? "已点赞" : "已取消点赞");
+  };
+
   const handleFavorite = () => {
     const willBeFav = !isFav;
     toggleFavorite(item);
-    showToast(willBeFav ? "已收藏" : "已取消");
+    showToast(willBeFav ? "已收藏" : "已取消收藏");
   };
 
   const handlePickEpisode = async (idx: number) => {
@@ -100,10 +112,11 @@ export default function InteractionBar({ item, onShare, onSelectEpisode }: Props
 
   const handleShare = async () => {
     if (onShare) return onShare();
+    const shareUrl = item.url || window.location.href;
     const shareData = {
       title: item.title,
       text: item.description ?? "",
-      url: item.url,
+      url: shareUrl,
     };
     if (navigator.share) {
       try {
@@ -113,10 +126,10 @@ export default function InteractionBar({ item, onShare, onSelectEpisode }: Props
       }
     } else {
       try {
-        await navigator.clipboard.writeText(item.url);
+        await navigator.clipboard.writeText(shareUrl);
         showToast("已复制链接");
       } catch {
-        showToast(item.url);
+        showToast(shareUrl);
       }
     }
   };
@@ -126,17 +139,20 @@ export default function InteractionBar({ item, onShare, onSelectEpisode }: Props
       <div
         className="absolute flex flex-col gap-3.5 z-30 pointer-events-none"
         style={{
-          // BottomTabBar 56 + safe-area-bottom + 文字层 + 间距
-          bottom: "calc(env(safe-area-inset-bottom) + 56px + 96px)",
+          bottom: "calc(var(--bottom-tab-h, 56px) + env(safe-area-inset-bottom) + 88px)",
           right: "calc(env(safe-area-inset-right) + 12px)",
         }}
       >
+        <IconBtn active={liked} label={liked ? "已赞" : "点赞"} onClick={handleLike}>
+          {liked ? <IconHeartFill size={22} /> : <IconHeart size={22} />}
+        </IconBtn>
+
         <IconBtn
           active={isFav}
-          label={isFav ? "收藏" : "收藏"}
+          label={isFav ? "已收藏" : "收藏"}
           onClick={handleFavorite}
         >
-          {isFav ? <IconHeartFill size={22} /> : <IconHeart size={22} />}
+          {isFav ? <IconBookmarkFill size={21} /> : <IconBookmark size={21} />}
         </IconBtn>
 
         {hasEpisodes && (
@@ -155,7 +171,7 @@ export default function InteractionBar({ item, onShare, onSelectEpisode }: Props
 
       {toast && (
         <div
-          className="absolute left-1/2 top-1/2 z-30 px-5 py-2.5 backdrop-blur-md pointer-events-none animate-fade-in font-mono text-xs tracking-wider"
+          className="absolute left-1/2 top-1/2 z-30 px-5 py-2.5 backdrop-blur-md pointer-events-none animate-toast-in font-mono text-xs tracking-wider"
           style={{
             background: "rgba(14, 15, 17, 0.86)",
             border: "1px solid var(--cream-line)",
@@ -236,4 +252,25 @@ export default function InteractionBar({ item, onShare, onSelectEpisode }: Props
 
     </>
   );
+}
+
+function likeKey(itemId: string): string {
+  return `douytv:liked:${itemId}`;
+}
+
+function loadLiked(itemId: string): boolean {
+  try {
+    return localStorage.getItem(likeKey(itemId)) === "1";
+  } catch {
+    return false;
+  }
+}
+
+function saveLiked(itemId: string, liked: boolean) {
+  try {
+    if (liked) localStorage.setItem(likeKey(itemId), "1");
+    else localStorage.removeItem(likeKey(itemId));
+  } catch {
+    /* ignore */
+  }
 }

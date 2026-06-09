@@ -191,6 +191,48 @@ code {
   50% { opacity: 1; }
 }
 
+.music-vinyl-spin {
+  animation: music-vinyl-spin 20s linear infinite;
+}
+@keyframes music-vinyl-spin {
+  from { transform: rotate(0deg); }
+  to { transform: rotate(360deg); }
+}
+.music-pulse {
+  animation: music-pulse 2.8s ease-in-out infinite;
+}
+@keyframes music-pulse {
+  0%, 100% { opacity: 0.42; transform: scale(0.98); }
+  50% { opacity: 0.72; transform: scale(1.04); }
+}
+.music-marquee {
+  display: inline-block;
+  min-width: 100%;
+  animation: music-marquee 13s linear infinite;
+}
+@keyframes music-marquee {
+  from { transform: translateX(0); }
+  to { transform: translateX(-42%); }
+}
+.music-visualizer-bar {
+  width: 3px;
+  min-height: 4px;
+  border-radius: 999px;
+  background: linear-gradient(to top, var(--vhs), var(--ember));
+  animation: music-visualizer 1.2s ease-in-out infinite;
+}
+@keyframes music-visualizer {
+  0%, 100% { transform: scaleY(0.58); opacity: 0.58; }
+  50% { transform: scaleY(1); opacity: 1; }
+}
+.animate-drag-hint {
+  animation: drag-hint 2s ease-in-out infinite;
+}
+@keyframes drag-hint {
+  0%, 100% { transform: translate(-50%, 0); }
+  50% { transform: translate(-50%, -10px); }
+}
+
 /* 对话框 / 浮层进入动画 */
 @keyframes sheet-up {
   from { transform: translateY(100%); opacity: 0; }
@@ -220,6 +262,9 @@ code {
   0% { opacity: 0; transform: translate(-50%, -45%) scale(0.92); }
   100% { opacity: 1; transform: translate(-50%, -50%) scale(1); }
 }
+.animate-toast-in {
+  animation: toast-in 180ms cubic-bezier(0.2, 0.9, 0.22, 1.12);
+}
 
 /* 按钮 active 缩放 */
 .tap {
@@ -227,6 +272,40 @@ code {
 }
 .tap:active {
   transform: scale(0.96);
+}
+
+.feed-action-button {
+  color: var(--cream);
+}
+.feed-action-button .feed-action-icon {
+  background: rgba(14, 15, 17, 0.42);
+  border: 1px solid var(--cream-line);
+  box-shadow: 0 0 18px rgba(0, 0, 0, 0.32);
+  transition:
+    transform 160ms cubic-bezier(0.2, 0.9, 0.22, 1.12),
+    color 160ms ease,
+    border-color 160ms ease,
+    box-shadow 160ms ease,
+    background-color 160ms ease;
+}
+.feed-action-button:hover .feed-action-icon {
+  border-color: rgba(242, 232, 213, 0.34);
+}
+.feed-action-button:active .feed-action-icon {
+  transform: scale(0.9);
+}
+.feed-action-button-active {
+  color: var(--ember);
+}
+.feed-action-button-active .feed-action-icon {
+  border-color: rgba(255, 107, 53, 0.44);
+  box-shadow: 0 0 18px rgba(255, 107, 53, 0.28);
+  animation: feed-action-pop 220ms cubic-bezier(0.2, 0.9, 0.22, 1.12);
+}
+@keyframes feed-action-pop {
+  0% { transform: scale(0.88); }
+  68% { transform: scale(1.08); }
+  100% { transform: scale(1); }
 }
 
 /* 滚动条样式（webview 桌面） */
@@ -309,20 +388,41 @@ textarea:focus-visible {
   text-shadow: 0 1px 4px rgba(0, 0, 0, 0.85);
 }
 
-/* Home Feed 模式：工具栏「只」在鼠标悬停其本身区域时显示。
-   注意：ArtPlayer 在加载 / 缓冲 / 切换 URL 期间会自动给 .art-video-player 加
-   .art-hover 类来强制显示控件 —— 这是默认行为下用户加载完毕前误以为"工具栏总在"
-   的根因。我们用 !important 把 .art-bottom 的可见性夺回来，且只允许真实
-   :hover 触发。 */
+/* Home Feed 模式：底栏贴在内容区底部；App 首页上移避开 BottomTabBar。 */
 .art-host-feed .art-video-player .art-bottom {
+  bottom: var(--feed-control-bottom, 0px) !important;
+  transition: opacity 220ms ease;
+}
+@media (max-width: 767px) {
+  .art-host-feed .art-video-player .art-bottom {
+    --feed-control-bottom: var(--bottom-tab-h, calc(56px + env(safe-area-inset-bottom)));
+  }
+}
+/* 首页视频：默认显示进度条，其他控件在鼠标/触摸到底部工具栏区域时显示。 */
+.art-host-feed-video .art-video-player .art-bottom {
+  opacity: 1 !important;
+}
+.art-host-feed-video .art-video-player .art-controls {
   opacity: 0 !important;
   transition: opacity 220ms ease;
 }
-.art-host-feed .art-video-player .art-bottom:hover {
+.art-host-feed-video .art-video-player .art-bottom:hover .art-controls,
+.art-host-feed-video.art-host-feed-active .art-video-player .art-controls {
   opacity: 1 !important;
 }
-/* 锁定状态下不显示工具栏（移动端长按锁定后是另一种交互） */
+/* 首页直播：默认底栏全隐藏，只有底部交互时显示完整工具栏。 */
+.art-host-feed-live .art-video-player .art-bottom {
+  opacity: 0 !important;
+}
+.art-host-feed-live .art-video-player .art-bottom:hover,
+.art-host-feed-live.art-host-feed-active .art-video-player .art-bottom {
+  opacity: 1 !important;
+}
+/* 锁定状态下不显示工具栏（移动端长按锁定后是另一种交互）。 */
 .art-host-feed .art-video-player.art-mobile.art-lock .art-bottom {
+  opacity: 0 !important;
+}
+.art-host-feed .art-video-player.art-mobile.art-lock .art-controls {
   opacity: 0 !important;
 }
 

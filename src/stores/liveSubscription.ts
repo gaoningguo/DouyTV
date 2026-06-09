@@ -6,6 +6,7 @@ export interface LiveSubscription {
   id: string;
   name: string;
   url: string;
+  enabled: boolean;
   /** 自动 24h 刷新 */
   autoRefresh: boolean;
   lastFetchedAt?: number;
@@ -25,6 +26,7 @@ interface LiveSubStore {
   remove: (id: string) => void;
   refresh: (id: string) => Promise<void>;
   refreshAll: () => Promise<void>;
+  setEnabled: (id: string, enabled: boolean) => void;
   setAutoRefresh: (id: string, auto: boolean) => void;
   /** App 启动时调用：对每条 autoRefresh=true 且超过 TTL 的订阅自动刷新 */
   bootRefresh: () => void;
@@ -43,7 +45,11 @@ function load(): LiveSubscription[] {
     const raw = localStorage.getItem(STORAGE_KEY);
     if (!raw) return [];
     const parsed = JSON.parse(raw);
-    return Array.isArray(parsed) ? (parsed as LiveSubscription[]) : [];
+    if (!Array.isArray(parsed)) return [];
+    return (parsed as Array<LiveSubscription & { enabled?: boolean }>).map((s) => ({
+      ...s,
+      enabled: s.enabled !== false,
+    }));
   } catch {
     return [];
   }
@@ -75,6 +81,7 @@ export const useLiveSubStore = create<LiveSubStore>((set, get) => ({
       id: `sub-${Date.now()}`,
       name: name.trim(),
       url: url.trim(),
+      enabled: true,
       autoRefresh,
     };
     const next = [...get().subscriptions, sub];
@@ -121,10 +128,17 @@ export const useLiveSubStore = create<LiveSubStore>((set, get) => ({
     }
   },
   refreshAll: async () => {
-    const subs = get().subscriptions;
+    const subs = get().subscriptions.filter((s) => s.enabled !== false);
     await Promise.all(
       subs.map((s) => get().refresh(s.id).catch(() => {}))
     );
+  },
+  setEnabled: (id, enabled) => {
+    const next = get().subscriptions.map((s) =>
+      s.id === id ? { ...s, enabled } : s
+    );
+    set({ subscriptions: next });
+    persist(next);
   },
   setAutoRefresh: (id, auto) => {
     const next = get().subscriptions.map((s) =>
@@ -137,6 +151,7 @@ export const useLiveSubStore = create<LiveSubStore>((set, get) => ({
     const subs = get().subscriptions;
     const now = Date.now();
     for (const s of subs) {
+      if (s.enabled === false) continue;
       if (!s.autoRefresh) continue;
       if (s.lastFetchedAt && now - s.lastFetchedAt < REFRESH_TTL_MS) continue;
       void get()

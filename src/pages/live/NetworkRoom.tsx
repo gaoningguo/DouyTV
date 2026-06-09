@@ -14,13 +14,15 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useLocation, useNavigate, useParams } from "react-router-dom";
 import { getAdapter } from "@/lib/netlive/registry";
-import type {
-  NetLivePlatformId,
-  NetLiveRoom,
-  NetLiveStream,
+import {
+  NETLIVE_PLATFORMS,
+  type NetLivePlatformId,
+  type NetLiveRoom,
+  type NetLiveStream,
 } from "@/lib/netlive/types";
 import { useNetLiveStore } from "@/stores/netlive";
 import { createDouyuDanmaku } from "@/lib/netlive/danmaku/douyu";
+import { netLiveRoomToMediaItem } from "@/lib/netlive/playback";
 import type {
   DanmakuClient,
   DanmakuMessage,
@@ -57,6 +59,14 @@ const PLATFORM_LABEL: Partial<Record<string, string>> = {
   bongacams: "BongaCams",
   camsoda: "CamSoda",
 };
+
+function platformLabel(platform: string): string {
+  return (
+    NETLIVE_PLATFORMS.find((meta) => meta.id === platform)?.label ??
+    PLATFORM_LABEL[platform] ??
+    platform
+  );
+}
 
 interface LocationState {
   room?: NetLiveRoom;
@@ -190,19 +200,7 @@ export default function NetworkRoom() {
 
   const mediaItem = useMemo<MediaItem | undefined>(() => {
     if (!stream || !room) return undefined;
-    const headers: Record<string, string> = {};
-    if (stream.ua) headers["User-Agent"] = stream.ua;
-    if (stream.referer) headers["Referer"] = stream.referer;
-    return {
-      id: `netlive:${room.platform}:${room.roomId}`,
-      kind: "live",
-      title: room.title,
-      url: stream.url,
-      streamType: stream.streamType ?? "hls",
-      poster: room.cover,
-      headers: Object.keys(headers).length > 0 ? headers : undefined,
-      agora: stream.agora,
-    };
+    return netLiveRoomToMediaItem(room, stream);
   }, [stream, room]);
 
   const fav = useMemo(
@@ -262,8 +260,9 @@ export default function NetworkRoom() {
             {room?.title || "直播间"}
           </p>
           <p className="font-mono text-[11px] text-cream-faint mt-0.5">
+            来自{" "}
             <span className="text-ember">
-              {PLATFORM_LABEL[platform] ?? platform}
+              {platformLabel(platform)}
             </span>
             {" · "}
             {room?.uname ?? "—"}
