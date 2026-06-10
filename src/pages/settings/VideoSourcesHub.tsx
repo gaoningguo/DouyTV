@@ -11,6 +11,7 @@ import { useScriptStore } from "@/stores/scripts";
 import { useConfigSubStore } from "@/stores/configSubscription";
 import { BUILTIN_SCRIPTS } from "@/source-script/builtin";
 import { SettingsSubPageLayout } from "./Layout";
+import { appAlert, appConfirm } from "@/components/AppDialog";
 import {
   IconPlus,
   IconTrash,
@@ -142,10 +143,10 @@ function ScriptsTab() {
           <button type="button" onClick={() => setSelected(new Set(scripts.map((s) => s.key)))} className="flex-1 py-1.5 rounded text-[9px] font-mono tap text-cream" style={{ background: "var(--ink-3)", border: "1px solid var(--cream-line)" }}>全选</button>
           <button type="button" onClick={() => { if (selected.size) toggleMany(Array.from(selected), true); }} disabled={!selected.size} className="flex-1 py-1.5 rounded text-[9px] tap disabled:opacity-40" style={{ background: "var(--ember-soft)", color: "var(--ember)" }}>启用</button>
           <button type="button" onClick={() => { if (selected.size) toggleMany(Array.from(selected), false); }} disabled={!selected.size} className="flex-1 py-1.5 rounded text-[9px] tap disabled:opacity-40 text-cream" style={{ background: "var(--ink-3)" }}>停用</button>
-          <button type="button" onClick={() => {
+          <button type="button" onClick={async () => {
             const removable = Array.from(selected).filter((k) => !builtinKeys.has(k));
-            if (!removable.length) { alert("选中项均为内置源"); return; }
-            if (confirm(`删除 ${removable.length} 个源？`)) { uninstallMany(removable); exitSelect(); }
+            if (!removable.length) { await appAlert("选中项均为内置源"); return; }
+            if (await appConfirm(`删除 ${removable.length} 个源？`, { tone: "danger" })) { uninstallMany(removable); exitSelect(); }
           }} disabled={!selected.size} className="flex-1 py-1.5 rounded text-[9px] tap disabled:opacity-40" style={{ background: "rgba(255,80,80,0.12)", color: "#FF6B6B" }}>删除</button>
         </div>
       )}
@@ -180,7 +181,7 @@ function ScriptsTab() {
                       {s.enabled ? "ON" : "OFF"}
                     </button>
                     {!isBuiltin && (
-                      <button type="button" onClick={() => { if (confirm(`卸载「${s.name}」？`)) uninstall(s.key); }} className="p-1 rounded tap" style={{ color: "#FF6B6B" }}>
+                      <button type="button" onClick={async () => { if (await appConfirm(`卸载「${s.name}」？`, { tone: "danger" })) uninstall(s.key); }} className="p-1 rounded tap" style={{ color: "#FF6B6B" }}>
                         <IconTrash size={10} />
                       </button>
                     )}
@@ -249,7 +250,7 @@ function ConfigSubTab() {
     if (!addUrl.trim()) return;
     setAddBusy(true);
     try { await add(addName.trim(), addUrl.trim()); setAddName(""); setAddUrl(""); setShowAdd(false); }
-    catch (e) { alert(`订阅失败：${(e as Error).message}`); }
+    catch (e) { await appAlert(`订阅失败：${(e as Error).message}`, { title: "订阅失败", tone: "warning" }); }
     finally { setAddBusy(false); }
   };
 
@@ -321,7 +322,7 @@ function ConfigSubTab() {
             <button type="button" onClick={() => void refresh(sub.id).catch(() => {})} disabled={refreshing.has(sub.id)} className="p-1 rounded tap text-cream-faint disabled:opacity-40" style={{ background: "var(--ink-3)" }}>
               <IconRefresh size={10} className={refreshing.has(sub.id) ? "animate-spin" : ""} />
             </button>
-            <button type="button" onClick={() => { if (confirm(`删除订阅「${sub.name}」？`)) remove(sub.id); }} className="p-1 rounded tap" style={{ color: "#FF6B6B" }}>
+            <button type="button" onClick={async () => { if (await appConfirm(`删除订阅「${sub.name}」？`, { tone: "danger" })) remove(sub.id); }} className="p-1 rounded tap" style={{ color: "#FF6B6B" }}>
               <IconTrash size={10} />
             </button>
           </div>
@@ -340,9 +341,9 @@ function ConfigSubTab() {
           <button type="button" onClick={async () => {
             try {
               const result = await importJson(jsonInput);
-              alert(`导入成功：${result.sourcesAdded} 个源 + ${result.livesAdded} 个直播${result.ignoredJarSites ? ` · 跳过 ${result.ignoredJarSites} 个 Java 源` : ""}`);
+              await appAlert(`导入成功：${result.sourcesAdded} 个源 + ${result.livesAdded} 个直播${result.ignoredJarSites ? ` · 跳过 ${result.ignoredJarSites} 个 Java 源` : ""}`);
               setJsonInput("");
-            } catch (e) { alert(`导入失败：${(e as Error).message}`); }
+            } catch (e) { await appAlert(`导入失败：${(e as Error).message}`, { title: "导入失败", tone: "warning" }); }
           }} disabled={!jsonInput.trim() || loading} className="w-full py-1.5 rounded text-[10px] font-display font-semibold tap disabled:opacity-40" style={{ background: "var(--ember)", color: "var(--ink)" }}>
             {loading ? "导入中…" : "导入 JSON"}
           </button>

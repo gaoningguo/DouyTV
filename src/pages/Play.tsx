@@ -2,8 +2,10 @@ import { useEffect, useMemo, useState } from "react";
 import { Link, useNavigate, useParams } from "react-router-dom";
 import { useDetail } from "@/hooks/useDetail";
 import { useLibraryStore } from "@/stores/library";
+import { useVodAssetsStore } from "@/stores/vodAssets";
 import { useDanmakuStore } from "@/stores/danmaku";
 import { callResolvePlayUrl } from "@/source-script/runtime";
+import { resumeVodDownload, startVodDownload } from "@/lib/vodDownload";
 import VideoPlayer from "@/components/VideoPlayer";
 import DanmakuPanel, {
   loadDanmakuMemory,
@@ -13,7 +15,16 @@ import { convertDanmakuFormat, getDanmakuById, getEpisodes, searchAnime } from "
 import type { Danmu } from "artplayer-plugin-danmuku";
 import type { DanmakuSelection } from "@/lib/danmaku/types";
 import type { MediaItem } from "@/types/media";
-import { IconArrowLeft, IconDanmaku, IconAntenna } from "@/components/Icon";
+import {
+  IconArrowLeft,
+  IconDanmaku,
+  IconAntenna,
+  IconHeart,
+  IconHeartFill,
+  IconDownload,
+  IconCheck,
+  IconShare,
+} from "@/components/Icon";
 
 export default function Play() {
   const params = useParams();
@@ -27,6 +38,11 @@ export default function Play() {
   const upsertHistory = useLibraryStore((s) => s.upsertHistory);
   const hydrate = useLibraryStore((s) => s.hydrate);
   const history = useLibraryStore((s) => s.history);
+  const isFavorite = useLibraryStore((s) => s.isFavorite);
+  const toggleFavorite = useLibraryStore((s) => s.toggleFavorite);
+  const hydrateVodAssets = useVodAssetsStore((s) => s.hydrate);
+  const downloads = useVodAssetsStore((s) => s.downloads);
+  const addDownloadTask = useVodAssetsStore((s) => s.addDownloadTask);
   const danmakuStore = useDanmakuStore();
   const hydrateDanmaku = useDanmakuStore((s) => s.hydrate);
 
@@ -68,14 +84,73 @@ export default function Play() {
 
   // 继续观看：当前视频 + 当前集 + 未完成 → 用 history.position 作为起播点
   const itemId = `${scriptKey}:${vodId}`;
+  const isFav = isFavorite(itemId);
+  const downloadTask = downloads.find(
+    (task) =>
+      task.itemId === itemId &&
+      task.playbackIndex === pbIdx &&
+      task.episodeIndex === epIdx
+  );
+  const isDownloadBusy = downloadTask?.status === "downloading" || downloadTask?.status === "queued";
+  const isDownloadDone = downloadTask?.status === "done";
   const continueFrom = history.find(
     (h) => h.itemId === itemId && h.episodeIndex === epIdx && !h.completed
   )?.position;
 
   useEffect(() => {
     hydrate();
+    hydrateVodAssets();
     hydrateDanmaku();
-  }, [hydrate, hydrateDanmaku]);
+  }, [hydrate, hydrateVodAssets, hydrateDanmaku]);
+
+  const handleFavorite = () => {
+    if (!item) return;
+    toggleFavorite(item);
+  };
+
+  const handleDownload = async () => {
+    if (!script || !detail || !playback || episode === undefined) return;
+    const taskId = addDownloadTask({
+      itemId,
+      scriptKey,
+      vodId,
+      title: detail.title,
+      poster: detail.poster,
+      sourceName: playback.sourceName || script.name,
+      playbackIndex: pbIdx,
+      episodeIndex: epIdx,
+      episodeTitle: playback.episodes_titles?.[epIdx] || `第${epIdx + 1}集`,
+    });
+    const task = useVodAssetsStore
+      .getState()
+      .downloads.find((row) => row.id === taskId);
+    if (!task) return;
+    await resumeVodDownload(task.id);
+    await startVodDownload({
+      task,
+      script,
+      episode,
+      sourceId: playback.sourceId,
+    });
+  };
+
+  const handleShare = async () => {
+    const text = `${detail?.title || videoTitle} ${playback?.episodes_titles?.[epIdx] || `第${epIdx + 1}集`}`;
+    const url = window.location.href;
+    if (navigator.share) {
+      try {
+        await navigator.share({ title: detail?.title || videoTitle, text, url });
+      } catch {
+        /* user cancelled */
+      }
+      return;
+    }
+    try {
+      await navigator.clipboard.writeText(url);
+    } catch {
+      /* ignore */
+    }
+  };
 
   // 自动加载上次选过的弹幕（按 title 记忆 + autoLoad 偏好）
   const videoTitle = useMemo(
@@ -213,6 +288,11 @@ export default function Play() {
           headers: resolved.headers,
           sourceId: playback.sourceId,
           sourceName: playback.sourceName,
+          episodes: playback.episodes,
+          episodesTitles: playback.episodes_titles,
+          currentEpisodeIndex: epIdx,
+          scriptKey,
+          vodId,
         });
       } catch (e) {
         if (!aborted) setResolveError((e as Error)?.message ?? String(e));
@@ -275,7 +355,7 @@ export default function Play() {
       // iOS WKWebView 默认会把水平 swipe 当作"返回手势"、垂直 swipe 当作页面滚动，
       // 导致 ArtPlayer 内部的左右 seek / 上下音量・亮度 拿不到 touchmove。
       // 这里把整页 touch-action 关掉，全部交给 ArtPlayer 自己处理。
-      style={{ touchAction: "none" }}
+      style={{ touchAction: "none", height: "100dvh" }}
     >
       <button
         type="button"
@@ -293,14 +373,66 @@ export default function Play() {
         <IconArrowLeft size={16} />
       </button>
 
-      {/* 弹幕开关 + 选源按钮 + 切线路 */}
+      {/* 操作按钮 */}
       <div
-        className="absolute z-20 flex items-center gap-2"
+        className="absolute z-20 flex items-center gap-2 flex-wrap justify-end"
         style={{
           top: "calc(env(safe-area-inset-top) + 16px)",
           right: "calc(env(safe-area-inset-right) + 16px)",
+          maxWidth: "calc(100vw - 84px)",
         }}
       >
+        <button
+          type="button"
+          onClick={handleFavorite}
+          className="w-9 h-9 flex items-center justify-center rounded-full backdrop-blur-md tap"
+          style={{
+            background: isFav ? "var(--ember)" : "rgba(14,15,17,0.6)",
+            border: `1px solid ${isFav ? "var(--ember)" : "var(--cream-line)"}`,
+            color: isFav ? "var(--ink)" : "var(--cream)",
+          }}
+          aria-label={isFav ? "取消收藏" : "收藏"}
+          title={isFav ? "取消收藏" : "收藏"}
+        >
+          {isFav ? <IconHeartFill size={16} /> : <IconHeart size={16} />}
+        </button>
+        <button
+          type="button"
+          disabled={isDownloadBusy || isDownloadDone}
+          onClick={() => void handleDownload()}
+          className="w-9 h-9 flex items-center justify-center rounded-full backdrop-blur-md tap disabled:opacity-70"
+          style={{
+            background: isDownloadDone ? "rgba(124,255,178,0.14)" : "rgba(14,15,17,0.6)",
+            border: `1px solid ${
+              isDownloadDone ? "rgba(124,255,178,0.32)" : "var(--cream-line)"
+            }`,
+            color: isDownloadDone ? "var(--phosphor)" : "var(--cream)",
+          }}
+          aria-label={isDownloadDone ? "已下载" : "下载"}
+          title={
+            isDownloadBusy
+              ? `下载中 ${Math.round(downloadTask?.progress ?? 0)}%`
+              : isDownloadDone
+              ? "已下载"
+              : "下载"
+          }
+        >
+          {isDownloadDone ? <IconCheck size={16} /> : <IconDownload size={16} />}
+        </button>
+        <button
+          type="button"
+          onClick={() => void handleShare()}
+          className="w-9 h-9 flex items-center justify-center rounded-full backdrop-blur-md tap"
+          style={{
+            background: "rgba(14,15,17,0.6)",
+            border: "1px solid var(--cream-line)",
+            color: "var(--cream)",
+          }}
+          aria-label="分享"
+          title="分享"
+        >
+          <IconShare size={16} />
+        </button>
         <button
           type="button"
           onClick={() => setDanmakuVisible((v) => !v)}
@@ -331,7 +463,7 @@ export default function Play() {
         <button
           type="button"
           onClick={() => setShowDanmakuPanel(true)}
-          className="px-3 h-9 flex items-center gap-1.5 rounded-full backdrop-blur-md tap font-display text-xs"
+          className="hidden sm:flex px-3 h-9 items-center gap-1.5 rounded-full backdrop-blur-md tap font-display text-xs"
           style={{
             background: "rgba(14,15,17,0.6)",
             border: "1px solid var(--cream-line)",
@@ -423,7 +555,7 @@ export default function Play() {
       <div
         className="absolute left-4 right-4 text-cream pointer-events-none"
         style={{
-          bottom: "calc(env(safe-area-inset-bottom) + 24px)",
+          bottom: "calc(env(safe-area-inset-bottom) + 92px)",
           paddingLeft: "env(safe-area-inset-left)",
           paddingRight: "env(safe-area-inset-right)",
         }}

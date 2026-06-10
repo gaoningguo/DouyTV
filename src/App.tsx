@@ -3,6 +3,9 @@ import { Route, Routes, useLocation, type Location } from "react-router-dom";
 import Home from "@/pages/Home";
 import Library from "@/pages/Library";
 import Search from "@/pages/Search";
+import Browse from "@/pages/Browse";
+import Douban from "@/pages/Douban";
+import Duanju from "@/pages/Duanju";
 import Detail from "@/pages/Detail";
 import Play from "@/pages/Play";
 import Live from "@/pages/Live";
@@ -23,6 +26,7 @@ import SettingsStripchatKeys, {
 import BottomTabBar from "@/components/BottomTabBar";
 import SideNav from "@/components/SideNav";
 import WelcomeModal from "@/components/WelcomeModal";
+import { AppDialogProvider } from "@/components/AppDialog";
 import { useConfigSubStore } from "@/stores/configSubscription";
 import { useLiveSubStore } from "@/stores/liveSubscription";
 import { useLibraryStore } from "@/stores/library";
@@ -133,7 +137,7 @@ export default function App() {
     !!backgroundLocation && location.pathname.startsWith("/live/room/");
 
   return (
-    <>
+    <AppDialogProvider>
       <div
         style={{
           paddingTop: mainPadTop,
@@ -164,6 +168,9 @@ export default function App() {
           <Route path="/settings/updates" element={<SettingsUpdates />} />
           <Route path="/scripts" element={<SettingsVideoHub />} />
           <Route path="/search" element={<Search />} />
+          <Route path="/douban" element={<Douban />} />
+          <Route path="/duanju" element={<Duanju />} />
+          <Route path="/browse/:key" element={<Browse />} />
           <Route path="/live" element={<Live />} />
           <Route
             path="/live/room/:platform/:roomId"
@@ -190,6 +197,6 @@ export default function App() {
       {showSideNav && <SideNav />}
       {showBottomBar && <BottomTabBar />}
       {showWelcome && <WelcomeModal onDismiss={dismissWelcome} />}
-    </>
+    </AppDialogProvider>
   );
 }

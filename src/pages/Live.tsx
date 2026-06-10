@@ -1,8 +1,9 @@
-import { memo, useEffect, useMemo, useState } from "react";
+import { memo, useEffect, useMemo, useState, type ReactNode } from "react";
 import { createPortal } from "react-dom";
 import { Link } from "react-router-dom";
 import { useLiveStore, type LiveChannel } from "@/stores/live";
 import { useLiveSubStore } from "@/stores/liveSubscription";
+import { useNetLiveStore } from "@/stores/netlive";
 import { useEpgStore } from "@/stores/epg";
 import type { EpgProgramme } from "@/lib/epg";
 import {
@@ -10,14 +11,23 @@ import {
   findUpcoming,
   formatProgrammeTime,
 } from "@/lib/epg";
+import {
+  NETLIVE_PLATFORMS,
+  type NetLiveRoom,
+} from "@/lib/netlive/types";
 import VideoPlayer from "@/components/VideoPlayer";
 import NetworkLivePanel from "@/pages/live/Network";
 import { EmptyState } from "@/components/EmptyState";
+import { appConfirm } from "@/components/AppDialog";
 import type { MediaItem } from "@/types/media";
 import {
   IconAntenna,
+  IconArtist,
   IconChevronRight,
+  IconClock,
   IconClose,
+  IconHeart,
+  IconHome,
   IconLive,
   IconList,
   IconSettings,
@@ -128,48 +138,262 @@ export default function Live() {
       /* private */
     }
   }, [tab]);
+  const [view, setView] = useState<"home" | "mine">("home");
 
   return (
     <div className="flex-1 min-h-0 bg-ink text-cream flex flex-col overflow-hidden">
       <div
-        className="flex items-end gap-1 px-3 pt-3 shrink-0"
-        style={{ borderBottom: "1px solid var(--cream-line)" }}
+        className="relative shrink-0 flex items-center justify-between gap-3 px-4 pt-4 pb-3 backdrop-blur-xl"
+        style={{
+          background: "rgba(14,15,17,0.92)",
+          borderBottom: "1px solid var(--cream-line)",
+        }}
       >
-        <TopTab label="IPTV · 电视" active={tab === "iptv"} onClick={() => setTab("iptv")} />
-        <TopTab label="网络直播" active={tab === "network"} onClick={() => setTab("network")} />
+        <div className="flex items-center gap-2.5 min-w-0">
+          <span className="rec-dot" />
+          <span className="hidden sm:inline font-display text-sm font-extrabold text-cream">
+            直播
+          </span>
+            <span className="hidden sm:inline font-mono text-[10px] tracking-[0.2em] text-cream-faint">
+              / MY LIVE
+            </span>
+          
+        </div>
+
+        {view === "home" && (
+          <nav
+            className="absolute left-1/2 top-0 -translate-x-1/2 flex items-center gap-6"
+            style={{ paddingTop: 16 }}
+            aria-label="直播类型"
+          >
+            <LiveModeButton active={tab === "iptv"} onClick={() => setTab("iptv")}>
+              IPTV
+            </LiveModeButton>
+            <LiveModeButton active={tab === "network"} onClick={() => setTab("network")}>
+              网络直播
+            </LiveModeButton>
+          </nav>
+        )}
+
+        <button
+          type="button"
+          onClick={() => setView(view === "mine" ? "home" : "mine")}
+          className="w-10 h-10 rounded-full flex items-center justify-center tap text-cream-dim hover:text-ember"
+          style={{ background: "var(--ink-2)", border: "1px solid var(--cream-line)" }}
+          aria-label={view === "mine" ? "返回首页" : "我的"}
+          title={view === "mine" ? "首页" : "我的"}
+        >
+          {view === "mine" ? <IconHome size={16} /> : <IconArtist size={16} />}
+        </button>
       </div>
       <div className="flex-1 min-h-0">
-        {tab === "iptv" ? <IPTVLive /> : <NetworkLivePanel />}
+        {view === "mine" ? (
+          <LiveMine />
+        ) : tab === "iptv" ? (
+          <IPTVLive />
+        ) : (
+          <NetworkLivePanel />
+        )}
       </div>
     </div>
   );
 }
 
-function TopTab({
-  label,
+function LiveModeButton({
   active,
   onClick,
+  children,
 }: {
-  label: string;
   active: boolean;
   onClick: () => void;
+  children: ReactNode;
 }) {
   return (
     <button
       type="button"
       onClick={onClick}
-      className={`relative px-4 py-2 font-display whitespace-nowrap tap text-[13px] ${
-        active ? "text-ember font-bold" : "text-cream-dim hover:text-cream font-medium"
+      className={`relative pb-2 font-display text-sm whitespace-nowrap tap transition-colors ${
+        active ? "text-cream font-extrabold" : "text-cream-dim hover:text-cream font-semibold"
       }`}
     >
-      {label}
+      {children}
       {active && (
         <span
-          className="absolute left-2 right-2 -bottom-px h-0.5 rounded-full"
+          className="absolute left-1/2 -translate-x-1/2 -bottom-px h-0.5 w-5 rounded-full"
           style={{ background: "var(--ember)" }}
         />
       )}
     </button>
+  );
+}
+
+function LiveMine() {
+  const favorites = useNetLiveStore((s) => s.favorites);
+  const history = useNetLiveStore((s) => s.history);
+  const hydrateNetLive = useNetLiveStore((s) => s.hydrate);
+  const toggleFavorite = useNetLiveStore((s) => s.toggleFavorite);
+  const clearHistory = useNetLiveStore((s) => s.clearHistory);
+
+  useEffect(() => {
+    hydrateNetLive();
+  }, [hydrateNetLive]);
+
+  return (
+    <div
+      className="h-full overflow-y-auto px-4 py-4"
+      style={{ paddingBottom: "calc(env(safe-area-inset-bottom) + 24px)" }}
+    >
+      <div className="mx-auto w-full max-w-6xl space-y-5">
+        <section>
+          <LiveMineSectionTitle
+            eyebrow="NET LIVE"
+            title="收藏主播"
+            action={<span>{favorites.length}</span>}
+          />
+          {favorites.length === 0 ? (
+            <LiveMineEmpty icon={<IconHeart size={26} />} title="还没有收藏的直播间" />
+          ) : (
+            <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 gap-2">
+              {favorites.slice(0, 12).map((room) => (
+                <LiveRoomMiniCard
+                  key={`${room.platform}:${room.roomId}`}
+                  room={room}
+                  actionLabel="取消收藏"
+                  onAction={() => toggleFavorite(room)}
+                />
+              ))}
+            </div>
+          )}
+        </section>
+
+        <section>
+          <LiveMineSectionTitle
+            eyebrow="HISTORY"
+            title="观看历史"
+            action={
+              history.length > 0 ? (
+                <button type="button" onClick={clearHistory} className="hover:text-ember tap">
+                  清空
+                </button>
+              ) : (
+                <span>0</span>
+              )
+            }
+          />
+          {history.length === 0 ? (
+            <LiveMineEmpty icon={<IconClock size={26} />} title="还没有直播观看记录" />
+          ) : (
+            <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 gap-2">
+              {history.slice(0, 12).map((room) => (
+                <LiveRoomMiniCard
+                  key={`${room.platform}:${room.roomId}`}
+                  room={room}
+                />
+              ))}
+            </div>
+          )}
+        </section>
+      </div>
+    </div>
+  );
+}
+
+function LiveMineSectionTitle({
+  eyebrow,
+  title,
+  action,
+}: {
+  eyebrow: string;
+  title: string;
+  action?: ReactNode;
+}) {
+  return (
+    <div className="mb-3 flex items-end justify-between gap-3">
+      <div>
+        <p className="font-mono text-[10px] tracking-[0.22em] text-cream-faint">{eyebrow}</p>
+        <h2 className="font-display text-lg font-extrabold text-cream">{title}</h2>
+      </div>
+      {action && <div className="font-mono text-[10px] text-cream-faint">{action}</div>}
+    </div>
+  );
+}
+
+function LiveRoomMiniCard({
+  room,
+  actionLabel,
+  onAction,
+}: {
+  room: NetLiveRoom;
+  actionLabel?: string;
+  onAction?: () => void;
+}) {
+  const platform = NETLIVE_PLATFORMS.find((p) => p.id === room.platform)?.label ?? room.platform;
+  return (
+    <div
+      className="rounded-lg overflow-hidden flex"
+      style={{ background: "var(--ink-2)", border: "1px solid var(--cream-line)" }}
+    >
+      <Link
+        to={`/live/room/${room.platform}/${encodeURIComponent(room.roomId)}`}
+        state={{ room }}
+        className="flex-1 min-w-0 flex items-center gap-3 p-2 tap text-cream"
+      >
+        <div
+          className="w-20 h-12 rounded-md overflow-hidden shrink-0 relative"
+          style={{ background: "var(--ink-3)" }}
+        >
+          {room.cover ? (
+            <img
+              src={room.cover.replace("http://", "https://")}
+              alt=""
+              loading="lazy"
+              referrerPolicy="no-referrer"
+              className="w-full h-full object-cover"
+            />
+          ) : (
+            <div className="absolute inset-0 grid place-items-center text-cream-faint">
+              <IconLive size={22} />
+            </div>
+          )}
+        </div>
+        <div className="flex-1 min-w-0">
+          <p className="text-sm font-display font-semibold line-clamp-1">{room.title || "直播间"}</p>
+          <p className="font-mono text-[10px] text-cream-faint mt-0.5 line-clamp-1">
+            @{room.uname || platform}
+            {room.category ? ` · ${room.category}` : ""}
+          </p>
+          <p className="font-mono text-[10px] text-cream-faint mt-0.5 line-clamp-1">
+            {platform} · {room.live ? "直播中" : "未开播"}
+          </p>
+        </div>
+      </Link>
+      {onAction && (
+        <button
+          type="button"
+          onClick={onAction}
+          className="w-10 shrink-0 grid place-items-center tap text-cream-faint hover:text-ember"
+          style={{ borderLeft: "1px solid var(--cream-line)" }}
+          aria-label={actionLabel}
+          title={actionLabel}
+        >
+          <IconClose size={14} />
+        </button>
+      )}
+    </div>
+  );
+}
+
+function LiveMineEmpty({ icon, title }: { icon: ReactNode; title: string }) {
+  return (
+    <div
+      className="rounded-lg p-6 text-center text-cream-faint"
+      style={{ background: "var(--ink-2)", border: "1px solid var(--cream-line)" }}
+    >
+      <div className="mx-auto mb-2 w-12 h-12 rounded-full grid place-items-center" style={{ background: "var(--ink-3)" }}>
+        {icon}
+      </div>
+      <p className="font-display text-sm font-semibold text-cream">{title}</p>
+    </div>
   );
 }
 
@@ -353,8 +577,8 @@ function IPTVLive() {
     return out;
   }, [grouped, expandedGroups, groupPage, programmes, now]);
 
-  const handleRemoveChannel = (id: string, name: string) => {
-    if (confirm(`删除频道「${name}」？`)) remove(id);
+  const handleRemoveChannel = async (id: string, name: string) => {
+    if (await appConfirm(`删除频道「${name}」？`, { tone: "danger" })) remove(id);
   };
 
   const activeSourceLabel =
@@ -375,16 +599,7 @@ function IPTVLive() {
         }}
       >
         <div className="flex-1 min-w-0">
-          <p className="font-mono text-[9px] tracking-[0.25em] text-cream-faint">
-            CHANNEL · LIVE
-          </p>
-          <h1 className="font-display text-base font-bold tracking-tight flex items-center gap-2">
-            直播
-            <span className="rec-dot" />
-            <span className="font-mono text-[10px] text-cream-faint">
-              {String(visibleChannels.length).padStart(2, "0")}
-            </span>
-          </h1>
+         
         </div>
 
         {/* 频道选择按钮 - 显示当前源 + 频道数 */}
@@ -407,17 +622,7 @@ function IPTVLive() {
           </span>
         </button>
 
-        <Link
-          to="/settings"
-          className="w-9 h-9 flex items-center justify-center rounded-full tap text-cream shrink-0"
-          style={{
-            background: "var(--ink-2)",
-            border: "1px solid var(--cream-line)",
-          }}
-          title="直播设置"
-        >
-          <IconSettings size={16} />
-        </Link>
+        
       </div>
 
       {/* 主区: 全屏播放器 + EPG */}

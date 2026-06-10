@@ -9,6 +9,8 @@ import { useLibraryStore } from "@/stores/library";
 import { useProxyStore } from "@/stores/proxy";
 import { useDanmakuStore } from "@/stores/danmaku";
 import { useSyncStore } from "@/stores/sync";
+import { useDownloadSettingsStore } from "@/stores/downloadSettings";
+import { appAlert, appConfirm } from "@/components/AppDialog";
 import {
   IconScript,
   IconLive,
@@ -120,6 +122,11 @@ export default function Settings() {
   const syncAutoIntervalMin = useSyncStore((s) => s.autoIntervalMin);
   const syncLastSyncAt = useSyncStore((s) => s.lastSyncAt);
   const hydrateSync = useSyncStore((s) => s.hydrate);
+  const downloadDir = useDownloadSettingsStore((s) => s.downloadDir);
+  const downloadConcurrency = useDownloadSettingsStore((s) => s.concurrency);
+  const hydrateDownloadSettings = useDownloadSettingsStore((s) => s.hydrate);
+  const setDownloadDir = useDownloadSettingsStore((s) => s.setDownloadDir);
+  const setDownloadConcurrency = useDownloadSettingsStore((s) => s.setConcurrency);
 
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [showHotkeys, setShowHotkeys] = useState(false);
@@ -134,6 +141,7 @@ export default function Settings() {
     hydrateDanmaku();
     void hydrateLibrary();
     hydrateSync();
+    hydrateDownloadSettings();
   }, [
     hydrateScripts,
     hydrateLive,
@@ -144,31 +152,33 @@ export default function Settings() {
     hydrateDanmaku,
     hydrateLibrary,
     hydrateSync,
+    hydrateDownloadSettings,
   ]);
 
   const onImportFile = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
     try {
-      if (!confirm(`从「${file.name}」导入将先清除当前数据，确认继续？`)) {
+      if (!(await appConfirm(`从「${file.name}」导入将先清除当前数据，确认继续？`, { tone: "warning" }))) {
         e.target.value = "";
         return;
       }
       const count = await importBackup(file);
-      alert(`成功导入 ${count} 项数据，应用将重启`);
+      await appAlert(`成功导入 ${count} 项数据，应用将重启`);
       window.location.reload();
     } catch (err) {
-      alert(`导入失败：${(err as Error).message}`);
+      await appAlert(`导入失败：${(err as Error).message}`, { title: "导入失败", tone: "warning" });
     } finally {
       e.target.value = "";
     }
   };
 
-  const onClearAll = () => {
+  const onClearAll = async () => {
     if (
-      !confirm(
-        "确认清除所有数据？将移除脚本、收藏、历史、直播频道、订阅和扫描记录，无法恢复。"
-      )
+      !(await appConfirm(
+        "确认清除所有数据？将移除脚本、收藏、历史、直播频道、订阅和扫描记录，无法恢复。",
+        { tone: "danger" }
+      ))
     ) {
       return;
     }
@@ -306,6 +316,56 @@ export default function Settings() {
               subtitle="GitHub Releases · 自动签名校验"
               accent="phosphor"
             />
+          </div>
+        </section>
+
+        <section className="mb-6">
+          <p className="font-mono text-[10px] tracking-[0.2em] text-cream-faint mb-3">
+            DOWNLOADS
+          </p>
+          <div
+            className="rounded-lg p-3 space-y-3"
+            style={{ background: "var(--ink-2)", border: "1px solid var(--cream-line)" }}
+          >
+            <label className="block">
+              <span className="block font-display text-sm font-semibold text-cream">
+                下载目录
+              </span>
+              <span className="block text-[11px] text-cream-faint mt-0.5">
+                留空使用系统下载目录/DouyTV；也可以填入完整本地路径。
+              </span>
+              <input
+                type="text"
+                value={downloadDir}
+                onChange={(e) => setDownloadDir(e.target.value)}
+                placeholder="例如 C:\\Users\\Name\\Downloads\\DouyTV"
+                className="mt-2 w-full h-10 rounded-lg px-3 bg-transparent outline-none text-sm text-cream placeholder:text-cream-faint"
+                style={{ border: "1px solid var(--cream-line)" }}
+              />
+            </label>
+            <div>
+              <p className="font-display text-sm font-semibold text-cream">并发下载</p>
+              <div className="mt-2 grid grid-cols-4 gap-2">
+                {[1, 2, 3, 4].map((value) => {
+                  const active = downloadConcurrency === value;
+                  return (
+                    <button
+                      key={value}
+                      type="button"
+                      onClick={() => setDownloadConcurrency(value)}
+                      className="h-9 rounded-lg text-xs font-mono tap"
+                      style={{
+                        background: active ? "var(--ember)" : "var(--ink-3)",
+                        color: active ? "var(--ink)" : "var(--cream-dim)",
+                        border: `1px solid ${active ? "var(--ember)" : "var(--cream-line)"}`,
+                      }}
+                    >
+                      {value}
+                    </button>
+                  );
+                })}
+              </div>
+            </div>
           </div>
         </section>
 

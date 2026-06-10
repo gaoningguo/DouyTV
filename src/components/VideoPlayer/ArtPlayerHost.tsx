@@ -373,11 +373,6 @@ const ArtPlayerHost = forwardRef<VideoPlayerHandle, VideoPlayerProps>(
     const [filterAds, setFilterAds] = useState<boolean>(readFilterAds);
     const [error, setError] = useState<string | null>(null);
     const [feedChromeActive, setFeedChromeActive] = useState(false);
-    // 视频实际宽高比 —— loadedmetadata 后读 videoWidth/Height 算出，
-    // 让播放器容器自适应贴合视频画面，工具栏自然落在视频底部而非屏幕底部。
-    // 默认 16/9 占位避免初次挂载时的 layout shift。仅 controls=true 时生效。
-    const [videoAspect, setVideoAspect] = useState<number>(16 / 9);
-
     const wrappedUrl = useMemo(
       () => {
         // NetLive 场景:用 per-platform 覆盖决定 proxyUrl / bypass,这样
@@ -738,8 +733,7 @@ const ArtPlayerHost = forwardRef<VideoPlayerHandle, VideoPlayerProps>(
       const el = containerRef.current;
       if (!el) return;
 
-      // 切到新 item → 重置宽高比占位 + 清掉上一个 item 残留的错误遮罩(否则切到正常房间还盖着)
-      setVideoAspect(16 / 9);
+      // 切到新 item → 清掉上一个 item 残留的错误遮罩(否则切到正常房间还盖着)
       setError(null);
 
       const initialType = detectArtType(item);
@@ -922,8 +916,9 @@ const ArtPlayerHost = forwardRef<VideoPlayerHandle, VideoPlayerProps>(
                 icon: '<svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M21 12a9 9 0 11-3-6.7L21 8M21 3v5h-5"/></svg>',
                 tooltip: "URL 失效时换一个",
                 onClick: () => {
-                  if (onRequestReresolve) {
-                    Promise.resolve(onRequestReresolve()).catch(() => {});
+                  const requestReresolve = propsRef.current.onRequestReresolve;
+                  if (requestReresolve) {
+                    Promise.resolve(requestReresolve()).catch(() => {});
                     return "正在重新解析…";
                   }
                   return "此源不支持重新解析";
@@ -934,8 +929,9 @@ const ArtPlayerHost = forwardRef<VideoPlayerHandle, VideoPlayerProps>(
                 icon: '<svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M3 12a9 9 0 0114-7M21 12a9 9 0 01-14 7M16 6h5V1M8 18H3v5"/></svg>',
                 tooltip: "切换线路并测速",
                 onClick: () => {
-                  if (onRequestSwitchSource) {
-                    onRequestSwitchSource();
+                  const requestSwitchSource = propsRef.current.onRequestSwitchSource;
+                  if (requestSwitchSource) {
+                    requestSwitchSource();
                     return "已打开";
                   }
                   return "此视频只有 1 条线路";
@@ -983,17 +979,6 @@ const ArtPlayerHost = forwardRef<VideoPlayerHandle, VideoPlayerProps>(
           art.currentTime >= art.duration - marks.outro
         ) {
           onEnded?.();
-        }
-      });
-
-      // metadata 就绪 → 读视频真实宽高比；用于把容器收成视频实际比例，
-      // 让 ArtPlayer 的 .art-bottom 工具栏自然贴在视频画面下沿。
-      art.on("video:loadedmetadata", () => {
-        const v = art.video as HTMLVideoElement | undefined;
-        if (!v || !v.videoWidth || !v.videoHeight) return;
-        const ratio = v.videoWidth / v.videoHeight;
-        if (Number.isFinite(ratio) && ratio > 0) {
-          setVideoAspect(ratio);
         }
       });
 
@@ -1250,7 +1235,7 @@ const ArtPlayerHost = forwardRef<VideoPlayerHandle, VideoPlayerProps>(
     );
 
     useEffect(() => {
-      if (controls || !feedChromeActive) return;
+      if (!feedChromeActive) return;
       if (feedChromeTimerRef.current) {
         window.clearTimeout(feedChromeTimerRef.current);
       }
@@ -1264,15 +1249,17 @@ const ArtPlayerHost = forwardRef<VideoPlayerHandle, VideoPlayerProps>(
           feedChromeTimerRef.current = null;
         }
       };
-    }, [controls, feedChromeActive]);
+    }, [feedChromeActive]);
 
     const revealFeedChromeFromBottom = useCallback(
-      (clientY: number) => {
-        if (controls) return;
+      (clientY: number, pointerType: string) => {
         const host = containerRef.current;
         if (!host) return;
         const rect = host.getBoundingClientRect();
+        const reserveSystemGestureArea =
+          controls && pointerType !== "mouse" ? 28 : 0;
         const bottomTab =
+          !controls &&
           typeof window !== "undefined" &&
           window.matchMedia?.("(max-width: 767px)").matches
             ? Number.parseFloat(
@@ -1281,8 +1268,9 @@ const ArtPlayerHost = forwardRef<VideoPlayerHandle, VideoPlayerProps>(
                   .replace("px", "")
               ) || 56
             : 0;
-        const hotBottom = rect.bottom - bottomTab;
-        if (clientY >= hotBottom - 96 && clientY <= hotBottom + 16) {
+        const hotBottom = rect.bottom - bottomTab - reserveSystemGestureArea;
+        const bottomSlack = controls ? 0 : 16;
+        if (clientY >= hotBottom - 96 && clientY <= hotBottom + bottomSlack) {
           setFeedChromeActive(true);
         }
       },
@@ -1292,28 +1280,24 @@ const ArtPlayerHost = forwardRef<VideoPlayerHandle, VideoPlayerProps>(
     return (
       <div
         className="relative w-full h-full bg-black flex items-center justify-center overflow-hidden"
-        onPointerDown={(e) => revealFeedChromeFromBottom(e.clientY)}
-        onPointerMove={(e) => {
-          if (e.pointerType === "mouse") return;
-          revealFeedChromeFromBottom(e.clientY);
-        }}
+        onPointerDown={(e) => revealFeedChromeFromBottom(e.clientY, e.pointerType)}
+        onPointerMove={(e) => revealFeedChromeFromBottom(e.clientY, e.pointerType)}
       >
         <div
           ref={containerRef}
-          // `art-host-feed-*` 触发 styles.css 里的首页 Feed 控制层规则。
+          // `art-host-feed-*` / `art-host-play-chrome` 触发 styles.css 里的底部热区控制层规则。
           className={`art-host ${
-            controls ? "" : `art-host-feed art-host-feed-${feedChrome}`
+            controls ? "art-host-play-chrome" : `art-host-feed art-host-feed-${feedChrome}`
           } ${feedChromeActive ? "art-host-feed-active" : ""}`}
           style={
             controls
               ? {
-                  // 把播放器尺寸收成视频实际宽高比，让 ArtPlayer 的 .art-bottom
-                  // 工具栏自然落在视频画面下沿，而非全屏底部。
-                  // width:100% + maxHeight:100% + aspectRatio 让浏览器在两条约束
-                  // 间自动取小，保持比例 + fit 容器。
+                  // 点播页播放器铺满页面内容播放区，工具栏落在内容区底部。
+                  // 视频本身仍由 ArtPlayer/video object-fit 居中显示。
+                  position: "absolute",
+                  inset: 0,
                   width: "100%",
-                  maxHeight: "100%",
-                  aspectRatio: String(videoAspect),
+                  height: "100%",
                 }
               : {
                   // Feed (短视频) 模式仍铺满整屏，保持原沉浸感。
@@ -1365,7 +1349,7 @@ const ArtPlayerHost = forwardRef<VideoPlayerHandle, VideoPlayerProps>(
                   type="button"
                   onClick={() => {
                     setError(null);
-                    Promise.resolve(onRequestReresolve()).catch(() => {});
+                    Promise.resolve(propsRef.current.onRequestReresolve?.()).catch(() => {});
                   }}
                   className="px-4 py-2 rounded-full text-xs font-display font-semibold tap text-cream"
                   style={{
@@ -1381,7 +1365,7 @@ const ArtPlayerHost = forwardRef<VideoPlayerHandle, VideoPlayerProps>(
                   type="button"
                   onClick={() => {
                     setError(null);
-                    onRequestSwitchSource();
+                    propsRef.current.onRequestSwitchSource?.();
                   }}
                   className="px-5 py-2 rounded-full text-xs font-display font-semibold tap glow-ember"
                   style={{ background: "var(--ember)", color: "var(--ink)" }}

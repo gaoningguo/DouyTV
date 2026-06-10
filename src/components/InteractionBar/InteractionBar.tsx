@@ -1,6 +1,9 @@
 import { useEffect, useState } from "react";
 import { createPortal } from "react-dom";
 import { useLibraryStore } from "@/stores/library";
+import { useScriptStore } from "@/stores/scripts";
+import { useVodAssetsStore } from "@/stores/vodAssets";
+import { resumeVodDownload, startVodDownload } from "@/lib/vodDownload";
 import type { MediaItem } from "@/types/media";
 import {
   IconHeart,
@@ -10,6 +13,8 @@ import {
   IconShare,
   IconEpisodes,
   IconClose,
+  IconDownload,
+  IconCheck,
 } from "@/components/Icon";
 
 interface Props {
@@ -62,6 +67,9 @@ function IconBtn({
 export default function InteractionBar({ item, onShare, onSelectEpisode }: Props) {
   const isFav = useLibraryStore((s) => s.isFavorite(item.id));
   const toggleFavorite = useLibraryStore((s) => s.toggleFavorite);
+  const scripts = useScriptStore((s) => s.scripts);
+  const downloads = useVodAssetsStore((s) => s.downloads);
+  const addDownloadTask = useVodAssetsStore((s) => s.addDownloadTask);
   const [liked, setLiked] = useState(() => loadLiked(item.id));
   const [toast, setToast] = useState<string | undefined>(undefined);
   const [epSheetOpen, setEpSheetOpen] = useState(false);
@@ -70,6 +78,12 @@ export default function InteractionBar({ item, onShare, onSelectEpisode }: Props
   const hasEpisodes = !!item.episodes && item.episodes.length > 1;
   const currentEp = item.currentEpisodeIndex ?? 0;
   const totalEp = item.episodes?.length ?? 0;
+  const downloadTask = downloads.find(
+    (task) =>
+      task.itemId === item.id &&
+      task.playbackIndex === 0 &&
+      task.episodeIndex === currentEp
+  );
 
   useEffect(() => {
     setLiked(loadLiked(item.id));
@@ -91,6 +105,41 @@ export default function InteractionBar({ item, onShare, onSelectEpisode }: Props
     const willBeFav = !isFav;
     toggleFavorite(item);
     showToast(willBeFav ? "已收藏" : "已取消收藏");
+  };
+
+  const handleDownload = async () => {
+    if (!item.scriptKey || !item.vodId || !item.episodes?.[currentEp]) {
+      showToast("当前内容暂不支持下载");
+      return;
+    }
+    const script = scripts.find((row) => row.key === item.scriptKey);
+    if (!script) {
+      showToast("视频源不存在");
+      return;
+    }
+    const taskId = addDownloadTask({
+      itemId: item.id,
+      scriptKey: item.scriptKey,
+      vodId: item.vodId,
+      title: item.title,
+      poster: item.poster,
+      sourceName: item.sourceName || script.name,
+      playbackIndex: 0,
+      episodeIndex: currentEp,
+      episodeTitle: item.episodesTitles?.[currentEp] || `第${currentEp + 1}集`,
+    });
+    const task = useVodAssetsStore
+      .getState()
+      .downloads.find((row) => row.id === taskId);
+    if (!task) return;
+    await resumeVodDownload(task.id);
+    showToast("已加入下载");
+    await startVodDownload({
+      task,
+      script,
+      episode: item.episodes[currentEp],
+      sourceId: item.sourceId || "",
+    });
   };
 
   const handlePickEpisode = async (idx: number) => {
@@ -161,6 +210,27 @@ export default function InteractionBar({ item, onShare, onSelectEpisode }: Props
             onClick={() => setEpSheetOpen(true)}
           >
             <IconEpisodes size={20} />
+          </IconBtn>
+        )}
+
+        {item.kind === "video" && (
+          <IconBtn
+            active={downloadTask?.status === "done"}
+            label={
+              downloadTask?.status === "done"
+                ? "已下载"
+                : downloadTask?.status === "downloading"
+                ? `${Math.round(downloadTask.progress)}%`
+                : "下载"
+            }
+            onClick={() => void handleDownload()}
+            disabled={downloadTask?.status === "downloading"}
+          >
+            {downloadTask?.status === "done" ? (
+              <IconCheck size={20} />
+            ) : (
+              <IconDownload size={20} />
+            )}
           </IconBtn>
         )}
 

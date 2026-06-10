@@ -3,6 +3,7 @@ import { Link } from "react-router-dom";
 import { useLibraryStore } from "@/stores/library";
 import { useScriptStore } from "@/stores/scripts";
 import { useLiveStore } from "@/stores/live";
+import { appConfirm } from "@/components/AppDialog";
 import {
   IconHeart,
   IconClock,
@@ -277,8 +278,8 @@ export default function Library() {
           {history.length > 0 && (
             <button
               type="button"
-              onClick={() => {
-                if (confirm("清空所有播放历史？")) clearHistory();
+              onClick={async () => {
+                if (await appConfirm("清空所有播放历史？", { tone: "danger" })) clearHistory();
               }}
               className="text-[10px] font-mono tracking-wider text-cream-faint hover:text-ember tap"
             >

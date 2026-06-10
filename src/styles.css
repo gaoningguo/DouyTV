@@ -308,6 +308,41 @@ code {
   100% { transform: scale(1); }
 }
 
+.detail-action-button {
+  position: relative;
+  overflow: hidden;
+  transition:
+    transform 150ms cubic-bezier(0.2, 0.9, 0.22, 1.12),
+    border-color 150ms ease,
+    box-shadow 150ms ease,
+    background-color 150ms ease,
+    color 150ms ease;
+}
+.detail-action-button::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  background: radial-gradient(circle at 50% 50%, rgba(255,255,255,0.26), transparent 52%);
+  opacity: 0;
+  transform: scale(0.35);
+}
+.detail-action-pop {
+  animation: detail-action-pop 360ms cubic-bezier(0.2, 0.9, 0.22, 1.12);
+}
+.detail-action-pop::after {
+  animation: detail-action-ripple 360ms ease-out;
+}
+@keyframes detail-action-pop {
+  0% { transform: scale(0.94); }
+  58% { transform: scale(1.05); }
+  100% { transform: scale(1); }
+}
+@keyframes detail-action-ripple {
+  0% { opacity: 0.55; transform: scale(0.35); }
+  100% { opacity: 0; transform: scale(1.8); }
+}
+
 /* 滚动条样式（webview 桌面） */
 ::-webkit-scrollbar {
   width: 6px;
@@ -328,7 +363,58 @@ code {
 .no-scrollbar::-webkit-scrollbar { display: none; }
 .no-scrollbar { -ms-overflow-style: none; scrollbar-width: none; }
 
+.vod-scroll-row {
+  scrollbar-width: thin;
+  scrollbar-color: rgba(244, 230, 210, 0.3) transparent;
+}
+.vod-scroll-row::-webkit-scrollbar {
+  height: 6px;
+}
+.vod-scroll-row::-webkit-scrollbar-track {
+  background: rgba(244, 230, 210, 0.08);
+  border-radius: 999px;
+}
+.vod-scroll-row::-webkit-scrollbar-thumb {
+  background: rgba(244, 230, 210, 0.32);
+  border-radius: 999px;
+}
+.vod-scroll-row::-webkit-scrollbar-thumb:hover {
+  background: rgba(255, 107, 53, 0.78);
+}
+
+.vod-hero-progress {
+  animation: vod-hero-progress 5.2s linear forwards;
+}
+@keyframes vod-hero-progress {
+  from { transform: scaleX(0); }
+  to { transform: scaleX(1); }
+}
+
 /* 输入框聚焦时移除浏览器默认外框，保留语义 outline */
+.duanju-more-page h1 {
+  font-size: 1.25rem;
+  line-height: 1.75rem;
+}
+.duanju-more-page h1 + p {
+  display: none;
+}
+
+.search-field-shell {
+  transition:
+    border-color 160ms ease,
+    box-shadow 160ms ease,
+    background-color 160ms ease;
+}
+.search-field-shell:focus-within {
+  border-color: rgba(255, 107, 53, 0.7) !important;
+  box-shadow:
+    0 0 0 1px rgba(255, 107, 53, 0.72),
+    0 0 0 4px rgba(255, 107, 53, 0.12);
+}
+.search-field-shell .search-field-input:focus-visible {
+  box-shadow: none;
+}
+
 input:focus,
 textarea:focus,
 select:focus,
@@ -423,6 +509,30 @@ textarea:focus-visible {
   opacity: 0 !important;
 }
 .art-host-feed .art-video-player.art-mobile.art-lock .art-controls {
+  opacity: 0 !important;
+}
+
+/* 点播播放页：工具栏固定在视频画面底部，默认只保留进度，底部热区再显示完整控件。 */
+.art-host-play-chrome .art-video-player .art-bottom {
+  bottom: var(--play-control-bottom, 0px) !important;
+  opacity: 1 !important;
+  transition: opacity 220ms ease;
+}
+@media (max-width: 767px) {
+  .art-host-play-chrome .art-video-player .art-bottom {
+    --play-control-bottom: calc(env(safe-area-inset-bottom) + 10px);
+    padding-bottom: 8px;
+  }
+}
+.art-host-play-chrome .art-video-player .art-controls {
+  opacity: 0 !important;
+  transition: opacity 220ms ease;
+}
+.art-host-play-chrome .art-video-player .art-bottom:hover .art-controls,
+.art-host-play-chrome.art-host-feed-active .art-video-player .art-controls {
+  opacity: 1 !important;
+}
+.art-host-play-chrome .art-video-player.art-mobile.art-lock .art-controls {
   opacity: 0 !important;
 }
 

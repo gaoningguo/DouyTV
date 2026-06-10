@@ -2,6 +2,8 @@ import { useEffect, useMemo, useState } from "react";
 import { Link, useNavigate, useParams } from "react-router-dom";
 import { useDetail } from "@/hooks/useDetail";
 import { useLibraryStore } from "@/stores/library";
+import { useVodAssetsStore } from "@/stores/vodAssets";
+import { resumeVodDownload, startVodDownload } from "@/lib/vodDownload";
 import SourceSwitcher from "@/components/SourceSwitcher";
 import {
   IconArrowLeft,
@@ -12,6 +14,9 @@ import {
   IconClock,
   IconCheck,
   IconAntenna,
+  IconBookmark,
+  IconBookmarkFill,
+  IconDownload,
 } from "@/components/Icon";
 
 export default function Detail() {
@@ -25,13 +30,20 @@ export default function Detail() {
   const isFavorite = useLibraryStore((s) => s.isFavorite);
   const toggleFavorite = useLibraryStore((s) => s.toggleFavorite);
   const history = useLibraryStore((s) => s.history);
+  const hydrateVodAssets = useVodAssetsStore((s) => s.hydrate);
+  const isWatchLater = useVodAssetsStore((s) => s.isWatchLater);
+  const toggleWatchLater = useVodAssetsStore((s) => s.toggleWatchLater);
+  const downloads = useVodAssetsStore((s) => s.downloads);
+  const addDownloadTask = useVodAssetsStore((s) => s.addDownloadTask);
 
   const [pbIdx, setPbIdx] = useState(0);
   const [showSourceSwitcher, setShowSourceSwitcher] = useState(false);
+  const [buttonPulse, setButtonPulse] = useState<string | undefined>(undefined);
 
   useEffect(() => {
     hydrate();
-  }, [hydrate]);
+    hydrateVodAssets();
+  }, [hydrate, hydrateVodAssets]);
 
   useEffect(() => {
     setPbIdx(0);
@@ -39,6 +51,7 @@ export default function Detail() {
 
   const itemId = `${scriptKey}:${vodId}`;
   const isFav = isFavorite(itemId);
+  const isLater = isWatchLater(itemId);
   const hist = history.find((h) => h.itemId === itemId);
   // 已看完的集索引集合 — 给选集网格加 ✓ 标记
   const watchedEpisodes = useMemo<Set<number>>(
@@ -84,6 +97,69 @@ export default function Detail() {
 
   const safePbIdx = Math.min(pbIdx, detail.playbacks.length - 1);
   const playback = detail.playbacks[safePbIdx];
+  const firstEpisodeTitle = playback?.episodes_titles?.[0] || "第1集";
+  const downloadTask = downloads.find(
+    (task) =>
+      task.itemId === itemId &&
+      task.playbackIndex === safePbIdx &&
+      task.episodeIndex === 0
+  );
+  const hasDownloadTask = Boolean(downloadTask);
+  const isDownloadBusy = downloadTask?.status === "downloading";
+  const isDownloadDone = downloadTask?.status === "done";
+  const downloadLabel = isDownloadBusy
+    ? `下载中 ${Math.round(downloadTask?.progress ?? 0)}%`
+    : isDownloadDone
+    ? "已下载"
+    : downloadTask?.status === "error"
+    ? "重试下载"
+    : downloadTask?.status === "paused"
+    ? "继续下载"
+    : hasDownloadTask
+    ? "继续下载"
+    : "加入下载";
+  const pulseButton = (key: string) => {
+    setButtonPulse(key);
+    window.setTimeout(() => {
+      setButtonPulse((current) => (current === key ? undefined : current));
+    }, 420);
+  };
+  const startFirstEpisodeDownload = async () => {
+    if (!playback || !script || playback.episodes.length === 0) return;
+    pulseButton("download");
+    const taskId = addDownloadTask({
+      itemId,
+      scriptKey,
+      vodId,
+      title: detail.title,
+      poster: detail.poster,
+      sourceName: playback.sourceName || script?.name,
+      playbackIndex: safePbIdx,
+      episodeIndex: 0,
+      episodeTitle: firstEpisodeTitle,
+    });
+    const task = useVodAssetsStore
+      .getState()
+      .downloads.find((row) => row.id === taskId);
+    const freshTask =
+      task ??
+      useVodAssetsStore
+        .getState()
+        .downloads.find(
+          (row) =>
+            row.itemId === itemId &&
+            row.playbackIndex === safePbIdx &&
+            row.episodeIndex === 0
+        );
+    if (!freshTask) return;
+    await resumeVodDownload(freshTask.id);
+    await startVodDownload({
+      task: freshTask,
+      script,
+      episode: playback.episodes[0],
+      sourceId: playback.sourceId,
+    });
+  };
 
   return (
     /* /detail 在 hideNav 里 → App.tsx 跳过 safe-area，此页面自己处理 */
@@ -153,7 +229,8 @@ export default function Detail() {
           <div className="mt-auto flex flex-wrap gap-2">
             <button
               type="button"
-              onClick={() =>
+              onClick={() => {
+                pulseButton("favorite");
                 toggleFavorite({
                   id: itemId,
                   kind: "video",
@@ -161,9 +238,11 @@ export default function Detail() {
                   url: "",
                   poster: detail.poster,
                   sourceName: script?.name,
-                })
-              }
-              className="px-3 py-1.5 rounded-full text-xs font-display font-semibold tap flex items-center gap-1.5"
+                });
+              }}
+              className={`detail-action-button px-3 py-1.5 rounded-full text-xs font-display font-semibold tap flex items-center gap-1.5 ${
+                buttonPulse === "favorite" ? "detail-action-pop" : ""
+              }`}
               style={
                 isFav
                   ? {
@@ -180,6 +259,39 @@ export default function Detail() {
             >
               {isFav ? <IconHeartFill size={13} /> : <IconHeart size={13} />}
               {isFav ? "已收藏" : "收藏"}
+            </button>
+            <button
+              type="button"
+              onClick={() => {
+                pulseButton("watchLater");
+                toggleWatchLater({
+                  itemId,
+                  scriptKey,
+                  vodId,
+                  title: detail.title,
+                  poster: detail.poster,
+                  sourceName: script?.name,
+                });
+              }}
+              className={`detail-action-button px-3 py-1.5 rounded-full text-xs font-display font-semibold tap flex items-center gap-1.5 ${
+                buttonPulse === "watchLater" ? "detail-action-pop" : ""
+              }`}
+              style={
+                isLater
+                  ? {
+                      background: "rgba(124,255,178,0.14)",
+                      border: "1px solid rgba(124,255,178,0.32)",
+                      color: "var(--phosphor)",
+                    }
+                  : {
+                      background: "var(--ink-2)",
+                      border: "1px solid var(--cream-line)",
+                      color: "var(--cream)",
+                    }
+              }
+            >
+              {isLater ? <IconBookmarkFill size={13} /> : <IconBookmark size={13} />}
+              {isLater ? "已稍后" : "稍后观看"}
             </button>
             {hist && (
               <Link
@@ -207,6 +319,32 @@ export default function Detail() {
               >
                 <IconAntenna size={13} />
                 换源 / 测速
+              </button>
+            )}
+            {playback && (
+              <button
+                type="button"
+                disabled={isDownloadBusy || isDownloadDone}
+                onClick={() => void startFirstEpisodeDownload()}
+                className={`detail-action-button px-3 py-1.5 rounded-full text-xs font-display font-semibold tap flex items-center gap-1.5 disabled:opacity-70 ${
+                  buttonPulse === "download" ? "detail-action-pop" : ""
+                }`}
+                style={
+                  isDownloadBusy || isDownloadDone
+                    ? {
+                        background: "rgba(124,255,178,0.14)",
+                        border: "1px solid rgba(124,255,178,0.32)",
+                        color: "var(--phosphor)",
+                      }
+                    : {
+                        background: "var(--ink-2)",
+                        border: "1px solid var(--cream-line)",
+                        color: "var(--cream)",
+                  }
+                }
+              >
+                {isDownloadDone ? <IconCheck size={13} /> : <IconDownload size={13} />}
+                {downloadLabel}
               </button>
             )}
             {playback && (

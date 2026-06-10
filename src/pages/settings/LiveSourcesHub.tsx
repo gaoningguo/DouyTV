@@ -14,6 +14,7 @@ import { usePluginSubscriptionStore, type PluginSubscription } from "@/stores/ne
 import { NETLIVE_PLATFORMS } from "@/lib/netlive/types";
 import type { NetLivePluginDescriptor } from "@/lib/netlive/external/types";
 import { SettingsSubPageLayout } from "./Layout";
+import { appAlert, appConfirm } from "@/components/AppDialog";
 import {
   IconPlus,
   IconRefresh,
@@ -110,7 +111,7 @@ function IptvTab() {
     if (!subName.trim() || !subUrl.trim()) return;
     setBusy("add");
     try { await addSub(subName.trim(), subUrl.trim(), true); setSubName(""); setSubUrl(""); setDialog(undefined); }
-    catch (e) { alert(`订阅失败：${(e as Error).message}`); }
+    catch (e) { await appAlert(`订阅失败：${(e as Error).message}`, { title: "订阅失败", tone: "warning" }); }
     finally { setBusy(undefined); }
   };
 
@@ -120,10 +121,10 @@ function IptvTab() {
     setChName(""); setChUrl(""); setDialog(undefined);
   };
 
-  const onImportM3u = () => {
+  const onImportM3u = async () => {
     if (!m3uText.trim()) return;
     const n = importM3U(m3uText);
-    alert(`已导入 ${n} 个频道`);
+    await appAlert(`已导入 ${n} 个频道`);
     setM3uText(""); setDialog(undefined);
   };
 
@@ -177,7 +178,7 @@ function IptvTab() {
             <button type="button" onClick={() => { setBusy(sub.id); refreshSub(sub.id).then(() => { setDoneMsg("已更新"); setTimeout(() => setDoneMsg(undefined), 2000); }).finally(() => setBusy(undefined)); }} disabled={busy === sub.id} className="p-1 rounded tap text-cream-faint disabled:opacity-40" style={{ background: "var(--ink-3)" }}>
               <IconRefresh size={10} className={busy === sub.id ? "animate-spin" : ""} />
             </button>
-            <button type="button" onClick={() => { if (confirm(`删除「${sub.name}」？`)) removeSub(sub.id); }} className="p-1 rounded tap" style={{ color: "#FF6B6B" }}>
+            <button type="button" onClick={async () => { if (await appConfirm(`删除「${sub.name}」？`, { tone: "danger" })) removeSub(sub.id); }} className="p-1 rounded tap" style={{ color: "#FF6B6B" }}>
               <IconTrash size={10} />
             </button>
           </div>
@@ -235,7 +236,7 @@ function EpgSection() {
       <div className="flex gap-2">
         <button type="button" onClick={() => setUrl(input.trim())} disabled={!input.trim() || input.trim() === url} className="flex-1 py-1.5 rounded text-[10px] font-semibold tap disabled:opacity-40" style={{ background: "var(--ember)", color: "var(--ink)" }}>保存</button>
         {url && <button type="button" onClick={() => void refresh()} className="flex-1 py-1.5 rounded text-[10px] tap text-cream" style={{ background: "var(--ink-3)", border: "1px solid var(--cream-line)" }}>刷新</button>}
-        {url && <button type="button" onClick={() => { if (confirm("清除 EPG？")) { clear(); setInput(""); } }} className="py-1.5 px-3 rounded text-[10px] tap" style={{ color: "#FF6B6B" }}>清除</button>}
+        {url && <button type="button" onClick={async () => { if (await appConfirm("清除 EPG？", { tone: "danger" })) { clear(); setInput(""); } }} className="py-1.5 px-3 rounded text-[10px] tap" style={{ color: "#FF6B6B" }}>清除</button>}
       </div>
     </div>
   );
@@ -433,7 +434,7 @@ function NetliveTab() {
             sub={sub}
             isRefreshing={refreshing.has(sub.id)}
             onRefresh={() => refreshSub(sub.id)}
-            onRemove={() => { if (confirm(`删除订阅「${sub.name}」？相关插件会被移除`)) removeSub(sub.id); }}
+            onRemove={async () => { if (await appConfirm(`删除订阅「${sub.name}」？相关插件会被移除`, { tone: "danger" })) removeSub(sub.id); }}
           />
         ))}
       </div>
@@ -453,7 +454,7 @@ function NetliveTab() {
           <p className="text-[10px] font-mono text-ember flex-1">已选 {selected.size} 个</p>
           <button type="button" onClick={() => { batchEnable(Array.from(selected)); clearSelection(); }} className="px-2 py-1 rounded text-[9px] font-mono font-semibold tap" style={{ background: "var(--ember)", color: "var(--ink)" }}>批量启用</button>
           <button type="button" onClick={() => { batchDisable(Array.from(selected)); clearSelection(); }} className="px-2 py-1 rounded text-[9px] font-mono tap text-cream" style={{ background: "var(--ink-3)", border: "1px solid var(--cream-line)" }}>批量禁用</button>
-          <button type="button" onClick={() => { if (confirm(`确认删除 ${selected.size} 个插件？`)) { batchRemove(Array.from(selected)); clearSelection(); } }} className="px-2 py-1 rounded text-[9px] font-mono tap" style={{ color: "#FF6B6B" }}>批量删除</button>
+          <button type="button" onClick={async () => { if (await appConfirm(`确认删除 ${selected.size} 个插件？`, { tone: "danger" })) { batchRemove(Array.from(selected)); clearSelection(); } }} className="px-2 py-1 rounded text-[9px] font-mono tap" style={{ color: "#FF6B6B" }}>批量删除</button>
           <button type="button" onClick={clearSelection} className="px-2 py-1 rounded text-[9px] font-mono tap text-cream-faint" style={{ background: "var(--ink-3)" }}>取消</button>
         </div>
       )}
@@ -472,7 +473,7 @@ function NetliveTab() {
               onToggleSelect={() => toggleSelect(p.key)}
               onEnable={() => enable(p.key)}
               onDisable={() => disable(p.key)}
-              onRemove={() => { if (confirm(`删除「${p.name}」？`)) removePlugin(p.key); }}
+              onRemove={async () => { if (await appConfirm(`删除「${p.name}」？`, { tone: "danger" })) removePlugin(p.key); }}
               onUpdate={(code) => updateCode(p.key, code)}
             />
           ))}

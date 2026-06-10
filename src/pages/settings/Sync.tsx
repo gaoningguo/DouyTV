@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import { useSyncStore } from "@/stores/sync";
 import { SettingsSubPageLayout } from "./Layout";
+import { appConfirm } from "@/components/AppDialog";
 
 const INTERVAL_OPTIONS = [
   { value: 0, label: "OFF" },
@@ -67,7 +68,7 @@ export default function SettingsSync() {
 
   const onPull = async () => {
     if (
-      !confirm("拉取远端数据将覆盖本地所有 DouyTV 设置/脚本/订阅，确认继续？")
+      !(await appConfirm("拉取远端数据将覆盖本地所有 DouyTV 设置/脚本/订阅，确认继续？", { tone: "warning" }))
     ) {
       return;
     }

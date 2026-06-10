@@ -10,6 +10,7 @@ import {
 } from "@/lib/danmaku/config";
 import { searchAnime } from "@/lib/danmaku/api";
 import { SettingsSubPageLayout } from "./Layout";
+import { appConfirm } from "@/components/AppDialog";
 
 /** 简单的横向滑块封装，复用主题 token。 */
 function Slider({
@@ -449,8 +450,8 @@ export default function SettingsDanmaku() {
           </div>
           <button
             type="button"
-            onClick={() => {
-              if (!confirm("清除所有弹幕缓存？已下载的弹幕将丢失。")) return;
+            onClick={async () => {
+              if (!(await appConfirm("清除所有弹幕缓存？已下载的弹幕将丢失。", { tone: "danger" }))) return;
               void clearAllDanmakuCache().then(refreshStats);
             }}
             className="px-4 py-2 rounded-lg text-xs tap text-cream"

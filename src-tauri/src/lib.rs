@@ -1,10 +1,12 @@
-use std::collections::HashMap;
-use std::io::Read;
+use std::collections::{HashMap, HashSet};
+use std::io::{Read, Write};
 use std::path::{Path, PathBuf};
 use std::sync::{Arc, OnceLock, RwLock};
-use std::time::Duration;
+use std::time::{Duration, Instant};
 
+use futures_util::StreamExt;
 use serde::{Deserialize, Serialize};
+use tauri::{Emitter, Manager};
 use tauri_plugin_sql::{Migration, MigrationKind};
 use url::Url;
 
@@ -15,6 +17,7 @@ mod mfc_ws;
 mod mouflon;
 mod sample_aes_proxy;
 mod stream_proxy;
+mod ts_mp4;
 
 /// 把 cookie jar 里命中的 cookie 合并进请求头。
 /// 如果调用方已有 `Cookie` 头,jar 命中的 cookie 追加到末尾(`; ` 分隔),不覆盖。
@@ -309,6 +312,984 @@ fn scan_local_videos(dir: String, max_depth: Option<u32>) -> Result<Vec<LocalVid
     visit(&path, &mut out, max_depth.unwrap_or(4), 0).map_err(|e| e.to_string())?;
     out.sort_by(|a, b| b.modified.cmp(&a.modified));
     Ok(out)
+}
+
+#[derive(Debug, Deserialize)]
+pub struct VodDownloadRequest {
+    pub task_id: String,
+    pub url: String,
+    pub stream_type: Option<String>,
+    #[serde(default)]
+    pub headers: HashMap<String, String>,
+    pub title: String,
+    pub episode_title: String,
+    pub download_dir: Option<String>,
+    pub proxy_url: Option<String>,
+}
+
+#[derive(Debug, Serialize, Clone)]
+pub struct VodDownloadProgress {
+    pub task_id: String,
+    pub status: String,
+    pub progress: f64,
+    pub downloaded: u64,
+    pub total: Option<u64>,
+    pub path: Option<String>,
+    pub message: Option<String>,
+}
+
+#[derive(Debug, Serialize)]
+pub struct VodDownloadResult {
+    pub path: String,
+    pub bytes: u64,
+    pub kind: String,
+}
+
+fn emit_vod_download_progress(
+    app: &tauri::AppHandle,
+    task_id: &str,
+    status: &str,
+    progress: f64,
+    downloaded: u64,
+    total: Option<u64>,
+    path: Option<&Path>,
+    message: Option<String>,
+) {
+    let payload = VodDownloadProgress {
+        task_id: task_id.to_string(),
+        status: status.to_string(),
+        progress: progress.clamp(0.0, 100.0),
+        downloaded,
+        total,
+        path: path.map(|p| p.to_string_lossy().to_string()),
+        message,
+    };
+    let _ = app.emit("vod-download-progress", payload);
+}
+
+fn sanitize_file_component(value: &str, fallback: &str) -> String {
+    let mut out = String::new();
+    for ch in value.chars() {
+        if ch.is_control() || matches!(ch, '<' | '>' | ':' | '"' | '/' | '\\' | '|' | '?' | '*') {
+            out.push(' ');
+        } else {
+            out.push(ch);
+        }
+        if out.chars().count() >= 80 {
+            break;
+        }
+    }
+    let cleaned = out
+        .split_whitespace()
+        .collect::<Vec<_>>()
+        .join(" ")
+        .trim_matches(|c| c == '.' || c == ' ')
+        .to_string();
+    if cleaned.is_empty() {
+        fallback.to_string()
+    } else {
+        cleaned
+    }
+}
+
+fn unique_path(mut path: PathBuf) -> PathBuf {
+    if !path.exists() {
+        return path;
+    }
+    let parent = path.parent().map(Path::to_path_buf).unwrap_or_default();
+    let stem = path
+        .file_stem()
+        .and_then(|s| s.to_str())
+        .unwrap_or("download")
+        .to_string();
+    let ext = path
+        .extension()
+        .and_then(|s| s.to_str())
+        .map(|s| s.to_string());
+    for i in 2..10_000 {
+        let name = match &ext {
+            Some(ext) => format!("{stem} ({i}).{ext}"),
+            None => format!("{stem} ({i})"),
+        };
+        path = parent.join(name);
+        if !path.exists() {
+            return path;
+        }
+    }
+    path
+}
+
+fn vod_download_root(app: &tauri::AppHandle, custom_dir: Option<&str>) -> Result<PathBuf, String> {
+    let root = if let Some(dir) = custom_dir.map(str::trim).filter(|s| !s.is_empty()) {
+        PathBuf::from(dir)
+    } else {
+        let base = app
+            .path()
+            .download_dir()
+            .or_else(|_| app.path().app_data_dir())
+            .map_err(|e| format!("download dir: {e}"))?;
+        base.join("DouyTV")
+    };
+    std::fs::create_dir_all(&root).map_err(|e| format!("create download dir: {e}"))?;
+    Ok(root)
+}
+
+fn download_pause_set() -> &'static RwLock<HashSet<String>> {
+    static PAUSED: OnceLock<RwLock<HashSet<String>>> = OnceLock::new();
+    PAUSED.get_or_init(|| RwLock::new(HashSet::new()))
+}
+
+fn is_download_paused(task_id: &str) -> bool {
+    download_pause_set()
+        .read()
+        .map(|set| set.contains(task_id))
+        .unwrap_or(false)
+}
+
+#[tauri::command]
+fn vod_set_download_paused(task_id: String, paused: bool) -> Result<(), String> {
+    let mut set = download_pause_set()
+        .write()
+        .map_err(|_| "download pause set poisoned".to_string())?;
+    if paused {
+        set.insert(task_id);
+    } else {
+        set.remove(&task_id);
+    }
+    Ok(())
+}
+
+#[tauri::command]
+fn open_vod_download_path(path: String, reveal: Option<bool>) -> Result<(), String> {
+    let input = PathBuf::from(path);
+    let target = if reveal.unwrap_or(false) {
+        if input.is_dir() {
+            input
+        } else {
+            input
+                .parent()
+                .map(Path::to_path_buf)
+                .ok_or_else(|| "download path has no parent".to_string())?
+        }
+    } else {
+        input
+    };
+
+    if !target.exists() {
+        return Err(format!("download path does not exist: {}", target.display()));
+    }
+
+    #[cfg(target_os = "windows")]
+    let mut command = {
+        let mut c = std::process::Command::new("explorer");
+        c.arg(&target);
+        c
+    };
+
+    #[cfg(target_os = "macos")]
+    let mut command = {
+        let mut c = std::process::Command::new("open");
+        c.arg(&target);
+        c
+    };
+
+    #[cfg(all(unix, not(target_os = "macos")))]
+    let mut command = {
+        let mut c = std::process::Command::new("xdg-open");
+        c.arg(&target);
+        c
+    };
+
+    command
+        .spawn()
+        .map_err(|e| format!("open download path: {e}"))?;
+    Ok(())
+}
+
+fn header_value<'a>(headers: &'a HashMap<String, String>, key: &str) -> Option<&'a str> {
+    headers
+        .iter()
+        .find(|(k, _)| k.eq_ignore_ascii_case(key))
+        .map(|(_, v)| v.as_str())
+}
+
+fn download_client(proxy: Option<&str>) -> Result<reqwest::Client, String> {
+    let mut builder = reqwest::Client::builder()
+        .connect_timeout(Duration::from_secs(20))
+        .redirect(reqwest::redirect::Policy::limited(10));
+    if let Some(proxy) = proxy.filter(|s| !s.trim().is_empty()) {
+        builder = builder.proxy(reqwest::Proxy::all(proxy).map_err(|e| format!("proxy: {e}"))?);
+    }
+    builder.build().map_err(|e| format!("download client: {e}"))
+}
+
+fn apply_download_headers(
+    mut req: reqwest::RequestBuilder,
+    url: &str,
+    headers: &HashMap<String, String>,
+) -> reqwest::RequestBuilder {
+    let has_ua = header_value(headers, "User-Agent").is_some();
+    let has_referer = header_value(headers, "Referer").is_some();
+    let merged_cookie = merge_cookie_header(url, headers);
+    for (k, v) in headers {
+        if k.eq_ignore_ascii_case("cookie") && merged_cookie.is_some() {
+            continue;
+        }
+        req = req.header(k.as_str(), v.as_str());
+    }
+    if !has_ua {
+        req = req.header("User-Agent", DEFAULT_UA);
+    }
+    if !has_referer {
+        req = req.header("Referer", "https://movie.douban.com/");
+    }
+    if let Some(cookie) = merged_cookie {
+        req = req.header("Cookie", cookie);
+    }
+    req
+}
+
+fn ext_from_url(url: &str) -> Option<String> {
+    Url::parse(url)
+        .ok()
+        .and_then(|u| {
+            Path::new(u.path())
+                .extension()
+                .and_then(|e| e.to_str())
+                .map(|e| e.to_lowercase())
+        })
+        .filter(|e| e.len() <= 8 && e.chars().all(|c| c.is_ascii_alphanumeric()))
+}
+
+fn direct_extension(url: &str, stream_type: Option<&str>, content_type: Option<&str>) -> String {
+    if let Some(kind) = stream_type {
+        match kind {
+            "mp4" => return "mp4".to_string(),
+            "flv" => return "flv".to_string(),
+            "dash" => return "mpd".to_string(),
+            _ => {}
+        }
+    }
+    if let Some(ext) = ext_from_url(url) {
+        if ext != "m3u8" && ext != "m3u" {
+            return ext;
+        }
+    }
+    let ct = content_type.unwrap_or("").to_lowercase();
+    if ct.contains("webm") {
+        "webm".to_string()
+    } else if ct.contains("matroska") {
+        "mkv".to_string()
+    } else if ct.contains("mpeg") || ct.contains("mp2t") {
+        "ts".to_string()
+    } else {
+        "mp4".to_string()
+    }
+}
+
+fn looks_like_hls(url: &str, stream_type: Option<&str>) -> bool {
+    if stream_type == Some("hls") {
+        return true;
+    }
+    let lower = url.to_lowercase();
+    lower.contains(".m3u8") || lower.ends_with(".m3u") || lower.contains(".m3u?")
+}
+
+async fn fetch_text_for_download(
+    client: &reqwest::Client,
+    url: &str,
+    headers: &HashMap<String, String>,
+) -> Result<String, String> {
+    let resp = apply_download_headers(client.get(url), url, headers)
+        .send()
+        .await
+        .map_err(|e| format!("fetch playlist: {e}"))?;
+    let status = resp.status();
+    if !status.is_success() {
+        return Err(format!("playlist HTTP {}", status.as_u16()));
+    }
+    resp.text()
+        .await
+        .map_err(|e| format!("read playlist: {e}"))
+}
+
+async fn download_url_to_file(
+    app: &tauri::AppHandle,
+    task_id: &str,
+    client: &reqwest::Client,
+    url: &str,
+    headers: &HashMap<String, String>,
+    path: &Path,
+    base_progress: f64,
+    progress_span: f64,
+    downloaded_base: u64,
+) -> Result<u64, String> {
+    let resp = apply_download_headers(client.get(url), url, headers)
+        .send()
+        .await
+        .map_err(|e| format!("download request: {e}"))?;
+    let status = resp.status();
+    if !status.is_success() {
+        return Err(format!("download HTTP {}: {url}", status.as_u16()));
+    }
+    if let Some(parent) = path.parent() {
+        std::fs::create_dir_all(parent).map_err(|e| format!("create dir: {e}"))?;
+    }
+    let total = resp.content_length();
+    let mut file = std::fs::File::create(path).map_err(|e| format!("create file: {e}"))?;
+    let mut stream = resp.bytes_stream();
+    let mut downloaded = 0u64;
+    let mut last_emit = Instant::now();
+    while let Some(chunk) = stream.next().await {
+        if is_download_paused(task_id) {
+            return Err("DOWNLOAD_PAUSED".to_string());
+        }
+        let chunk = chunk.map_err(|e| format!("read stream: {e}"))?;
+        file.write_all(&chunk)
+            .map_err(|e| format!("write file: {e}"))?;
+        downloaded += chunk.len() as u64;
+        if last_emit.elapsed() >= Duration::from_millis(250) {
+            let inner = total
+                .map(|t| if t > 0 { downloaded as f64 / t as f64 } else { 0.0 })
+                .unwrap_or(0.0);
+            emit_vod_download_progress(
+                app,
+                task_id,
+                "downloading",
+                base_progress + progress_span * inner,
+                downloaded_base + downloaded,
+                total.map(|t| downloaded_base + t),
+                Some(path),
+                None,
+            );
+            last_emit = Instant::now();
+        }
+    }
+    file.flush().map_err(|e| format!("flush file: {e}"))?;
+    Ok(downloaded)
+}
+
+async fn append_url_to_file(
+    app: &tauri::AppHandle,
+    task_id: &str,
+    client: &reqwest::Client,
+    url: &str,
+    headers: &HashMap<String, String>,
+    range: Option<(u64, u64)>,
+    file: &mut std::fs::File,
+    base_progress: f64,
+    progress_span: f64,
+    downloaded_base: u64,
+    output_path: &Path,
+) -> Result<u64, String> {
+    let mut req = apply_download_headers(client.get(url), url, headers);
+    if let Some((start, end)) = range {
+        req = req.header("Range", format!("bytes={start}-{end}"));
+    }
+    let resp = req
+        .send()
+        .await
+        .map_err(|e| format!("download request: {e}"))?;
+    let status = resp.status();
+    if !status.is_success() {
+        return Err(format!("download HTTP {}: {url}", status.as_u16()));
+    }
+    if range.is_some() && status.as_u16() != 206 {
+        return Err(format!(
+            "download HTTP {} ignored HLS byte range: {url}",
+            status.as_u16()
+        ));
+    }
+    let total = resp.content_length();
+    let mut stream = resp.bytes_stream();
+    let mut downloaded = 0u64;
+    let mut last_emit = Instant::now();
+    while let Some(chunk) = stream.next().await {
+        if is_download_paused(task_id) {
+            return Err("DOWNLOAD_PAUSED".to_string());
+        }
+        let chunk = chunk.map_err(|e| format!("read stream: {e}"))?;
+        file.write_all(&chunk)
+            .map_err(|e| format!("append file: {e}"))?;
+        downloaded += chunk.len() as u64;
+        if last_emit.elapsed() >= Duration::from_millis(250) {
+            let inner = total
+                .map(|t| if t > 0 { downloaded as f64 / t as f64 } else { 0.0 })
+                .unwrap_or(0.0);
+            emit_vod_download_progress(
+                app,
+                task_id,
+                "downloading",
+                base_progress + progress_span * inner,
+                downloaded_base + downloaded,
+                None,
+                Some(output_path),
+                None,
+            );
+            last_emit = Instant::now();
+        }
+    }
+    Ok(downloaded)
+}
+
+async fn download_url_to_mp4_muxer(
+    app: &tauri::AppHandle,
+    task_id: &str,
+    client: &reqwest::Client,
+    url: &str,
+    headers: &HashMap<String, String>,
+    range: Option<(u64, u64)>,
+    muxer: &mut ts_mp4::TsMp4Muxer,
+    base_progress: f64,
+    progress_span: f64,
+    downloaded_base: u64,
+    output_path: &Path,
+) -> Result<u64, String> {
+    let mut req = apply_download_headers(client.get(url), url, headers);
+    if let Some((start, end)) = range {
+        req = req.header("Range", format!("bytes={start}-{end}"));
+    }
+    let resp = req
+        .send()
+        .await
+        .map_err(|e| format!("download request: {e}"))?;
+    let status = resp.status();
+    if !status.is_success() {
+        return Err(format!("download HTTP {}: {url}", status.as_u16()));
+    }
+    if range.is_some() && status.as_u16() != 206 {
+        return Err(format!(
+            "download HTTP {} ignored HLS byte range: {url}",
+            status.as_u16()
+        ));
+    }
+    let total = resp.content_length();
+    let mut stream = resp.bytes_stream();
+    let mut buf = Vec::new();
+    let mut downloaded = 0u64;
+    let mut last_emit = Instant::now();
+    while let Some(chunk) = stream.next().await {
+        if is_download_paused(task_id) {
+            return Err("DOWNLOAD_PAUSED".to_string());
+        }
+        let chunk = chunk.map_err(|e| format!("read stream: {e}"))?;
+        downloaded += chunk.len() as u64;
+        buf.extend_from_slice(&chunk);
+        if last_emit.elapsed() >= Duration::from_millis(250) {
+            let inner = total
+                .map(|t| if t > 0 { downloaded as f64 / t as f64 } else { 0.0 })
+                .unwrap_or(0.0);
+            emit_vod_download_progress(
+                app,
+                task_id,
+                "downloading",
+                base_progress + progress_span * inner,
+                downloaded_base + downloaded,
+                None,
+                Some(output_path),
+                None,
+            );
+            last_emit = Instant::now();
+        }
+    }
+    muxer.push_ts(&buf)?;
+    Ok(downloaded)
+}
+
+fn absolutize_hls_url(base_url: &str, maybe_relative: &str) -> String {
+    if maybe_relative.starts_with("http://") || maybe_relative.starts_with("https://") {
+        maybe_relative.to_string()
+    } else if maybe_relative.starts_with("//") {
+        Url::parse(base_url)
+            .map(|base| format!("{}:{}", base.scheme(), maybe_relative))
+            .unwrap_or_else(|_| maybe_relative.to_string())
+    } else {
+        Url::parse(base_url)
+            .ok()
+            .and_then(|base| base.join(maybe_relative).ok())
+            .map(|u| u.to_string())
+            .unwrap_or_else(|| maybe_relative.to_string())
+    }
+}
+
+fn extract_attr_uri(line: &str) -> Option<String> {
+    extract_hls_attr(line, "URI")
+}
+
+fn extract_hls_attr(line: &str, key: &str) -> Option<String> {
+    let attrs = line.split_once(':')?.1;
+    let bytes = attrs.as_bytes();
+    let mut i = 0usize;
+    while i < bytes.len() {
+        while i < bytes.len() && (bytes[i] == b',' || bytes[i].is_ascii_whitespace()) {
+            i += 1;
+        }
+        let key_start = i;
+        while i < bytes.len() && bytes[i] != b'=' && bytes[i] != b',' {
+            i += 1;
+        }
+        let attr_key = attrs[key_start..i].trim();
+        if i >= bytes.len() || bytes[i] != b'=' {
+            while i < bytes.len() && bytes[i] != b',' {
+                i += 1;
+            }
+            continue;
+        }
+        i += 1;
+
+        let value = if i < bytes.len() && bytes[i] == b'"' {
+            i += 1;
+            let value_start = i;
+            while i < bytes.len() && bytes[i] != b'"' {
+                i += 1;
+            }
+            let out = attrs[value_start..i].to_string();
+            if i < bytes.len() {
+                i += 1;
+            }
+            out
+        } else {
+            let value_start = i;
+            while i < bytes.len() && bytes[i] != b',' {
+                i += 1;
+            }
+            attrs[value_start..i].trim().to_string()
+        };
+
+        if attr_key.eq_ignore_ascii_case(key) {
+            return Some(value);
+        }
+    }
+    None
+}
+
+fn parse_hls_byterange_value(
+    value: &str,
+    next_offset: &mut Option<u64>,
+) -> Result<(u64, u64), String> {
+    let value = value.trim().trim_matches('"');
+    let (len_text, offset_text) = value
+        .split_once('@')
+        .map(|(len, offset)| (len.trim(), Some(offset.trim())))
+        .unwrap_or_else(|| (value.trim(), None));
+    let len = len_text
+        .parse::<u64>()
+        .map_err(|_| format!("invalid HLS BYTERANGE length: {value}"))?;
+    if len == 0 {
+        return Err("invalid HLS BYTERANGE length: 0".to_string());
+    }
+    let start = match offset_text.filter(|s| !s.is_empty()) {
+        Some(offset) => offset
+            .parse::<u64>()
+            .map_err(|_| format!("invalid HLS BYTERANGE offset: {value}"))?,
+        None => next_offset.unwrap_or(0),
+    };
+    let end = start
+        .checked_add(len)
+        .and_then(|v| v.checked_sub(1))
+        .ok_or_else(|| format!("invalid HLS BYTERANGE overflow: {value}"))?;
+    let next = end
+        .checked_add(1)
+        .ok_or_else(|| format!("invalid HLS BYTERANGE overflow: {value}"))?;
+    *next_offset = Some(next);
+    Ok((start, end))
+}
+
+fn parse_bandwidth(line: &str) -> u64 {
+    let Some(start) = line.find("BANDWIDTH=") else {
+        return 0;
+    };
+    let rest = &line[start + "BANDWIDTH=".len()..];
+    rest.chars()
+        .take_while(|c| c.is_ascii_digit())
+        .collect::<String>()
+        .parse()
+        .unwrap_or(0)
+}
+
+fn pick_hls_variant(master: &str, base_url: &str) -> Option<String> {
+    let mut pending_bandwidth: Option<u64> = None;
+    let mut best: Option<(u64, String)> = None;
+    for line in master.lines() {
+        let trimmed = line.trim();
+        if trimmed.starts_with("#EXT-X-STREAM-INF") {
+            pending_bandwidth = Some(parse_bandwidth(trimmed));
+            continue;
+        }
+        if trimmed.is_empty() || trimmed.starts_with('#') {
+            continue;
+        }
+        if let Some(bw) = pending_bandwidth.take() {
+            let abs = absolutize_hls_url(base_url, trimmed);
+            if best.as_ref().map(|(best_bw, _)| bw > *best_bw).unwrap_or(true) {
+                best = Some((bw, abs));
+            }
+        }
+    }
+    best.map(|(_, url)| url)
+}
+
+async fn download_direct_media(
+    app: &tauri::AppHandle,
+    req: &VodDownloadRequest,
+    client: &reqwest::Client,
+) -> Result<VodDownloadResult, String> {
+    let root = vod_download_root(app, req.download_dir.as_deref())?;
+    let title = sanitize_file_component(&req.title, "视频");
+    let episode = sanitize_file_component(&req.episode_title, "正片");
+    let folder = root.join(&title);
+    std::fs::create_dir_all(&folder).map_err(|e| format!("create title dir: {e}"))?;
+
+    let head_resp = apply_download_headers(client.head(&req.url), &req.url, &req.headers)
+        .send()
+        .await
+        .ok();
+    let content_type = head_resp
+        .as_ref()
+        .and_then(|r| r.headers().get("content-type"))
+        .and_then(|v| v.to_str().ok());
+    let ext = direct_extension(
+        &req.url,
+        req.stream_type.as_deref(),
+        content_type,
+    );
+    if ext == "ts" {
+        let path = unique_path(folder.join(format!("{episode}.mp4")));
+        emit_vod_download_progress(
+            app,
+            &req.task_id,
+            "downloading",
+            1.0,
+            0,
+            None,
+            Some(&path),
+            Some("下载并封装 MPEG-TS".to_string()),
+        );
+        let mut muxer = ts_mp4::TsMp4Muxer::create(&path)?;
+        let downloaded = download_url_to_mp4_muxer(
+            app,
+            &req.task_id,
+            client,
+            &req.url,
+            &req.headers,
+            None,
+            &mut muxer,
+            1.0,
+            97.0,
+            0,
+            &path,
+        )
+        .await?;
+        emit_vod_download_progress(
+            app,
+            &req.task_id,
+            "downloading",
+            99.0,
+            downloaded,
+            None,
+            Some(&path),
+            Some("封装 MP4".to_string()),
+        );
+        let bytes = muxer.finish().map_err(|e| {
+            let _ = std::fs::remove_file(&path);
+            e
+        })?;
+        return Ok(VodDownloadResult {
+            path: path.to_string_lossy().to_string(),
+            bytes,
+            kind: "file".to_string(),
+        });
+    }
+    let path = unique_path(folder.join(format!("{episode}.{ext}")));
+    emit_vod_download_progress(
+        app,
+        &req.task_id,
+        "downloading",
+        1.0,
+        0,
+        None,
+        Some(&path),
+        Some("开始下载".to_string()),
+    );
+    let bytes = download_url_to_file(
+        app,
+        &req.task_id,
+        client,
+        &req.url,
+        &req.headers,
+        &path,
+        1.0,
+        98.0,
+        0,
+    )
+    .await?;
+    Ok(VodDownloadResult {
+        path: path.to_string_lossy().to_string(),
+        bytes,
+        kind: "file".to_string(),
+    })
+}
+
+async fn download_hls_media(
+    app: &tauri::AppHandle,
+    req: &VodDownloadRequest,
+    client: &reqwest::Client,
+) -> Result<VodDownloadResult, String> {
+    let root = vod_download_root(app, req.download_dir.as_deref())?;
+    let title = sanitize_file_component(&req.title, "视频");
+    let episode = sanitize_file_component(&req.episode_title, "正片");
+    let folder = root.join(&title);
+    std::fs::create_dir_all(&folder).map_err(|e| format!("create title dir: {e}"))?;
+
+    emit_vod_download_progress(
+        app,
+        &req.task_id,
+        "downloading",
+        1.0,
+        0,
+        None,
+        Some(&folder),
+        Some("读取 HLS 播放列表".to_string()),
+    );
+
+    let master = fetch_text_for_download(client, &req.url, &req.headers).await?;
+    let (playlist_url, playlist_text) = if master.contains("#EXT-X-STREAM-INF") {
+        let variant = pick_hls_variant(&master, &req.url)
+            .ok_or_else(|| "HLS master playlist has no playable variant".to_string())?;
+        let text = fetch_text_for_download(client, &variant, &req.headers).await?;
+        (variant, text)
+    } else {
+        (req.url.clone(), master)
+    };
+
+    if playlist_text
+        .lines()
+        .any(|line| line.trim().starts_with("#EXT-X-KEY"))
+    {
+        return Err("该 HLS 使用加密分片，当前下载器不能合并为完整视频文件。".to_string());
+    }
+
+    let resource_count = playlist_text
+        .lines()
+        .filter(|line| {
+            let trimmed = line.trim();
+            !trimmed.is_empty() && (!trimmed.starts_with('#') || trimmed.starts_with("#EXT-X-MAP"))
+        })
+        .count()
+        .max(1);
+
+    let has_init_map = playlist_text
+        .lines()
+        .any(|line| line.trim().starts_with("#EXT-X-MAP"));
+    if !has_init_map {
+        let final_path = unique_path(folder.join(format!("{episode}.mp4")));
+        let mut muxer = ts_mp4::TsMp4Muxer::create(&final_path)?;
+        let mut downloaded_total = 0u64;
+        let mut done_count = 0usize;
+        let mut pending_range: Option<(u64, u64)> = None;
+        let mut next_byterange_offset: Option<u64> = None;
+        for line in playlist_text.lines() {
+            let trimmed = line.trim();
+            if let Some(value) = trimmed.strip_prefix("#EXT-X-BYTERANGE:") {
+                pending_range =
+                    Some(parse_hls_byterange_value(value, &mut next_byterange_offset)?);
+                continue;
+            }
+            if trimmed.is_empty() || trimmed.starts_with('#') {
+                continue;
+            }
+            let abs = absolutize_hls_url(&playlist_url, trimmed);
+            let span = 97.0 / resource_count as f64;
+            let range = pending_range.take();
+            if range.is_none() {
+                next_byterange_offset = None;
+            }
+            downloaded_total += download_url_to_mp4_muxer(
+                app,
+                &req.task_id,
+                client,
+                &abs,
+                &req.headers,
+                range,
+                &mut muxer,
+                1.0 + done_count as f64 * span,
+                span,
+                downloaded_total,
+                &final_path,
+            )
+            .await?;
+            done_count += 1;
+        }
+        emit_vod_download_progress(
+            app,
+            &req.task_id,
+            "downloading",
+            99.0,
+            downloaded_total,
+            None,
+            Some(&final_path),
+            Some("封装 MP4".to_string()),
+        );
+        let media_bytes = muxer.finish().map_err(|e| {
+            let _ = std::fs::remove_file(&final_path);
+            e
+        })?;
+        return Ok(VodDownloadResult {
+            path: final_path.to_string_lossy().to_string(),
+            bytes: media_bytes,
+            kind: "file".to_string(),
+        });
+    }
+
+    let final_path = unique_path(folder.join(format!("{episode}.mp4")));
+    let output_path = final_path.clone();
+    let mut output =
+        std::fs::File::create(&output_path).map_err(|e| format!("create output file: {e}"))?;
+
+    let mut downloaded_total = 0u64;
+    let mut done_count = 0usize;
+    let mut downloaded_maps: HashMap<String, bool> = HashMap::new();
+    let mut pending_range: Option<(u64, u64)> = None;
+    let mut next_byterange_offset: Option<u64> = None;
+
+    for line in playlist_text.lines() {
+        let trimmed = line.trim();
+        if trimmed.starts_with("#EXT-X-MAP") {
+            if let Some(uri) = extract_attr_uri(line) {
+                let abs = absolutize_hls_url(&playlist_url, &uri);
+                let mut map_next_offset = None;
+                let map_range = extract_hls_attr(line, "BYTERANGE")
+                    .map(|value| parse_hls_byterange_value(&value, &mut map_next_offset))
+                    .transpose()?;
+                let map_key = match map_range {
+                    Some((start, end)) => format!("{abs}#{start}-{end}"),
+                    None => abs.clone(),
+                };
+                if !downloaded_maps.contains_key(&map_key) {
+                    let span = 98.0 / resource_count as f64;
+                    downloaded_total += append_url_to_file(
+                        app,
+                        &req.task_id,
+                        client,
+                        &abs,
+                        &req.headers,
+                        map_range,
+                        &mut output,
+                        1.0 + done_count as f64 * span,
+                        span,
+                        downloaded_total,
+                        &output_path,
+                    )
+                    .await?;
+                    done_count += 1;
+                    downloaded_maps.insert(map_key, true);
+                }
+            }
+            continue;
+        }
+
+        if let Some(value) = trimmed.strip_prefix("#EXT-X-BYTERANGE:") {
+            pending_range = Some(parse_hls_byterange_value(value, &mut next_byterange_offset)?);
+            continue;
+        }
+
+        if trimmed.is_empty() || trimmed.starts_with('#') {
+            continue;
+        }
+
+        let abs = absolutize_hls_url(&playlist_url, trimmed);
+        let span = 98.0 / resource_count as f64;
+        let range = pending_range.take();
+        if range.is_none() {
+            next_byterange_offset = None;
+        }
+        downloaded_total += append_url_to_file(
+            app,
+            &req.task_id,
+            client,
+            &abs,
+            &req.headers,
+            range,
+            &mut output,
+            1.0 + done_count as f64 * span,
+            span,
+            downloaded_total,
+            &output_path,
+        )
+        .await?;
+        done_count += 1;
+    }
+
+    output.flush().map_err(|e| format!("flush output: {e}"))?;
+    drop(output);
+
+    Ok(VodDownloadResult {
+        path: final_path.to_string_lossy().to_string(),
+        bytes: downloaded_total,
+        kind: "file".to_string(),
+    })
+}
+
+#[tauri::command]
+async fn vod_download_media(
+    app: tauri::AppHandle,
+    req: VodDownloadRequest,
+) -> Result<VodDownloadResult, String> {
+    let client = match download_client(req.proxy_url.as_deref()) {
+        Ok(c) => c,
+        Err(e) => {
+            emit_vod_download_progress(&app, &req.task_id, "error", 0.0, 0, None, None, Some(e.clone()));
+            return Err(e);
+        }
+    };
+
+    let result = if looks_like_hls(&req.url, req.stream_type.as_deref()) {
+        download_hls_media(&app, &req, &client).await
+    } else {
+        download_direct_media(&app, &req, &client).await
+    };
+
+    match result {
+        Ok(result) => {
+            emit_vod_download_progress(
+                &app,
+                &req.task_id,
+                "done",
+                100.0,
+                result.bytes,
+                Some(result.bytes),
+                Some(Path::new(&result.path)),
+                Some("下载完成".to_string()),
+            );
+            Ok(result)
+        }
+        Err(e) => {
+            if e == "DOWNLOAD_PAUSED" {
+                emit_vod_download_progress(
+                    &app,
+                    &req.task_id,
+                    "paused",
+                    0.0,
+                    0,
+                    None,
+                    None,
+                    Some("已暂停".to_string()),
+                );
+                return Err(e);
+            }
+            emit_vod_download_progress(
+                &app,
+                &req.task_id,
+                "error",
+                0.0,
+                0,
+                None,
+                None,
+                Some(e.clone()),
+            );
+            Err(e)
+        }
+    }
 }
 
 /// 读取操作系统级代理设置（Windows/macOS/Linux 桌面），返回标准化的 URL。
@@ -1754,6 +2735,9 @@ pub fn run() {
             script_http,
             script_http_h2,
             scan_local_videos,
+            vod_download_media,
+            vod_set_download_paused,
+            open_vod_download_path,
             read_system_proxy,
             get_stream_proxy_port,
             open_cf_challenge,
