@@ -10,8 +10,10 @@ import { useProxyStore } from "@/stores/proxy";
 import { useDanmakuStore } from "@/stores/danmaku";
 import { useSyncStore } from "@/stores/sync";
 import { useDownloadSettingsStore } from "@/stores/downloadSettings";
+import { useMusicStore } from "@/stores/music";
 import { appAlert, appConfirm } from "@/components/AppDialog";
 import {
+  IconAlbum,
   IconScript,
   IconLive,
   IconAntenna,
@@ -127,6 +129,10 @@ export default function Settings() {
   const hydrateDownloadSettings = useDownloadSettingsStore((s) => s.hydrate);
   const setDownloadDir = useDownloadSettingsStore((s) => s.setDownloadDir);
   const setDownloadConcurrency = useDownloadSettingsStore((s) => s.setConcurrency);
+  const musicSources = useMusicStore((s) => s.sources);
+  const musicFavorites = useMusicStore((s) => s.favorites);
+  const musicPlaylists = useMusicStore((s) => s.playlists);
+  const hydrateMusic = useMusicStore((s) => s.hydrate);
 
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [showHotkeys, setShowHotkeys] = useState(false);
@@ -142,6 +148,7 @@ export default function Settings() {
     void hydrateLibrary();
     hydrateSync();
     hydrateDownloadSettings();
+    hydrateMusic();
   }, [
     hydrateScripts,
     hydrateLive,
@@ -153,6 +160,7 @@ export default function Settings() {
     hydrateLibrary,
     hydrateSync,
     hydrateDownloadSettings,
+    hydrateMusic,
   ]);
 
   const onImportFile = async (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -224,6 +232,13 @@ export default function Settings() {
               title="本地扫描"
               subtitle="扫描本地视频目录"
               accent="vhs"
+            />
+            <SettingsRow
+              to="/settings/music-hub"
+              Icon={IconAlbum}
+              title="音乐管理"
+              subtitle={`${musicSources.length} 源 · ${musicSources.filter((s) => s.enabled).length} 启用 · ${musicFavorites.length} 收藏 · ${musicPlaylists.length} 歌单`}
+              accent="phosphor"
             />
           </div>
         </section>

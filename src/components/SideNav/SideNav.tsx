@@ -4,6 +4,7 @@ import {
   IconHome,
   IconSearch,
   IconLive,
+  IconAlbum,
   IconLibrary,
   IconSettings,
   IconChevronRight,
@@ -13,6 +14,7 @@ const NAV_TABS = [
   { to: "/", Icon: IconHome, label: "首页", end: true },
   { to: "/search", Icon: IconSearch, label: "点播", end: false },
   { to: "/live", Icon: IconLive, label: "直播", end: false },
+  { to: "/music", Icon: IconAlbum, label: "音乐", end: false },
   { to: "/library", Icon: IconLibrary, label: "我的", end: false },
   { to: "/settings", Icon: IconSettings, label: "设置", end: false },
 ];

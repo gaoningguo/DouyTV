@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Link, useLocation, useNavigate } from "react-router-dom";
 import VideoFeed from "@/components/VideoFeed";
 import InteractionBar from "@/components/InteractionBar";
@@ -11,6 +11,7 @@ import { useFeed } from "@/hooks/useFeed";
 import { useLiveFeed } from "@/hooks/useLiveFeed";
 import { useViewport } from "@/hooks/useViewport";
 import { useLibraryStore } from "@/stores/library";
+import { useMusicStore } from "@/stores/music";
 import { useNetLiveStore } from "@/stores/netlive";
 import { useScriptStore } from "@/stores/scripts";
 import { useDanmakuStore } from "@/stores/danmaku";
@@ -22,6 +23,7 @@ import {
   IconAlbum,
   IconQueue,
   IconPlay,
+  IconPause,
   IconHeart,
   IconHeartFill,
   IconBookmark,
@@ -31,6 +33,18 @@ import {
 } from "@/components/Icon";
 import type { MediaItem } from "@/types/media";
 import { NETLIVE_PLATFORMS, type NetLiveRoom } from "@/lib/netlive/types";
+import {
+  formatDuration,
+  getMusicBoardSongs,
+  getMusicBoards,
+  getMusicHotSearch,
+  musicSongKey,
+  resolveMusicSource,
+  searchMusicSource,
+  waitForUsableMusicAudio,
+  type MusicSong,
+} from "@/lib/music";
+import { wrapImage } from "@/lib/proxy";
 import type { ScriptPlayback } from "@/source-script/types";
 import type { DanmakuSelection } from "@/lib/danmaku/types";
 
@@ -44,6 +58,253 @@ const MUSIC_VISUALIZER_HEIGHTS = [
   42, 68, 24, 76, 52, 34, 86, 48, 28, 72, 18, 64, 82, 36, 54, 26, 74, 44,
   88, 32, 58, 20, 70, 46, 30, 80, 38, 62, 22, 66, 50, 84,
 ];
+
+const MUSIC_FEED_KEYWORDS = ["新歌", "热歌", "民谣", "粤语", "流行", "纯音乐"];
+const MUSIC_FEED_LIMIT = 48;
+
+interface MusicFeedCache {
+  items: MusicSong[];
+  activeIndex: number;
+  signature: string;
+  seed: number;
+}
+
+let musicFeedCache: MusicFeedCache = {
+  items: [],
+  activeIndex: 0,
+  signature: "",
+  seed: 0,
+};
+
+function normalizeMusicText(value?: string) {
+  return (value || "")
+    .toLowerCase()
+    .replace(/\s+/g, "")
+    .replace(/[（(].*?[）)]/g, "")
+    .replace(/[^\p{L}\p{N}]+/gu, "");
+}
+
+function musicRecommendKey(song: MusicSong) {
+  return `${normalizeMusicText(song.title)}:${normalizeMusicText(song.artist)}`;
+}
+
+function hashString(input: string): number {
+  let h = 2166136261 >>> 0;
+  for (let i = 0; i < input.length; i++) {
+    h = Math.imul(h ^ input.charCodeAt(i), 16777619);
+  }
+  return h >>> 0;
+}
+
+function seededScore(seed: number, id: string): number {
+  let h = (seed ^ hashString(id)) >>> 0;
+  h ^= h >>> 16;
+  h = Math.imul(h, 0x7feb352d);
+  h ^= h >>> 15;
+  h = Math.imul(h, 0x846ca68b);
+  h ^= h >>> 16;
+  return (h >>> 0) / 4294967296;
+}
+
+function dedupeMusicRecommendations(songs: MusicSong[]) {
+  const seen = new Set<string>();
+  return songs.filter((song) => {
+    const key = musicRecommendKey(song) || musicSongKey(song);
+    if (seen.has(key)) return false;
+    seen.add(key);
+    return true;
+  });
+}
+
+function rankMusicRecommendations({
+  songs,
+  favorites,
+  history,
+  seed,
+}: {
+  songs: MusicSong[];
+  favorites: MusicSong[];
+  history: MusicSong[];
+  seed: number;
+}) {
+  const favoriteKeys = new Set(favorites.map(musicRecommendKey));
+  const historyKeys = new Set(history.slice(0, 80).map(musicRecommendKey));
+  return dedupeMusicRecommendations(songs)
+    .map((song, index) => {
+      const key = musicRecommendKey(song) || musicSongKey(song);
+      const favoriteBoost = favoriteKeys.has(key) ? 0.36 : 0;
+      const historyBoost = historyKeys.has(key) ? 0.22 : 0;
+      const coverBoost = song.cover ? 0.08 : 0;
+      const freshness = Math.max(0, 0.12 - index * 0.002);
+      const random = seededScore(seed, `${key}:${song.sourceId}`) * 0.22;
+      return {
+        song,
+        score: favoriteBoost + historyBoost + coverBoost + freshness + random,
+      };
+    })
+    .sort((a, b) => b.score - a.score)
+    .map((item) => item.song)
+    .slice(0, MUSIC_FEED_LIMIT);
+}
+
+function useMusicHomeFeed(enabled: boolean) {
+  const hydrate = useMusicStore((s) => s.hydrate);
+  const hydrated = useMusicStore((s) => s.hydrated);
+  const sources = useMusicStore((s) => s.sources);
+  const favorites = useMusicStore((s) => s.favorites);
+  const history = useMusicStore((s) => s.history);
+  const queue = useMusicStore((s) => s.queue);
+  const [items, setItems] = useState<MusicSong[]>(() => musicFeedCache.items);
+  const [activeIndex, setActiveIndex] = useState(() => musicFeedCache.activeIndex);
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState<string | undefined>();
+  const inFlight = useRef(false);
+  const seedRef = useRef(musicFeedCache.seed || Date.now());
+  const restoredCacheRef = useRef(musicFeedCache.items.length > 0);
+
+  useEffect(() => {
+    hydrate();
+  }, [hydrate]);
+
+  const enabledSources = useMemo(
+    () => sources.filter((source) => source.enabled),
+    [sources]
+  );
+  const discoverySource = useMemo(
+    () => enabledSources.find((source) => source.kind === "lx-server"),
+    [enabledSources]
+  );
+  const signature = useMemo(
+    () =>
+      [
+        enabledSources.map((source) => `${source.id}:${source.enabled ? 1 : 0}:${source.updatedAt ?? 0}`).join("|"),
+        favorites.slice(0, 20).map(musicRecommendKey).join("|"),
+        history.slice(0, 20).map(musicRecommendKey).join("|"),
+      ].join("\n"),
+    [enabledSources, favorites, history]
+  );
+
+  const load = useCallback(
+    async (replace = true) => {
+      if (!enabled || inFlight.current) return;
+      if (enabledSources.length === 0) {
+        setItems([]);
+        setError(undefined);
+        return;
+      }
+      inFlight.current = true;
+      setLoading(true);
+      setError(undefined);
+      if (replace) {
+        seedRef.current = Date.now();
+        setActiveIndex(0);
+      }
+      try {
+        const collected: MusicSong[] = [
+          ...queue,
+          ...favorites,
+          ...history,
+        ];
+
+        if (discoverySource) {
+          const [boardsResult, hotResult] = await Promise.allSettled([
+            getMusicBoards(discoverySource, "kw"),
+            getMusicHotSearch(discoverySource, "mg"),
+          ]);
+          if (boardsResult.status === "fulfilled") {
+            const boards = boardsResult.value.list.slice(0, 3);
+            const boardSongs = await Promise.allSettled(
+              boards.map((board) =>
+                getMusicBoardSongs(discoverySource, board.source, board.id, 1)
+              )
+            );
+            boardSongs.forEach((result) => {
+              if (result.status === "fulfilled") collected.push(...result.value.list);
+            });
+          }
+          if (hotResult.status === "fulfilled") {
+            const hotKeywords = hotResult.value
+              .map((item) => item.keyword)
+              .filter(Boolean)
+              .slice(0, 4);
+            const hotSongs = await Promise.allSettled(
+              hotKeywords.map((keyword) =>
+                searchMusicSource(discoverySource, keyword, 1, 8)
+              )
+            );
+            hotSongs.forEach((result) => {
+              if (result.status === "fulfilled") collected.push(...result.value.list);
+            });
+          }
+        }
+
+        const fallbackSearches = await Promise.allSettled(
+          enabledSources.slice(0, 4).map((source, index) =>
+            searchMusicSource(
+              source,
+              MUSIC_FEED_KEYWORDS[index % MUSIC_FEED_KEYWORDS.length],
+              1,
+              8
+            )
+          )
+        );
+        fallbackSearches.forEach((result) => {
+          if (result.status === "fulfilled") collected.push(...result.value.list);
+        });
+
+        const ranked = rankMusicRecommendations({
+          songs: collected,
+          favorites,
+          history,
+          seed: seedRef.current,
+        });
+        setItems(ranked);
+        setError(ranked.length === 0 ? "没有拿到可推荐的音乐内容" : undefined);
+      } catch (e) {
+        setError((e as Error).message ?? String(e));
+        if (replace) setItems([]);
+      } finally {
+        setLoading(false);
+        inFlight.current = false;
+      }
+    },
+    [discoverySource, enabled, enabledSources, favorites, history, queue]
+  );
+
+  useEffect(() => {
+    if (!enabled || !hydrated) return;
+    if (
+      restoredCacheRef.current &&
+      musicFeedCache.items.length > 0 &&
+      musicFeedCache.signature === signature
+    ) {
+      restoredCacheRef.current = false;
+      return;
+    }
+    restoredCacheRef.current = false;
+    void load(true);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [enabled, hydrated, signature]);
+
+  useEffect(() => {
+    musicFeedCache = {
+      items,
+      activeIndex: Math.max(0, Math.min(items.length - 1, activeIndex)),
+      signature,
+      seed: seedRef.current,
+    };
+  }, [activeIndex, items, signature]);
+
+  return {
+    items,
+    loading,
+    error,
+    activeIndex,
+    setActiveIndex,
+    reload: () => load(true),
+    enabledSources,
+  };
+}
 
 export default function Home({ feedPaused = false }: HomeProps) {
   const { isDesktop } = useViewport();
@@ -72,7 +333,12 @@ export default function Home({ feedPaused = false }: HomeProps) {
       feedPaused={feedPaused}
     />
   ) : mode === "music" ? (
-    <MusicHomePlaceholder mode={mode} setMode={setMode} isDesktop={isDesktop} />
+    <MusicHomeFeed
+      mode={mode}
+      setMode={setMode}
+      isDesktop={isDesktop}
+      feedPaused={feedPaused}
+    />
   ) : (
     <VideoHomeFeed mode={mode} setMode={setMode} isDesktop={isDesktop} />
   );
@@ -452,201 +718,595 @@ function LiveHomeFeed({
   );
 }
 
-function MusicHomePlaceholder({
+function MusicHomeFeed({
   mode,
   setMode,
   isDesktop,
+  feedPaused,
 }: {
   mode: FeedMode;
   setMode: (mode: FeedMode) => void;
   isDesktop: boolean;
+  feedPaused: boolean;
 }) {
+  const navigate = useNavigate();
+  const audioRef = useRef<HTMLAudioElement>(null);
+  const scrollRef = useRef<HTMLDivElement>(null);
+  const itemRefs = useRef<Array<HTMLElement | null>>([]);
+  const playRequestRef = useRef(0);
+  const userStartedRef = useRef(false);
+  const lastAutoPlayKeyRef = useRef("");
+  const {
+    items,
+    loading,
+    error,
+    activeIndex,
+    setActiveIndex,
+    reload,
+    enabledSources,
+  } = useMusicHomeFeed(true);
+  const sources = useMusicStore((s) => s.sources);
+  const currentSong = useMusicStore((s) => s.currentSong);
+  const setCurrentSong = useMusicStore((s) => s.setCurrentSong);
+  const setQueue = useMusicStore((s) => s.setQueue);
+  const appendToQueue = useMusicStore((s) => s.appendToQueue);
+  const isFavorite = useMusicStore((s) => s.isFavorite);
+  const toggleFavorite = useMusicStore((s) => s.toggleFavorite);
+  const noteHistory = useMusicStore((s) => s.noteHistory);
+  const quality = useMusicStore((s) => s.quality);
+  const proxyEnabled = useMusicStore((s) => s.proxyEnabled);
+  const volume = useMusicStore((s) => s.volume);
+  const [audioUrl, setAudioUrl] = useState("");
+  const [isPlaying, setIsPlaying] = useState(false);
+  const [resolving, setResolving] = useState(false);
+  const [currentTime, setCurrentTime] = useState(0);
+  const [duration, setDuration] = useState(0);
+  const [toast, setToast] = useState<string | undefined>();
+  const activeSong = items[Math.max(0, Math.min(activeIndex, items.length - 1))];
+
+  useEffect(() => {
+    if (audioRef.current) audioRef.current.volume = volume;
+  }, [volume]);
+
+  useEffect(() => {
+    if (feedPaused) audioRef.current?.pause();
+  }, [feedPaused]);
+
+  const showToast = (message: string) => {
+    setToast(message);
+    window.setTimeout(() => setToast(undefined), 1300);
+  };
+
+  const scrollToIndex = (index: number) => {
+    const target = itemRefs.current[index];
+    if (target) {
+      target.scrollIntoView({ behavior: "smooth", block: "start" });
+    }
+    setActiveIndex(index);
+  };
+
+  const playSong = useCallback(
+    async (song: MusicSong, userInitiated = true) => {
+      if (userInitiated) userStartedRef.current = true;
+      const candidates = dedupeMusicRecommendations([
+        song,
+        ...items.filter((item) => musicRecommendKey(item) === musicRecommendKey(song)),
+      ]);
+      const requestId = ++playRequestRef.current;
+      setResolving(true);
+      let lastError: unknown;
+
+      for (const candidate of candidates) {
+        const source = sources.find(
+          (item) => item.enabled && item.id === candidate.sourceId
+        );
+        if (!source) continue;
+        try {
+          setCurrentSong(candidate);
+          setQueue(items.length > 0 ? items : [candidate], candidate);
+          const play = await resolveMusicSource(source, candidate, quality, {
+            proxy: proxyEnabled,
+          });
+          if (requestId !== playRequestRef.current) return;
+          const audio = audioRef.current;
+          if (audio) {
+            audio.autoplay = userStartedRef.current;
+            audio.src = play.url;
+            audio.load();
+            const loadedDuration = await waitForUsableMusicAudio(
+              audio,
+              candidate.durationSec
+            );
+            if (requestId !== playRequestRef.current) return;
+            if (loadedDuration) setDuration(loadedDuration);
+          }
+          setAudioUrl(play.url);
+          setCurrentTime(0);
+          noteHistory(candidate, 0, candidate.durationSec ?? 0);
+          if (audio) {
+            if (userStartedRef.current && !feedPaused) {
+              await audio
+                .play()
+                .then(() => setIsPlaying(true))
+                .catch(() => setIsPlaying(false));
+            }
+          }
+          setResolving(false);
+          return;
+        } catch (playError) {
+          lastError = playError;
+          if (audioRef.current) {
+            audioRef.current.pause();
+            audioRef.current.removeAttribute("src");
+            audioRef.current.load();
+          }
+          if (requestId !== playRequestRef.current) return;
+        }
+      }
+
+      if (requestId === playRequestRef.current) {
+        setResolving(false);
+        const message =
+          lastError instanceof Error ? lastError.message : "音乐解析失败";
+        showToast(message);
+      }
+    },
+    [
+      feedPaused,
+      items,
+      noteHistory,
+      proxyEnabled,
+      quality,
+      setCurrentSong,
+      setQueue,
+      sources,
+    ]
+  );
+
+  useEffect(() => {
+    if (!activeSong || !userStartedRef.current || feedPaused) return;
+    const key = musicSongKey(activeSong);
+    if (lastAutoPlayKeyRef.current === key) return;
+    lastAutoPlayKeyRef.current = key;
+    void playSong(activeSong, false);
+  }, [activeSong, feedPaused, playSong]);
+
+  const handleScroll = () => {
+    const scroller = scrollRef.current;
+    if (!scroller) return;
+    const height = scroller.clientHeight || 1;
+    const nextIndex = Math.max(
+      0,
+      Math.min(items.length - 1, Math.round(scroller.scrollTop / height))
+    );
+    if (nextIndex !== activeIndex) setActiveIndex(nextIndex);
+  };
+
+  const playNext = () => {
+    if (items.length === 0) return;
+    const nextIndex = (activeIndex + 1) % items.length;
+    scrollToIndex(nextIndex);
+    const next = items[nextIndex];
+    if (next) void playSong(next, false);
+  };
+
+  const handlePrimaryPlay = () => {
+    if (!activeSong) return;
+    const audio = audioRef.current;
+    if (
+      currentSong &&
+      musicSongKey(currentSong) === musicSongKey(activeSong) &&
+      audioUrl
+    ) {
+      if (audio?.paused) {
+        userStartedRef.current = true;
+        void audio.play().then(() => setIsPlaying(true)).catch(() => setIsPlaying(false));
+      } else {
+        audio?.pause();
+      }
+      return;
+    }
+    void playSong(activeSong, true);
+  };
+
+  const handleFavorite = (song: MusicSong) => {
+    toggleFavorite(song);
+    showToast(isFavorite(song) ? "已取消收藏" : "已收藏");
+  };
+
+  const handleQueue = (song: MusicSong) => {
+    appendToQueue(song);
+    showToast("已加入队列");
+  };
+
+  const handleShare = async (song: MusicSong) => {
+    const text = `${song.title} - ${song.artist}`;
+    if (navigator.share) {
+      try {
+        await navigator.share({ title: song.title, text });
+        return;
+      } catch {
+        return;
+      }
+    }
+    try {
+      await navigator.clipboard.writeText(text);
+      showToast("已复制歌曲信息");
+    } catch {
+      showToast(text);
+    }
+  };
+
+  const topBar = (
+    <HomeTopBar
+      mode={mode}
+      setMode={setMode}
+      onRefresh={reload}
+      variant={isDesktop ? "desktop" : "immersive"}
+    />
+  );
+
+  if (loading && items.length === 0) {
+    return (
+      <HomeShell isDesktop={isDesktop}>
+        {topBar}
+        <FeedLoading label="TUNING MUSIC..." />
+      </HomeShell>
+    );
+  }
+
+  if (enabledSources.length === 0) {
+    return (
+      <HomeShell isDesktop={isDesktop}>
+        {topBar}
+        <FeedEmptyState
+          icon={<IconAlbum size={64} className="text-cream-faint mb-4" />}
+          label="NO MUSIC SOURCE"
+          title="还没有可用于推荐的音乐源"
+          primaryLabel="刷新"
+          onPrimary={reload}
+          secondaryTo="/settings/music-hub"
+          secondaryLabel="添加音乐源"
+        />
+      </HomeShell>
+    );
+  }
+
+  if (error && items.length === 0) {
+    return (
+      <HomeShell isDesktop={isDesktop}>
+        {topBar}
+        <FeedError
+          title="MUSIC SIGNAL LOST"
+          message={error}
+          actionLabel="刷新音乐"
+          onRetry={reload}
+        />
+      </HomeShell>
+    );
+  }
+
   return (
-    <HomeShell
-      isDesktop={isDesktop}
-      contentClassName="text-cream"
-    >
-      <HomeTopBar mode={mode} setMode={setMode} variant={isDesktop ? "desktop" : "immersive"} />
-      <div className="absolute inset-0 overflow-hidden">
-        <div
-          className="absolute inset-0"
-          style={{
-            background:
-              "radial-gradient(circle at 28% 22%, rgba(79,195,247,0.24), transparent 32%), radial-gradient(circle at 76% 18%, rgba(255,107,53,0.22), transparent 34%), radial-gradient(circle at 50% 74%, rgba(124,255,178,0.1), transparent 42%), linear-gradient(180deg, #070809 0%, #0E0F11 72%, #050505 100%)",
-          }}
-        />
-        <div
-          className="absolute inset-0 opacity-50"
-          style={{
-            backgroundImage:
-              "repeating-radial-gradient(circle at 52% 46%, rgba(242,232,213,0.06) 0 1px, transparent 1px 9px)",
-          }}
-        />
-        <div className="absolute inset-0 bg-black/35" />
+    <HomeShell isDesktop={isDesktop} contentClassName="text-cream">
+      {topBar}
+      <audio
+        ref={audioRef}
+        src={audioUrl}
+        preload="metadata"
+        onLoadedMetadata={(event) => setDuration(event.currentTarget.duration || 0)}
+        onDurationChange={(event) => setDuration(event.currentTarget.duration || 0)}
+        onTimeUpdate={(event) => {
+          const nextTime = event.currentTarget.currentTime || 0;
+          const nextDuration = event.currentTarget.duration || duration || 0;
+          setCurrentTime(nextTime);
+          if (currentSong) noteHistory(currentSong, nextTime, nextDuration);
+        }}
+        onPlaying={() => setIsPlaying(true)}
+        onPlay={() => setIsPlaying(true)}
+        onPause={() => setIsPlaying(false)}
+        onEnded={playNext}
+      />
+
+      <div
+        ref={scrollRef}
+        className="absolute inset-0 overflow-y-auto snap-y snap-mandatory scrollbar-hide"
+        onScroll={handleScroll}
+      >
+        {items.map((song, index) => {
+          const cover = song.cover ? wrapImage(song.cover) : "";
+          const active =
+            !!currentSong && musicSongKey(currentSong) === musicSongKey(song);
+          const playing = active && isPlaying;
+          const progress =
+            active && duration > 0
+              ? Math.min(100, Math.max(0, (currentTime / duration) * 100))
+              : 0;
+          return (
+            <section
+              key={`${musicSongKey(song)}:${index}`}
+              ref={(node) => {
+                itemRefs.current[index] = node;
+              }}
+              className="relative h-full w-full snap-start overflow-hidden"
+            >
+              <div className="absolute inset-0 bg-[#050608]">
+                {cover ? (
+                  <img
+                    src={cover}
+                    alt=""
+                    className="h-full w-full object-cover opacity-45"
+                  />
+                ) : (
+                  <div className="h-full w-full bg-[linear-gradient(135deg,rgba(79,195,247,0.18),rgba(255,107,53,0.12))]" />
+                )}
+                <div className="absolute inset-0 backdrop-blur-2xl scale-110" />
+                <div
+                  className="absolute inset-0"
+                  style={{
+                    background:
+                      "linear-gradient(180deg, rgba(0,0,0,0.50) 0%, rgba(0,0,0,0.18) 35%, rgba(0,0,0,0.78) 100%)",
+                  }}
+                />
+              </div>
+
+              <main className="absolute inset-0 flex items-center justify-center px-5">
+                <button
+                  type="button"
+                  onClick={handlePrimaryPlay}
+                  className="relative z-10 grid place-items-center tap"
+                  aria-label={playing ? "暂停" : "播放"}
+                >
+                  <div
+                    className={`relative grid place-items-center overflow-hidden rounded-full ${
+                      playing ? "music-vinyl-spin" : ""
+                    }`}
+                    style={{
+                      width: "min(70vw, 340px)",
+                      height: "min(70vw, 340px)",
+                      background: "#07080a",
+                      border: "14px solid rgba(5,6,8,0.92)",
+                      boxShadow: "0 26px 80px -36px rgba(0,0,0,0.96)",
+                    }}
+                  >
+                    {cover ? (
+                      <img src={cover} alt="" className="h-full w-full object-cover" />
+                    ) : (
+                      <IconAlbum size={68} className="text-cream-faint" />
+                    )}
+                    <span className="absolute inset-[42%] rounded-full bg-ink border border-cream-line" />
+                  </div>
+                  <span
+                    className="absolute z-20 grid h-16 w-16 place-items-center rounded-full backdrop-blur-md"
+                    style={{
+                      background: "rgba(14,15,17,0.58)",
+                      border: "1px solid var(--cream-line)",
+                    }}
+                  >
+                    {resolving && active ? (
+                      <IconRefresh size={22} className="animate-spin" />
+                    ) : playing ? (
+                      <IconPause size={24} />
+                    ) : (
+                      <IconPlay size={24} />
+                    )}
+                  </span>
+                </button>
+
+                <MusicFeedActionRail
+                  song={song}
+                  favorite={isFavorite(song)}
+                  desktop={isDesktop}
+                  onFavorite={() => handleFavorite(song)}
+                  onQueue={() => handleQueue(song)}
+                  onShare={() => void handleShare(song)}
+                  onDetail={() => navigate("/music")}
+                />
+
+                <MusicFeedCaption
+                  song={song}
+                  index={index}
+                  desktop={isDesktop}
+                  playing={playing}
+                />
+
+                <div
+                  className="absolute left-0 right-0 z-20 px-5 sm:px-8"
+                  style={{
+                    bottom: isDesktop
+                      ? 44
+                      : "calc(var(--bottom-tab-h, 56px) + env(safe-area-inset-bottom) + 18px)",
+                  }}
+                >
+                  <div className="h-8 mb-2 flex items-end justify-center gap-1 overflow-hidden">
+                    {MUSIC_VISUALIZER_HEIGHTS.map((height, barIndex) => (
+                      <span
+                        key={`${height}-${barIndex}`}
+                        className="music-visualizer-bar"
+                        style={{
+                          height: `${playing ? height : Math.max(8, height * 0.36)}%`,
+                          animationDelay: `${barIndex * 48}ms`,
+                          animationPlayState: playing ? "running" : "paused",
+                        }}
+                      />
+                    ))}
+                  </div>
+                  <div className="relative h-1 w-full overflow-hidden rounded-full bg-white/20">
+                    <div
+                      className="absolute left-0 top-0 h-full rounded-full"
+                      style={{
+                        width: `${progress}%`,
+                        background: "var(--vhs)",
+                        boxShadow: "0 0 12px rgba(79,195,247,0.9)",
+                      }}
+                    />
+                  </div>
+                  <div className="mt-1 flex justify-between font-mono text-[10px] text-cream-faint">
+                    <span>{active ? formatDuration(currentTime) : "0:00"}</span>
+                    <span>{formatDuration(song.durationSec || duration)}</span>
+                  </div>
+                </div>
+              </main>
+            </section>
+          );
+        })}
       </div>
 
-      <main className="absolute inset-0 flex items-center justify-center">
-        <div className="relative z-10 flex flex-col items-center">
-          <div className="relative w-64 h-64 sm:w-80 sm:h-80">
-            <div
-              className="absolute -inset-6 rounded-full blur-2xl opacity-60 music-pulse"
-              style={{ background: "rgba(79,195,247,0.28)" }}
-            />
-            <div
-              className="absolute inset-0 rounded-full music-vinyl-spin"
-              style={{
-                background:
-                  "radial-gradient(circle, #08090b 0 18%, rgba(242,232,213,0.11) 19% 20%, #101114 21% 44%, rgba(79,195,247,0.18) 45% 46%, #090a0c 47% 68%, rgba(255,107,53,0.18) 69% 70%, #050506 71%)",
-                border: "16px solid #090909",
-                boxShadow: "0 0 70px rgba(79,195,247,0.28)",
-              }}
-            >
-              <div
-                className="absolute inset-0 rounded-full opacity-45"
-                style={{
-                  backgroundImage:
-                    "repeating-radial-gradient(circle, transparent 0 4px, rgba(242,232,213,0.05) 5px 6px)",
-                }}
-              />
-              <div
-                className="absolute inset-[27%] rounded-full grid place-items-center overflow-hidden"
-                style={{
-                  background:
-                    "linear-gradient(135deg, rgba(79,195,247,0.92), rgba(255,107,53,0.76))",
-                  border: "4px solid #050506",
-                }}
-              >
-                <IconAlbum size={54} className="text-ink" />
-              </div>
-            </div>
-            <button
-              type="button"
-              className="absolute inset-0 m-auto w-16 h-16 rounded-full grid place-items-center tap"
-              style={{
-                background: "rgba(14,15,17,0.58)",
-                color: "var(--cream)",
-                border: "1px solid var(--cream-line)",
-                backdropFilter: "blur(14px)",
-              }}
-              aria-label="播放音乐"
-            >
-              <IconPlay size={24} />
-            </button>
-          </div>
-        </div>
-
+      {toast && (
         <div
-          className="absolute right-4 sm:right-6 flex flex-col items-center gap-5 z-20"
+          className="absolute left-1/2 top-1/2 z-40 px-5 py-2.5 backdrop-blur-md pointer-events-none animate-toast-in font-mono text-xs tracking-wider"
           style={{
-            bottom: isDesktop
-              ? 118
-              : "calc(var(--bottom-tab-h, 56px) + env(safe-area-inset-bottom) + 88px)",
+            background: "rgba(14, 15, 17, 0.86)",
+            border: "1px solid var(--cream-line)",
+            borderRadius: 10,
+            color: "var(--cream)",
           }}
         >
-          <MusicSideAction icon={<IconHeart size={21} />} label="1.2W" tone="ember" />
-          <MusicSideAction icon={<IconQueue size={21} />} label="歌单" tone="vhs" />
-          <MusicSideAction icon={<IconShare size={20} />} label="分享" />
-          <MusicSideAction icon={<IconMore size={20} />} label="更多" />
+          <span className="rec-dot" style={{ marginRight: 8 }} />
+          {toast}
         </div>
-
-        <div
-          className="absolute left-5 sm:left-8 z-20 max-w-[70%]"
-          style={{
-            bottom: isDesktop
-              ? 118
-              : "calc(var(--bottom-tab-h, 56px) + env(safe-area-inset-bottom) + 88px)",
-          }}
-        >
-          <h1
-            className="font-display text-2xl sm:text-3xl font-extrabold leading-tight text-shadow"
-            style={{ color: "var(--vhs)", textShadow: "0 0 14px rgba(79,195,247,0.72)" }}
-          >
-            霓虹夜行者
-          </h1>
-          <div className="mt-2 flex items-center gap-2">
-            <span
-              className="px-2 py-0.5 rounded text-[10px] font-mono font-bold"
-              style={{ background: "var(--ember)", color: "var(--ink)" }}
-            >
-              STATIC
-            </span>
-            <p className="text-sm text-cream text-shadow">@数字幻象 Digital Mirage</p>
-          </div>
-          <div className="mt-2 overflow-hidden whitespace-nowrap opacity-75">
-            <p className="music-marquee font-mono text-[10px] tracking-[0.12em] text-cream-dim">
-              正在播放：霓虹夜行者 - 数字幻象 - 专辑：赛博夜航 - 音乐推荐详情播放占位
-            </p>
-          </div>
-        </div>
-
-        <div
-          className="absolute left-0 right-0 z-20 px-5 sm:px-8"
-          style={{
-            bottom: isDesktop
-              ? 44
-              : "calc(var(--bottom-tab-h, 56px) + env(safe-area-inset-bottom) + 18px)",
-          }}
-        >
-          <div className="h-8 mb-2 flex items-end justify-center gap-1 overflow-hidden">
-            {MUSIC_VISUALIZER_HEIGHTS.map((height, index) => (
-              <span
-                key={`${height}-${index}`}
-                className="music-visualizer-bar"
-                style={{
-                  height: `${height}%`,
-                  animationDelay: `${index * 48}ms`,
-                }}
-              />
-            ))}
-          </div>
-          <div className="relative w-full h-1 rounded-full bg-white/20 overflow-hidden">
-            <div
-              className="absolute left-0 top-0 h-full rounded-full"
-              style={{
-                width: "33%",
-                background: "var(--vhs)",
-                boxShadow: "0 0 12px rgba(79,195,247,0.9)",
-              }}
-            />
-          </div>
-          <div className="mt-1 flex justify-between font-mono text-[10px] text-cream-faint">
-            <span>01:12</span>
-            <span>03:45</span>
-          </div>
-        </div>
-      </main>
+      )}
     </HomeShell>
   );
 }
 
-function MusicSideAction({
+function MusicFeedCaption({
+  song,
+  index,
+  desktop,
+  playing,
+}: {
+  song: MusicSong;
+  index: number;
+  desktop: boolean;
+  playing: boolean;
+}) {
+  return (
+    <div
+      className="absolute left-5 right-24 z-20 max-w-2xl"
+      style={{
+        bottom: desktop
+          ? 118
+          : "calc(var(--bottom-tab-h, 56px) + env(safe-area-inset-bottom) + 88px)",
+        paddingLeft: desktop ? 0 : "env(safe-area-inset-left)",
+      }}
+    >
+      <h1
+        className="line-clamp-2 font-display text-2xl sm:text-3xl font-extrabold leading-tight text-shadow"
+        style={{
+          color: "var(--vhs)",
+          textShadow: "0 0 14px rgba(79,195,247,0.72)",
+        }}
+      >
+        {song.title}
+      </h1>
+      <div className="mt-2 flex flex-wrap items-center gap-2">
+        <span
+          className="px-2 py-0.5 rounded text-[10px] font-mono font-bold"
+          style={{ background: "var(--ember)", color: "var(--ink)" }}
+        >
+          {playing ? "PLAYING" : `REC ${String(index + 1).padStart(2, "0")}`}
+        </span>
+        <p className="text-sm text-cream text-shadow">@{song.artist || "未知歌手"}</p>
+      </div>
+      <p className="mt-2 line-clamp-2 text-xs text-cream-dim text-shadow">
+        {song.album || song.sourceName} · {song.sourceName} · {song.durationText || formatDuration(song.durationSec)}
+      </p>
+      <div className="mt-2 overflow-hidden whitespace-nowrap opacity-75">
+        <p className="music-marquee font-mono text-[10px] tracking-[0.12em] text-cream-dim">
+          正在推荐：{song.title} - {song.artist} - 来源：{song.sourceName}
+        </p>
+      </div>
+    </div>
+  );
+}
+
+function MusicFeedActionRail({
+  song,
+  favorite,
+  desktop,
+  onFavorite,
+  onQueue,
+  onShare,
+  onDetail,
+}: {
+  song: MusicSong;
+  favorite: boolean;
+  desktop: boolean;
+  onFavorite: () => void;
+  onQueue: () => void;
+  onShare: () => void;
+  onDetail: () => void;
+}) {
+  return (
+    <div
+      className="absolute right-4 sm:right-6 z-30 flex flex-col items-center gap-5"
+      style={{
+        bottom: desktop
+          ? 118
+          : "calc(var(--bottom-tab-h, 56px) + env(safe-area-inset-bottom) + 88px)",
+        paddingRight: desktop ? 0 : "env(safe-area-inset-right)",
+      }}
+    >
+      <MusicRailButton
+        icon={favorite ? <IconHeartFill size={21} /> : <IconHeart size={21} />}
+        label={favorite ? "已收藏" : "收藏"}
+        active={favorite}
+        onClick={onFavorite}
+      />
+      <MusicRailButton
+        icon={<IconQueue size={21} />}
+        label="队列"
+        tone="vhs"
+        onClick={onQueue}
+      />
+      <MusicRailButton icon={<IconShare size={20} />} label="分享" onClick={onShare} />
+      <MusicRailButton icon={<IconMore size={20} />} label="详情" onClick={onDetail} />
+      <span className="sr-only">{song.title}</span>
+    </div>
+  );
+}
+
+function MusicRailButton({
   icon,
   label,
   tone,
+  active,
+  onClick,
 }: {
   icon: React.ReactNode;
   label: string;
   tone?: "ember" | "vhs";
+  active?: boolean;
+  onClick: () => void;
 }) {
   const color =
-    tone === "ember" ? "var(--ember)" : tone === "vhs" ? "var(--vhs)" : "var(--cream)";
+    active || tone === "ember"
+      ? "var(--ember)"
+      : tone === "vhs"
+        ? "var(--vhs)"
+        : "var(--cream)";
   return (
-    <div className="flex flex-col items-center gap-1 text-cream">
-      <button
-        type="button"
-        className="w-11 h-11 sm:w-12 sm:h-12 rounded-full grid place-items-center tap"
+    <button
+      type="button"
+      onClick={(event) => {
+        event.stopPropagation();
+        onClick();
+      }}
+      className="flex flex-col items-center gap-1 text-cream tap"
+    >
+      <span
+        className="w-11 h-11 sm:w-12 sm:h-12 rounded-full grid place-items-center"
         style={{
           background: "rgba(242,232,213,0.08)",
           border: "1px solid var(--cream-line)",
           color,
           backdropFilter: "blur(16px)",
         }}
-        aria-label={label}
       >
         {icon}
-      </button>
+      </span>
       <span className="font-mono text-[10px] text-cream-dim text-shadow">{label}</span>
-    </div>
+    </button>
   );
 }
 

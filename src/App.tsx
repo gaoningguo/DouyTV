@@ -11,6 +11,7 @@ import Play from "@/pages/Play";
 import Live from "@/pages/Live";
 import NetworkRoom from "@/pages/live/NetworkRoom";
 import Local from "@/pages/Local";
+import Music from "@/pages/Music";
 import Settings from "@/pages/Settings";
 import SettingsLocalScan from "@/pages/settings/LocalScan";
 import SettingsProxy from "@/pages/settings/Proxy";
@@ -19,6 +20,7 @@ import SettingsSync from "@/pages/settings/Sync";
 import SettingsUpdates from "@/pages/settings/Updates";
 import SettingsVideoHub from "@/pages/settings/VideoSourcesHub";
 import SettingsLiveHub from "@/pages/settings/LiveSourcesHub";
+import SettingsMusicHub from "@/pages/settings/MusicSourcesHub";
 import SettingsStripchatKeys, {
   loadKeysFromStorage as loadStripchatKeys,
   syncKeysToRust as syncStripchatKeys,
@@ -35,10 +37,11 @@ import { useProxyStore } from "@/stores/proxy";
 import { useNetliveProxyStore } from "@/stores/netliveProxy";
 import { useExternalPluginStore } from "@/stores/netliveExternalPlugins";
 import { usePluginSubscriptionStore } from "@/stores/netlivePluginSubscription";
+import { useMusicStore } from "@/stores/music";
 import { startAutoSyncTimer, useSyncStore } from "@/stores/sync";
 import { useViewport } from "@/hooks/useViewport";
 
-const HIDE_NAV_PREFIXES = ["/play", "/detail", "/live/room"];
+const HIDE_NAV_PREFIXES = ["/play", "/detail", "/live/room", "/music/player"];
 const ONBOARDED_KEY = "douytv:onboarded";
 
 interface RouteState {
@@ -99,6 +102,7 @@ export default function App() {
     useExternalPluginStore.getState().hydrate();
     usePluginSubscriptionStore.getState().hydrate();
     usePluginSubscriptionStore.getState().bootRefresh();
+    useMusicStore.getState().hydrate();
     useProxyStore.getState().hydrate();
     useNetliveProxyStore.getState().hydrate();
     useSyncStore.getState().hydrate();
@@ -157,6 +161,7 @@ export default function App() {
           <Route path="/settings" element={<Settings />} />
           <Route path="/settings/video-hub" element={<SettingsVideoHub />} />
           <Route path="/settings/live-hub" element={<SettingsLiveHub />} />
+          <Route path="/settings/music-hub" element={<SettingsMusicHub />} />
           <Route
             path="/settings/stripchat-keys"
             element={<SettingsStripchatKeys />}
@@ -172,6 +177,7 @@ export default function App() {
           <Route path="/duanju" element={<Duanju />} />
           <Route path="/browse/:key" element={<Browse />} />
           <Route path="/live" element={<Live />} />
+          <Route path="/music/*" element={<Music />} />
           <Route
             path="/live/room/:platform/:roomId"
             element={<NetworkRoom />}

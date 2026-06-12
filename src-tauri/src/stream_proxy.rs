@@ -21,6 +21,7 @@ use hyper::{Method, Request, Response, StatusCode};
 use hyper_util::rt::TokioIo;
 use std::collections::HashMap;
 use std::convert::Infallible;
+use std::io::Read;
 use std::sync::OnceLock;
 use std::time::Duration;
 use tokio::net::TcpListener;
@@ -118,6 +119,129 @@ fn boxed_full(b: Bytes) -> BoxedBody {
     full.map_err(|never| match never {}).boxed()
 }
 
+fn normalize_music_quality(quality: Option<&str>) -> String {
+    match quality.unwrap_or("320k") {
+        "128k" => "128k".to_string(),
+        "192k" => "192k".to_string(),
+        "320k" => "320k".to_string(),
+        "flac" | "flac24bit" => "flac".to_string(),
+        _ => "320k".to_string(),
+    }
+}
+
+fn insert_music_field(
+    obj: &mut serde_json::Map<String, serde_json::Value>,
+    key: &str,
+    value: Option<&String>,
+) {
+    if let Some(v) = value {
+        if !v.is_empty() {
+            obj.insert(key.to_string(), serde_json::Value::String(v.clone()));
+        }
+    }
+}
+
+fn resolve_music_stream_url(
+    params: &HashMap<String, String>,
+    proxy: Option<&str>,
+) -> Result<String, String> {
+    let base = params
+        .get("music_base")
+        .map(|s| s.trim().trim_end_matches('/').to_string())
+        .filter(|s| !s.is_empty())
+        .ok_or_else(|| "missing music_base".to_string())?;
+    let endpoint = format!("{base}/api/music/url");
+    let song_id = params
+        .get("song_id")
+        .or_else(|| params.get("id"))
+        .cloned()
+        .unwrap_or_default();
+    let source = params
+        .get("source")
+        .cloned()
+        .unwrap_or_else(|| "kw".to_string());
+    let songmid = params
+        .get("songmid")
+        .cloned()
+        .or_else(|| song_id.split_once('_').map(|(_, tail)| tail.to_string()))
+        .unwrap_or_else(|| song_id.clone());
+    let name = params.get("name").cloned().unwrap_or_default();
+    let artist = params.get("artist").cloned().unwrap_or_default();
+
+    if song_id.is_empty() || name.is_empty() || artist.is_empty() {
+        return Err("music song info incomplete".to_string());
+    }
+
+    let mut song_info = serde_json::Map::new();
+    song_info.insert("id".to_string(), serde_json::Value::String(song_id));
+    song_info.insert("name".to_string(), serde_json::Value::String(name));
+    song_info.insert("singer".to_string(), serde_json::Value::String(artist.clone()));
+    song_info.insert("artist".to_string(), serde_json::Value::String(artist));
+    song_info.insert("source".to_string(), serde_json::Value::String(source));
+    song_info.insert("songmid".to_string(), serde_json::Value::String(songmid.clone()));
+    song_info.insert("songId".to_string(), serde_json::Value::String(songmid));
+    insert_music_field(&mut song_info, "hash", params.get("hash"));
+    insert_music_field(&mut song_info, "interval", params.get("durationText"));
+    insert_music_field(&mut song_info, "copyrightId", params.get("copyrightId"));
+    insert_music_field(&mut song_info, "albumId", params.get("albumId"));
+    insert_music_field(&mut song_info, "lrcUrl", params.get("lrcUrl"));
+    insert_music_field(&mut song_info, "mrcUrl", params.get("mrcUrl"));
+    insert_music_field(&mut song_info, "trcUrl", params.get("trcUrl"));
+
+    let body = serde_json::json!({
+        "songInfo": serde_json::Value::Object(song_info),
+        "quality": normalize_music_quality(params.get("quality").map(String::as_str)),
+    });
+
+    let mut agent_builder = ureq::AgentBuilder::new()
+        .timeout(Duration::from_secs(45))
+        .redirects(10);
+    if let Some(p) = proxy {
+        if !p.is_empty() {
+            if let Ok(prx) = ureq::Proxy::new(p) {
+                agent_builder = agent_builder.proxy(prx);
+            }
+        }
+    }
+    let agent = agent_builder.build();
+    let mut req = agent
+        .post(&endpoint)
+        .set("Accept", "application/json")
+        .set("Content-Type", "application/json");
+    if let Some(token) = params.get("music_token") {
+        if !token.is_empty() {
+            req = req.set("x-user-token", token);
+        }
+    }
+
+    let resp = req
+        .send_string(&body.to_string())
+        .map_err(|e| format!("music url: {e}"))?;
+    let status = resp.status();
+    let mut text = String::new();
+    resp.into_reader()
+        .read_to_string(&mut text)
+        .map_err(|e| format!("music url body: {e}"))?;
+    if status >= 400 {
+        return Err(format!("music url HTTP {status}: {text}"));
+    }
+    let payload: serde_json::Value =
+        serde_json::from_str(&text).map_err(|e| format!("music url json: {e}: {text}"))?;
+    let url = payload
+        .get("url")
+        .and_then(|v| v.as_str())
+        .or_else(|| payload.get("data").and_then(|d| d.get("url")).and_then(|v| v.as_str()))
+        .filter(|s| !s.is_empty())
+        .ok_or_else(|| {
+            payload
+                .get("error")
+                .and_then(|v| v.as_str())
+                .unwrap_or("music url missing")
+                .to_string()
+        })?;
+    Ok(url.to_string())
+}
+
 async fn handle(req: Request<Incoming>) -> Result<Response<BoxedBody>, Infallible> {
     // OPTIONS preflight
     if req.method() == Method::OPTIONS {
@@ -135,13 +259,40 @@ async fn handle(req: Request<Incoming>) -> Result<Response<BoxedBody>, Infallibl
         .into_owned()
         .collect();
 
-    let Some(target_url) = params.get("url").cloned() else {
-        return Ok(err_resp(StatusCode::BAD_REQUEST, "missing url param"));
-    };
     let ua = params.get("ua").cloned();
     let referer = params.get("referer").cloned();
+    let origin = params.get("origin").cloned();
     let proxy = params.get("proxy").cloned();
     let decrypt_mode = params.get("decrypt").cloned();
+    let range = req
+        .headers()
+        .get("range")
+        .and_then(|v| v.to_str().ok())
+        .map(|v| v.to_string());
+
+    let target_url = if params.contains_key("music_base") {
+        let params_for_resolve = params.clone();
+        let proxy_for_resolve = proxy.clone();
+        match tauri::async_runtime::spawn_blocking(move || {
+            resolve_music_stream_url(&params_for_resolve, proxy_for_resolve.as_deref())
+        })
+        .await
+        {
+            Ok(Ok(url)) => url,
+            Ok(Err(e)) => return Ok(err_resp(StatusCode::BAD_GATEWAY, &e)),
+            Err(e) => {
+                return Ok(err_resp(
+                    StatusCode::BAD_GATEWAY,
+                    &format!("music resolver task: {e}"),
+                ))
+            }
+        }
+    } else {
+        let Some(url) = params.get("url").cloned() else {
+            return Ok(err_resp(StatusCode::BAD_REQUEST, "missing url param"));
+        };
+        url
+    };
 
     // sample-aes 解密代理 —— amateur.tv / a0s.net 系平台。
     // 前端传 url=<fmp4-hls m3u8 URL>&decrypt=sample-aes&proxy=...
@@ -166,7 +317,9 @@ async fn handle(req: Request<Incoming>) -> Result<Response<BoxedBody>, Infallibl
     let target_url_for_thread = target_url.clone();
     let ua_for_thread = ua.clone();
     let referer_for_thread = referer.clone();
+    let origin_for_thread = origin.clone();
     let proxy_for_thread = proxy.clone();
+    let range_for_thread = range.clone();
     tauri::async_runtime::spawn_blocking(move || {
         let mut agent_builder = ureq::AgentBuilder::new()
             .timeout(Duration::from_secs(READ_TIMEOUT_SECS))
@@ -194,6 +347,16 @@ async fn handle(req: Request<Incoming>) -> Result<Response<BoxedBody>, Infallibl
         if let Some(r) = referer_for_thread.as_deref() {
             if !r.is_empty() {
                 req = req.set("Referer", r);
+            }
+        }
+        if let Some(o) = origin_for_thread.as_deref() {
+            if !o.is_empty() {
+                req = req.set("Origin", o);
+            }
+        }
+        if let Some(r) = range_for_thread.as_deref() {
+            if !r.is_empty() {
+                req = req.set("Range", r);
             }
         }
         req = req.set("Accept", "*/*");

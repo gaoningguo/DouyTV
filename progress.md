@@ -1,0 +1,74 @@
+# Music Migration Progress
+
+## 2026-06-10
+
+- Started MoonTVPlus music migration continuation.
+- Confirmed modified files include music page/store/lib files and Tauri stream proxy.
+- Created persistent plan/findings/progress files for this multi-phase task.
+- Ran `pnpm.cmd run build`: passed with existing Vite chunk warnings.
+- Ran `cargo check` in `src-tauri`: passed.
+- Continued runtime verification after context resume.
+- Confirmed `http://127.0.0.1:5173` was not already listening.
+- Found current shell environment contains duplicate `PATH` and `Path`, which breaks PowerShell environment enumeration and `Start-Process`.
+- Verified Vite starts successfully in foreground with `node node_modules/vite/bin/vite.js --host 127.0.0.1 --port 5173`; Vite reported ready on `http://127.0.0.1:5173/`.
+- Tried multiple background startup methods (`Start-Process`, Node detached spawn, PowerShell Job, `cmd start`, Vite Node API launcher). In this tool host, background children exit before serving or lose process lifetime when the parent shell exits.
+- Cleaned temporary background-launch files/logs created during testing.
+- Re-ran `pnpm.cmd run build`: passed; only existing Vite warnings about dynamic imports/chunk size remain.
+- Re-ran `cargo check` in `src-tauri`: passed.
+- Refactored the music page visual structure using the 21-29 reference screens:
+  - Music center now uses a large recommendation hero, hot-search chips, horizontal songlist rail, chart list, and recommended songlists.
+  - Search page now has a dedicated search hero, source chips, quick discovery cards, and result panel.
+  - Library page now follows a profile-style layout with stats, liked-music hero card, tabs, history/favorites/playlists.
+  - Bottom player was redesigned as a glass mini player with cover entry into a playback detail drawer.
+  - Drawer now supports playback detail, queue, immersive lyrics, and settings/equalizer-like controls.
+- Added music-page-scoped styles in `src/styles.css`.
+- Ran `pnpm.cmd run build`: passed; only existing Vite warnings about dynamic imports/chunk size remain.
+- Removed the new standalone circular glow from player detail styling and re-ran `pnpm.cmd run build`: passed; only existing Vite warnings remain.
+- Implemented the homepage music recommendation feed:
+  - Replaced the static music placeholder with a real vertically swipable music feed.
+  - Feed data now comes from enabled music sources, MoonTV-compatible boards/hot search, fallback source search, and local favorites/history/queue.
+  - Added music playback in the home feed with source resolution, progress display, favorite, queue, share, detail entry, refresh, caching, and safe-area-aware controls.
+  - Fixed leftover Music page TypeScript errors by wiring search dedupe/candidate storage and restoring drawer type coverage.
+  - Ran `pnpm.cmd run build`: passed; only existing Vite warnings about dynamic imports/chunk size remain.
+- Kept NetEase/WY in music search/discovery, but filtered actual short-preview playback results:
+  - Restored WY in LX platform enumeration, discovery fallbacks, new-source default platform lists, and music page platform switching.
+  - Added playback metadata validation to skip any source whose loaded audio duration is only a short preview compared with the expected song duration.
+  - Homepage music feed and full music page both continue to the next candidate when a parsed URL is detected as a preview.
+  - Ran `pnpm.cmd run build` and `cargo check`: both passed; existing Vite chunk warnings remain.
+- Updated the music discovery page to behave as an aggregate platform:
+  - Boards, hot search, playlist tags, and recommended playlists now pull from all supported music platforms and merge results.
+  - Removed concrete platform labels/chips/fallback text from new discovery, charts, hot search, playlist cards, song rows, and playlist detail headers.
+  - Platform filter chips were removed from recommended playlists; tag/sort filters now apply to the aggregated result set.
+  - Ran `pnpm.cmd run build`: passed; existing Vite chunk warnings remain.
+- Redesigned the music bottom playback bar:
+  - Replaced the cramped two-row mini player with a stable progress strip plus three-part layout for track info, transport controls, and tools.
+  - Added responsive mobile layout with safe-area padding and horizontally contained tool actions.
+  - Kept existing playback callbacks, quality, favorite, download, lyrics, queue, settings, volume, sleep, and buffering states.
+  - Ran `pnpm.cmd run build`: passed; existing Vite chunk warnings remain.
+- Refined the music bottom playback bar against `stitch_design_evolution_project/code.html`:
+  - Reworked it into an Obsidian-style control console with a top progress line, left track block, centered transport controls, and right-side tools/volume.
+  - Moved queue back into the tool group and kept favorite beside track info, matching the reference hierarchy.
+  - Added responsive rules so mobile keeps prev/play/next visible and scrolls secondary tools instead of cramping controls.
+  - Ran `pnpm.cmd run build`: passed; existing Vite chunk warnings remain.
+- Reviewed current DouyTV music files. Existing implementation has search/play/source manager, but lacks MoonTVPlus discovery APIs, playlists, expanded playback settings, and complete music center structure.
+- Read MoonTVPlus `music-v2` library and API routes for play/stream/discovery/search. The stream route caches resolved URLs briefly and forwards Range/referer/origin/user-agent to avoid short preview playback.
+- Added `src/lib/music/discovery.ts` with MoonTVPlus-compatible boards, board songs, songlists, songlist detail, tags, and hot search helpers.
+- Expanded music types for discovery, songlists, `flac24bit`, and MoonTV-style history metadata.
+- Expanded music store with playlists, sleep timer, spectrum/proxy settings, and playlist management actions.
+- Rebuilt `src/pages/Music.tsx` as a full music center: discovery, hot search, boards, songlists, search, library, playlists, queue drawer, lyrics drawer, sleep timer, quality switching, favorites, and bottom player.
+- Added `src/pages/settings/MusicSourcesHub.tsx` and route `/settings/music-hub`; added Settings homepage entry for music management.
+- Improved import recognition for `.json` music source URLs and expanded JS plugin method names for MusicFree/LX-style plugins.
+- Rewrote music `types.ts`, `index.ts`, and `lxServer.ts` user-facing strings to normal Chinese and kept MoonTV-style stable stream behavior.
+- Ran `pnpm.cmd run build`: passed with existing Vite chunk warnings.
+- Ran `cargo check` in `src-tauri`: passed.
+- Refined the music page against `stitch_design_evolution_project/code.html`:
+  - Discovery page now uses the reference-like dark glass rhythm with a larger hero, animated equalizer, large horizontal discovery cards, chart list, and quick-pick playlist panel.
+  - Bottom player remains two visual rows only: a top seek strip and one main control row; progress time text is removed from the bottom bar.
+  - Mobile bottom player now keeps the same two-row structure and hides secondary controls that would create a cramped tool strip.
+  - Removed unused legacy bottom-player CSS classes.
+  - Ran `pnpm.cmd run build`: passed; existing Vite dynamic import/chunk-size warnings remain.
+
+- Refined music lyric experience against the full-screen player design screens:
+  - Full-screen player (`.music-now-lyrics`): added top/bottom fade masks, larger/brighter active line with ember glow, dimmer inactive lines, smoother spring transitions, and enlarged active translation text.
+  - Immersive lyrics drawer (`.music-lyrics-stage` / `.music-lyric-line`): added fade masks and stronger active-line contrast to match the centered-lyrics reference screen.
+  - Ran `pnpm.cmd run build`: passed; only existing Vite chunk warnings remain.

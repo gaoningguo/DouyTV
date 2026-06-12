@@ -284,6 +284,127 @@ export function wrapImage(
   });
 }
 
+function musicReferer(platform?: string, url?: string): string {
+  switch ((platform || "").toLowerCase()) {
+    case "wy":
+    case "netease":
+      return "https://music.163.com/";
+    case "tx":
+    case "qq":
+      return "https://y.qq.com/";
+    case "kw":
+    case "kuwo":
+      return "https://www.kuwo.cn/";
+    case "kg":
+    case "kugou":
+      return "https://www.kugou.com/";
+    case "mg":
+    case "migu":
+      return "https://music.migu.cn/";
+    default:
+      try {
+        return url ? new URL(url).origin + "/" : "https://music.163.com/";
+      } catch {
+        return "https://music.163.com/";
+      }
+  }
+}
+
+function originFromReferer(referer: string): string {
+  try {
+    return new URL(referer).origin;
+  } catch {
+    return referer.replace(/\/+$/, "");
+  }
+}
+
+function defaultAudioUa(): string {
+  return "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36";
+}
+
+export interface LxMusicStreamSong {
+  id: string;
+  title: string;
+  artist: string;
+  platform?: string;
+  songmid?: string;
+  durationText?: string;
+  hash?: string;
+  copyrightId?: string;
+  albumId?: string;
+  lrcUrl?: string;
+  mrcUrl?: string;
+  trcUrl?: string;
+}
+
+export function buildLxMusicStreamUrl({
+  baseUrl,
+  token,
+  song,
+  quality,
+  headers,
+}: {
+  baseUrl?: string;
+  token?: string;
+  song: LxMusicStreamSong;
+  quality: string;
+  headers?: Record<string, string>;
+}): string {
+  if (!isTauri) return "";
+  const port = getStreamProxyPort();
+  if (!port || !baseUrl) return "";
+  const platform = song.platform || "kw";
+  const songmid = song.songmid || song.id.split("_").slice(1).join("_") || song.id;
+  const referer = getHeader(headers, "Referer") || musicReferer(platform);
+  const ua = getHeader(headers, "User-Agent") || defaultAudioUa();
+  const u = new URL(`http://127.0.0.1:${port}/`);
+  u.searchParams.set("music_base", baseUrl);
+  if (token) u.searchParams.set("music_token", token);
+  u.searchParams.set("quality", quality);
+  u.searchParams.set("song_id", song.id);
+  u.searchParams.set("source", platform);
+  u.searchParams.set("songmid", songmid);
+  u.searchParams.set("name", song.title);
+  u.searchParams.set("artist", song.artist);
+  if (song.durationText) u.searchParams.set("durationText", song.durationText);
+  if (song.hash) u.searchParams.set("hash", song.hash);
+  if (song.copyrightId) u.searchParams.set("copyrightId", song.copyrightId);
+  if (song.albumId) u.searchParams.set("albumId", song.albumId);
+  if (song.lrcUrl) u.searchParams.set("lrcUrl", song.lrcUrl);
+  if (song.mrcUrl) u.searchParams.set("mrcUrl", song.mrcUrl);
+  if (song.trcUrl) u.searchParams.set("trcUrl", song.trcUrl);
+  u.searchParams.set("ua", ua);
+  u.searchParams.set("referer", referer);
+  u.searchParams.set("origin", originFromReferer(referer));
+  return u.toString();
+}
+
+export function wrapAudioUrl(
+  absUrl: string,
+  platform?: string,
+  headers?: Record<string, string>
+): string {
+  if (!absUrl) return "";
+  if (!isTauri) return absUrl;
+  const ua = getHeader(headers, "User-Agent") || defaultAudioUa();
+  const referer = getHeader(headers, "Referer") || musicReferer(platform, absUrl);
+  if (!IS_IOS) {
+    const port = getStreamProxyPort();
+    if (port) {
+      const u = new URL(`http://127.0.0.1:${port}/`);
+      u.searchParams.set("url", absUrl);
+      u.searchParams.set("ua", ua);
+      u.searchParams.set("referer", referer);
+      u.searchParams.set("origin", originFromReferer(referer));
+      return u.toString();
+    }
+  }
+  return buildProxyUrl("stream", absUrl, {
+    ua,
+    referer,
+  });
+}
+
 /** 平台 → Referer 默认值（NetEase MP3 CDN 等节点对盗链有 host 校验）。 */
 
 /**
