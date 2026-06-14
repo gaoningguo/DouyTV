@@ -54,13 +54,62 @@ interface HomeProps {
   feedPaused?: boolean;
 }
 
-const MUSIC_VISUALIZER_HEIGHTS = [
-  42, 68, 24, 76, 52, 34, 86, 48, 28, 72, 18, 64, 82, 36, 54, 26, 74, 44,
-  88, 32, 58, 20, 70, 46, 30, 80, 38, 62, 22, 66, 50, 84,
-];
-
 const MUSIC_FEED_KEYWORDS = ["新歌", "热歌", "民谣", "粤语", "流行", "纯音乐"];
 const MUSIC_FEED_LIMIT = 48;
+const MUSIC_CENTER_LIFT_CSS = "clamp(40px, 7vh, 82px)";
+
+function shouldUseAnonymousMusicAudio(url: string) {
+  if (!url) return false;
+  try {
+    const parsed = new URL(url, window.location.href);
+    return (
+      parsed.origin === window.location.origin ||
+      parsed.hostname === "127.0.0.1" ||
+      parsed.hostname === "localhost" ||
+      parsed.hostname === "dyproxy.localhost" ||
+      parsed.protocol === "dyproxy:"
+    );
+  } catch {
+    return false;
+  }
+}
+
+function setMusicAudioSource(audio: HTMLAudioElement, url: string) {
+  if (shouldUseAnonymousMusicAudio(url)) {
+    audio.crossOrigin = "anonymous";
+    audio.setAttribute("crossorigin", "anonymous");
+  } else {
+    audio.crossOrigin = null;
+    audio.removeAttribute("crossorigin");
+  }
+  audio.src = url;
+  audio.load();
+}
+
+interface LyricLine {
+  time: number;
+  text: string;
+}
+
+// Parse an LRC string into time-sorted lines. Tolerates multiple timestamps on
+// one line ("[00:01.00][00:05.00]text") and skips metadata-only / blank lines.
+function parseLrc(lrc: string): LyricLine[] {
+  if (!lrc) return [];
+  const lines: LyricLine[] = [];
+  for (const raw of lrc.split(/\r?\n/)) {
+    const stamps = [...raw.matchAll(/\[(\d{1,2}):(\d{1,2})(?:[.:](\d{1,3}))?\]/g)];
+    if (stamps.length === 0) continue;
+    const text = raw.replace(/\[[^\]]*\]/g, "").trim();
+    if (!text) continue;
+    for (const stamp of stamps) {
+      const min = parseInt(stamp[1], 10);
+      const sec = parseInt(stamp[2], 10);
+      const frac = stamp[3] ? parseInt(stamp[3].padEnd(3, "0").slice(0, 3), 10) : 0;
+      lines.push({ time: min * 60 + sec + frac / 1000, text });
+    }
+  }
+  return lines.sort((a, b) => a.time - b.time);
+}
 
 interface MusicFeedCache {
   items: MusicSong[];
@@ -116,35 +165,148 @@ function dedupeMusicRecommendations(songs: MusicSong[]) {
   });
 }
 
+type MusicRankSong = MusicSong & {
+  lastPlayedAt?: number;
+  playCount?: number;
+};
+
+function musicArtistTokens(song: MusicSong) {
+  return (song.artist || "")
+    .split(/[、,/&，;；|｜]+/)
+    .map(normalizeMusicText)
+    .filter(Boolean);
+}
+
+function buildArtistAffinity(
+  songs: MusicSong[],
+  options: { limit: number; base: number; playCount?: boolean }
+) {
+  const affinity = new Map<string, number>();
+  songs.slice(0, options.limit).forEach((song, index) => {
+    const rank = Math.max(0.12, 1 - index / Math.max(1, options.limit));
+    const count = options.playCount
+      ? Math.min(2.2, Math.max(1, (song as MusicRankSong).playCount ?? 1))
+      : 1;
+    musicArtistTokens(song).forEach((artist) => {
+      affinity.set(
+        artist,
+        (affinity.get(artist) ?? 0) + options.base * rank * count
+      );
+    });
+  });
+  return affinity;
+}
+
+function artistAffinityScore(song: MusicSong, affinity: Map<string, number>) {
+  return Math.min(
+    0.32,
+    musicArtistTokens(song).reduce(
+      (score, artist) => score + (affinity.get(artist) ?? 0),
+      0
+    )
+  );
+}
+
+function recentPlayPenalty(song: MusicSong, historyByKey: Map<string, MusicRankSong>) {
+  const record = historyByKey.get(musicRecommendKey(song));
+  if (!record?.lastPlayedAt) return 0;
+  const age = Date.now() - record.lastPlayedAt;
+  if (age < 10 * 60_000) return 0.42;
+  if (age < 6 * 60 * 60_000) return 0.22;
+  if (age < 24 * 60 * 60_000) return 0.1;
+  return 0;
+}
+
+function diversifyMusicRecommendations(songs: MusicSong[], limit: number) {
+  const pending = songs.slice();
+  const out: MusicSong[] = [];
+  const wouldCluster = (song: MusicSong) => {
+    const recent = out.slice(-2);
+    if (recent.length < 2) return false;
+    const sameSource = recent.every((item) => item.sourceId === song.sourceId);
+    const platform = String(song.platform || "");
+    const samePlatform =
+      !!platform && recent.every((item) => String(item.platform || "") === platform);
+    return sameSource || samePlatform;
+  };
+
+  while (pending.length > 0 && out.length < limit) {
+    const pick = pending.findIndex((song) => !wouldCluster(song));
+    out.push(pending.splice(pick >= 0 ? pick : 0, 1)[0]);
+  }
+  return out;
+}
+
 function rankMusicRecommendations({
   songs,
   favorites,
   history,
+  queue,
   seed,
 }: {
   songs: MusicSong[];
   favorites: MusicSong[];
-  history: MusicSong[];
+  history: MusicRankSong[];
+  queue: MusicSong[];
   seed: number;
 }) {
   const favoriteKeys = new Set(favorites.map(musicRecommendKey));
-  const historyKeys = new Set(history.slice(0, 80).map(musicRecommendKey));
-  return dedupeMusicRecommendations(songs)
+  const historyByKey = new Map(
+    history.slice(0, 140).map((song) => [musicRecommendKey(song), song])
+  );
+  const favoriteArtists = buildArtistAffinity(favorites, {
+    limit: 80,
+    base: 0.09,
+  });
+  const recentArtists = buildArtistAffinity(history, {
+    limit: 100,
+    base: 0.055,
+    playCount: true,
+  });
+  const queueArtists = buildArtistAffinity(queue, {
+    limit: 40,
+    base: 0.05,
+  });
+  const titleCounts = new Map<string, number>();
+  songs.forEach((song) => {
+    const titleKey = normalizeMusicText(song.title);
+    if (titleKey) titleCounts.set(titleKey, (titleCounts.get(titleKey) ?? 0) + 1);
+  });
+
+  const scored = dedupeMusicRecommendations(songs)
     .map((song, index) => {
       const key = musicRecommendKey(song) || musicSongKey(song);
       const favoriteBoost = favoriteKeys.has(key) ? 0.36 : 0;
-      const historyBoost = historyKeys.has(key) ? 0.22 : 0;
+      const historyBoost = historyByKey.has(key) ? 0.12 : 0;
+      const artistBoost =
+        artistAffinityScore(song, favoriteArtists) +
+        artistAffinityScore(song, recentArtists) +
+        artistAffinityScore(song, queueArtists);
       const coverBoost = song.cover ? 0.08 : 0;
-      const freshness = Math.max(0, 0.12 - index * 0.002);
-      const random = seededScore(seed, `${key}:${song.sourceId}`) * 0.22;
+      const durationBoost = song.durationSec || song.durationText ? 0.04 : 0;
+      const freshness = Math.max(0, 0.1 - index * 0.0015);
+      const duplicateTitlePenalty =
+        (titleCounts.get(normalizeMusicText(song.title)) ?? 0) > 3 ? 0.04 : 0;
+      const repeatPenalty = recentPlayPenalty(song, historyByKey);
+      const random = seededScore(seed, `${key}:${song.sourceId}`) * 0.18;
       return {
         song,
-        score: favoriteBoost + historyBoost + coverBoost + freshness + random,
+        score:
+          favoriteBoost +
+          historyBoost +
+          artistBoost +
+          coverBoost +
+          durationBoost +
+          freshness +
+          random -
+          repeatPenalty -
+          duplicateTitlePenalty,
       };
     })
     .sort((a, b) => b.score - a.score)
-    .map((item) => item.song)
-    .slice(0, MUSIC_FEED_LIMIT);
+    .map((item) => item.song);
+
+  return diversifyMusicRecommendations(scored, MUSIC_FEED_LIMIT);
 }
 
 function useMusicHomeFeed(enabled: boolean) {
@@ -174,14 +336,17 @@ function useMusicHomeFeed(enabled: boolean) {
     () => enabledSources.find((source) => source.kind === "lx-server"),
     [enabledSources]
   );
+  // Only source config (add/remove/enable/disable) should auto-reload the
+  // feed. favorites/history must NOT be in the signature: playing/scrolling a
+  // song calls noteHistory(), and a favorites toggle mutates favorites — either
+  // would otherwise re-trigger load(true), re-seeding the whole list into fresh
+  // songs ("下滑后刷新变成新歌"). They remain inputs to ranking inside load().
   const signature = useMemo(
     () =>
-      [
-        enabledSources.map((source) => `${source.id}:${source.enabled ? 1 : 0}:${source.updatedAt ?? 0}`).join("|"),
-        favorites.slice(0, 20).map(musicRecommendKey).join("|"),
-        history.slice(0, 20).map(musicRecommendKey).join("|"),
-      ].join("\n"),
-    [enabledSources, favorites, history]
+      enabledSources
+        .map((source) => `${source.id}:${source.enabled ? 1 : 0}:${source.updatedAt ?? 0}`)
+        .join("|"),
+    [enabledSources]
   );
 
   const load = useCallback(
@@ -256,6 +421,7 @@ function useMusicHomeFeed(enabled: boolean) {
           songs: collected,
           favorites,
           history,
+          queue,
           seed: seedRef.current,
         });
         setItems(ranked);
@@ -736,6 +902,9 @@ function MusicHomeFeed({
   const playRequestRef = useRef(0);
   const userStartedRef = useRef(false);
   const lastAutoPlayKeyRef = useRef("");
+  const scrollSettleRef = useRef<number | undefined>(undefined);
+  const restoredScrollRef = useRef(false);
+  const iconFlashRef = useRef<number | undefined>(undefined);
   const {
     items,
     loading,
@@ -762,7 +931,27 @@ function MusicHomeFeed({
   const [currentTime, setCurrentTime] = useState(0);
   const [duration, setDuration] = useState(0);
   const [toast, setToast] = useState<string | undefined>();
+  const [iconFlash, setIconFlash] = useState(false);
+  const [lyricLines, setLyricLines] = useState<LyricLine[]>([]);
   const activeSong = items[Math.max(0, Math.min(activeIndex, items.length - 1))];
+
+  // Index of the lyric line that matches the current playback position.
+  const activeLyricIndex = useMemo(() => {
+    if (lyricLines.length === 0) return -1;
+    let lo = 0;
+    let hi = lyricLines.length - 1;
+    let found = -1;
+    while (lo <= hi) {
+      const mid = (lo + hi) >> 1;
+      if (lyricLines[mid].time <= currentTime) {
+        found = mid;
+        lo = mid + 1;
+      } else {
+        hi = mid - 1;
+      }
+    }
+    return found;
+  }, [lyricLines, currentTime]);
 
   useEffect(() => {
     if (audioRef.current) audioRef.current.volume = volume;
@@ -785,6 +974,18 @@ function MusicHomeFeed({
     setActiveIndex(index);
   };
 
+  // Briefly reveal the centre play/pause icon on tap, then fade it back out.
+  const flashIcon = () => {
+    if (iconFlashRef.current !== undefined) {
+      window.clearTimeout(iconFlashRef.current);
+    }
+    setIconFlash(true);
+    iconFlashRef.current = window.setTimeout(() => {
+      iconFlashRef.current = undefined;
+      setIconFlash(false);
+    }, 600);
+  };
+
   const playSong = useCallback(
     async (song: MusicSong, userInitiated = true) => {
       if (userInitiated) userStartedRef.current = true;
@@ -794,6 +995,15 @@ function MusicHomeFeed({
       ]);
       const requestId = ++playRequestRef.current;
       setResolving(true);
+      // Stop the previous track immediately. Otherwise the old audio keeps
+      // playing through the (async) resolve below, so the card shows the new
+      // song while the speakers are still on the previous one.
+      const prevAudio = audioRef.current;
+      if (prevAudio && !prevAudio.paused) {
+        prevAudio.pause();
+        setIsPlaying(false);
+      }
+      setLyricLines([]);
       let lastError: unknown;
 
       for (const candidate of candidates) {
@@ -803,7 +1013,11 @@ function MusicHomeFeed({
         if (!source) continue;
         try {
           setCurrentSong(candidate);
-          setQueue(items.length > 0 ? items : [candidate], candidate);
+          // Only (re)build the queue on an explicit user play. Auto-advance
+          // while scrolling the feed must not clobber a user-curated queue.
+          if (userInitiated) {
+            setQueue(items.length > 0 ? items : [candidate], candidate);
+          }
           const play = await resolveMusicSource(source, candidate, quality, {
             proxy: proxyEnabled,
           });
@@ -811,8 +1025,7 @@ function MusicHomeFeed({
           const audio = audioRef.current;
           if (audio) {
             audio.autoplay = userStartedRef.current;
-            audio.src = play.url;
-            audio.load();
+            setMusicAudioSource(audio, play.url);
             const loadedDuration = await waitForUsableMusicAudio(
               audio,
               candidate.durationSec
@@ -822,6 +1035,7 @@ function MusicHomeFeed({
           }
           setAudioUrl(play.url);
           setCurrentTime(0);
+          setLyricLines(parseLrc(play.lyric ?? ""));
           noteHistory(candidate, 0, candidate.durationSec ?? 0);
           if (audio) {
             if (userStartedRef.current && !feedPaused) {
@@ -874,13 +1088,50 @@ function MusicHomeFeed({
   const handleScroll = () => {
     const scroller = scrollRef.current;
     if (!scroller) return;
-    const height = scroller.clientHeight || 1;
-    const nextIndex = Math.max(
-      0,
-      Math.min(items.length - 1, Math.round(scroller.scrollTop / height))
-    );
-    if (nextIndex !== activeIndex) setActiveIndex(nextIndex);
+    if (scrollSettleRef.current !== undefined) {
+      window.clearTimeout(scrollSettleRef.current);
+    }
+    // Only commit the active index once scrolling settles on a snap point.
+    // Reacting mid-drag would switch the active song before the swipe lands
+    // (and even when it snaps back), leaving audio and the card out of sync.
+    scrollSettleRef.current = window.setTimeout(() => {
+      scrollSettleRef.current = undefined;
+      const el = scrollRef.current;
+      if (!el) return;
+      const height = el.clientHeight || 1;
+      const nextIndex = Math.max(
+        0,
+        Math.min(items.length - 1, Math.round(el.scrollTop / height))
+      );
+      if (nextIndex !== activeIndex) setActiveIndex(nextIndex);
+    }, 120);
   };
+
+  useEffect(
+    () => () => {
+      if (scrollSettleRef.current !== undefined) {
+        window.clearTimeout(scrollSettleRef.current);
+      }
+      if (iconFlashRef.current !== undefined) {
+        window.clearTimeout(iconFlashRef.current);
+      }
+    },
+    []
+  );
+
+  // Restore the scroll position to the cached active index once items are
+  // ready, so re-entering the page lands on the same card the audio is on
+  // (the scroller resets to top on mount otherwise).
+  useEffect(() => {
+    if (restoredScrollRef.current) return;
+    if (items.length === 0) return;
+    const scroller = scrollRef.current;
+    if (!scroller) return;
+    restoredScrollRef.current = true;
+    if (activeIndex <= 0) return;
+    const height = scroller.clientHeight || 1;
+    scroller.scrollTop = activeIndex * height;
+  }, [items.length, activeIndex]);
 
   const playNext = () => {
     if (items.length === 0) return;
@@ -892,6 +1143,7 @@ function MusicHomeFeed({
 
   const handlePrimaryPlay = () => {
     if (!activeSong) return;
+    flashIcon();
     const audio = audioRef.current;
     if (
       currentSong &&
@@ -991,7 +1243,6 @@ function MusicHomeFeed({
       {topBar}
       <audio
         ref={audioRef}
-        src={audioUrl}
         preload="metadata"
         onLoadedMetadata={(event) => setDuration(event.currentTarget.duration || 0)}
         onDurationChange={(event) => setDuration(event.currentTarget.duration || 0)}
@@ -1050,47 +1301,77 @@ function MusicHomeFeed({
               </div>
 
               <main className="absolute inset-0 flex items-center justify-center px-5">
-                <button
-                  type="button"
-                  onClick={handlePrimaryPlay}
-                  className="relative z-10 grid place-items-center tap"
-                  aria-label={playing ? "暂停" : "播放"}
+                <div
+                  className="relative z-10 grid place-items-center"
+                  style={{ transform: `translateY(calc(-1 * ${MUSIC_CENTER_LIFT_CSS}))` }}
                 >
-                  <div
-                    className={`relative grid place-items-center overflow-hidden rounded-full ${
-                      playing ? "music-vinyl-spin" : ""
-                    }`}
-                    style={{
-                      width: "min(70vw, 340px)",
-                      height: "min(70vw, 340px)",
-                      background: "#07080a",
-                      border: "14px solid rgba(5,6,8,0.92)",
-                      boxShadow: "0 26px 80px -36px rgba(0,0,0,0.96)",
-                    }}
+                  <button
+                    type="button"
+                    onClick={handlePrimaryPlay}
+                    className="relative grid place-items-center tap"
+                    aria-label={playing ? "暂停" : "播放"}
                   >
-                    {cover ? (
-                      <img src={cover} alt="" className="h-full w-full object-cover" />
-                    ) : (
-                      <IconAlbum size={68} className="text-cream-faint" />
-                    )}
-                    <span className="absolute inset-[42%] rounded-full bg-ink border border-cream-line" />
-                  </div>
-                  <span
-                    className="absolute z-20 grid h-16 w-16 place-items-center rounded-full backdrop-blur-md"
-                    style={{
-                      background: "rgba(14,15,17,0.58)",
-                      border: "1px solid var(--cream-line)",
-                    }}
-                  >
-                    {resolving && active ? (
-                      <IconRefresh size={22} className="animate-spin" />
-                    ) : playing ? (
-                      <IconPause size={24} />
-                    ) : (
-                      <IconPlay size={24} />
-                    )}
-                  </span>
-                </button>
+                    <div
+                      className="music-vinyl relative grid place-items-center rounded-full music-vinyl-spin"
+                      style={{
+                        width: "min(70vw, 340px)",
+                        height: "min(70vw, 340px)",
+                        // Keep the animation mounted at all times and only toggle
+                        // its play state, so pausing freezes the disc in place
+                        // instead of snapping the rotation back to 0deg.
+                        animationPlayState: playing ? "running" : "paused",
+                      }}
+                    >
+                      {/* Album art sits in the inner "label" of the record. */}
+                      <span
+                        className="relative grid place-items-center overflow-hidden rounded-full"
+                        style={{
+                          width: "62%",
+                          height: "62%",
+                          background: "#0c0d10",
+                          boxShadow:
+                            "0 0 0 6px rgba(5,6,8,0.9), 0 6px 22px -8px rgba(0,0,0,0.9)",
+                        }}
+                      >
+                        {cover ? (
+                          <img src={cover} alt="" className="h-full w-full object-cover" />
+                        ) : (
+                          <IconAlbum size={68} className="text-cream-faint" />
+                        )}
+                        {/* Spindle hole in the centre of the label. */}
+                        <span
+                          className="absolute rounded-full"
+                          style={{
+                            width: 16,
+                            height: 16,
+                            background: "var(--ink)",
+                            boxShadow:
+                              "inset 0 0 0 2px rgba(0,0,0,0.85), 0 0 0 3px rgba(242,232,213,0.12)",
+                          }}
+                        />
+                      </span>
+                    </div>
+                    <span
+                      className="absolute left-1/2 top-1/2 z-20 grid h-16 w-16 -translate-x-1/2 -translate-y-1/2 place-items-center rounded-full backdrop-blur-md transition-opacity duration-200"
+                      style={{
+                        background: "rgba(14,15,17,0.58)",
+                        border: "1px solid var(--cream-line)",
+                        color: "var(--cream)",
+                        // Hidden by default; only surfaces while resolving or for
+                        // a brief flash after the user taps the active card.
+                        opacity: active && (resolving || iconFlash) ? 1 : 0,
+                      }}
+                    >
+                      {resolving && active ? (
+                        <IconRefresh size={22} className="animate-spin" />
+                      ) : playing ? (
+                        <IconPause size={24} />
+                      ) : (
+                        <IconPlay size={24} />
+                      )}
+                    </span>
+                  </button>
+                </div>
 
                 <MusicFeedActionRail
                   song={song}
@@ -1109,6 +1390,10 @@ function MusicHomeFeed({
                   playing={playing}
                 />
 
+                {active && lyricLines.length > 0 && (
+                  <MusicLyrics lines={lyricLines} activeIndex={activeLyricIndex} />
+                )}
+
                 <div
                   className="absolute left-0 right-0 z-20 px-5 sm:px-8"
                   style={{
@@ -1117,19 +1402,6 @@ function MusicHomeFeed({
                       : "calc(var(--bottom-tab-h, 56px) + env(safe-area-inset-bottom) + 18px)",
                   }}
                 >
-                  <div className="h-8 mb-2 flex items-end justify-center gap-1 overflow-hidden">
-                    {MUSIC_VISUALIZER_HEIGHTS.map((height, barIndex) => (
-                      <span
-                        key={`${height}-${barIndex}`}
-                        className="music-visualizer-bar"
-                        style={{
-                          height: `${playing ? height : Math.max(8, height * 0.36)}%`,
-                          animationDelay: `${barIndex * 48}ms`,
-                          animationPlayState: playing ? "running" : "paused",
-                        }}
-                      />
-                    ))}
-                  </div>
                   <div className="relative h-1 w-full overflow-hidden rounded-full bg-white/20">
                     <div
                       className="absolute left-0 top-0 h-full rounded-full"
@@ -1166,6 +1438,53 @@ function MusicHomeFeed({
         </div>
       )}
     </HomeShell>
+  );
+}
+
+function MusicLyrics({
+  lines,
+  activeIndex,
+}: {
+  lines: LyricLine[];
+  activeIndex: number;
+}) {
+  // Show the active line plus one above and one below. The neighbours fade out
+  // and the whole window slides up by one line each time the active row moves,
+  // so the lyrics track the audio without a scroll container.
+  const cur = activeIndex < 0 ? 0 : activeIndex;
+  const window = [cur - 1, cur, cur + 1];
+  return (
+    <div
+      className="absolute left-1/2 z-20 -translate-x-1/2 w-[min(86vw,560px)] text-center pointer-events-none"
+      style={{
+        // Sit just below the vinyl, above the visualiser/progress block.
+        top: `calc(40% + min(48vw, 264px) - ${MUSIC_CENTER_LIFT_CSS})`,
+      }}
+    >
+      <div className="flex flex-col items-center gap-2 overflow-hidden">
+        {window.map((lineIndex, slot) => {
+          const line = lines[lineIndex];
+          const isActive = slot === 1 && activeIndex >= 0;
+          return (
+            <p
+              key={`${lineIndex}-${slot}`}
+              className="line-clamp-2 font-display leading-snug transition-all duration-300 text-shadow"
+              style={{
+                fontSize: isActive ? "1.05rem" : "0.82rem",
+                fontWeight: isActive ? 700 : 500,
+                color: isActive ? "var(--cream)" : "var(--cream-dim)",
+                opacity: line ? (isActive ? 1 : 0.4) : 0,
+                textShadow: isActive
+                  ? "0 0 16px rgba(79,195,247,0.5)"
+                  : undefined,
+              }}
+            >
+              {line?.text || " "}
+            </p>
+          );
+        })}
+      </div>
+    </div>
   );
 }
 
