@@ -74,17 +74,10 @@ type MusicView = "discover" | "songlists" | "search" | "library" | "sources" | "
 type LibraryTab = "favorites" | "history" | "playlists";
 type DrawerView = "queue" | "lyrics" | "settings" | null;
 
-interface LyricWord {
-  time: number; // 绝对开始时间（秒）
-  text: string;
-  duration: number; // 该词时长（秒）
-}
-
 interface LyricLine {
   time: number;
   text: string;
   trans?: string;
-  words?: LyricWord[]; // 逐字时间轴（增强型 LRC 解析或按字符合成）
 }
 
 const QUALITY_OPTIONS: Array<{ id: MusicQuality; label: string }> = [
@@ -189,11 +182,6 @@ function mergeSongCandidates(
   return next;
 }
 
-// 解析增强型 LRC 的逐字时间标签：
-//   网易/QQ 的 yrc/qrc 形态 → "<00:01.20>词" 或 "[00:01.20,300]" 段落
-//   这里统一支持行内 "<mm:ss.xx>" 词标签（最常见、可直接喂给逐字渲染）。
-const WORD_TAG = /<(\d{1,2}):(\d{2})(?:\.(\d{1,3}))?>/g;
-
 function tagToSeconds(min: string, sec: string, frac?: string): number {
   const m = Number(min);
   const s = Number(sec);
@@ -202,59 +190,17 @@ function tagToSeconds(min: string, sec: string, frac?: string): number {
   return m * 60 + s + ms / 1000;
 }
 
-// 把一行（已去掉行首 [mm:ss] 时间戳）里的逐字标签拆成 LyricWord[]。
-// lineStart/lineEnd 用于推算首尾词时长。返回 null 表示该行没有逐字标签。
-function parseWordTags(
-  raw: string,
-  lineStart: number,
-  lineEnd: number
-): { text: string; words: LyricWord[] } | null {
-  const matches = Array.from(raw.matchAll(WORD_TAG));
-  if (matches.length === 0) return null;
-  const words: LyricWord[] = [];
-  let plain = "";
-  for (let i = 0; i < matches.length; i += 1) {
-    const m = matches[i];
-    const start = tagToSeconds(m[1], m[2], m[3]);
-    const from = (m.index ?? 0) + m[0].length;
-    const to = i + 1 < matches.length ? matches[i + 1].index ?? raw.length : raw.length;
-    const text = raw.slice(from, to);
-    if (!text) continue;
-    plain += text;
-    words.push({ time: start, text, duration: 0 });
-  }
-  if (words.length === 0) return null;
-  // 用下一个词的开始时间回填每个词的时长，最后一个词用 lineEnd 兜底。
-  for (let i = 0; i < words.length; i += 1) {
-    const next = i + 1 < words.length ? words[i + 1].time : Math.max(lineEnd, words[i].time);
-    words[i].duration = Math.max(0.08, next - words[i].time);
-  }
-  // 行首没有词标签时，补一个起点，避免第一个词等到 time 才开始。
-  if (words[0].time > lineStart) words[0].time = lineStart;
-  return { text: plain.trim(), words };
-}
-
-// 没有逐字标签时，按字符把整行时长均摊出来，逐字仍能平滑扫过。
-function synthesizeWords(text: string, start: number, end: number): LyricWord[] {
-  const chars = Array.from(text);
-  const span = Math.max(0.4, end - start);
-  const per = span / Math.max(1, chars.length);
-  return chars.map((ch, i) => ({
-    time: start + per * i,
-    text: ch,
-    duration: per,
-  }));
-}
-
 function parseLyric(lyricText: string, tlyricText?: string): LyricLine[] {
   const timeRegex = /\[(\d{2}):(\d{2})(?:\.(\d{2,3}))?\]/g;
-  // 先解析翻译（只取行级时间 → 文本），用于和主歌词按时间对齐。
+  const wordTagRegex = /<(\d{1,2}):(\d{2})(?:\.(\d{1,3}))?>/g;
+
+  // 解析翻译（只取行级时间 → 文本）
   const parseTrans = (text: string) => {
     const map = new Map<number, string>();
     text.split("\n").forEach((line) => {
       const matches = Array.from(line.matchAll(timeRegex));
       if (matches.length === 0) return;
-      const content = line.replace(timeRegex, "").replace(WORD_TAG, "").trim();
+      const content = line.replace(timeRegex, "").replace(wordTagRegex, "").trim();
       matches.forEach((match) => {
         const t = tagToSeconds(match[1], match[2], match[3]);
         if (content) map.set(t, content);
@@ -263,13 +209,13 @@ function parseLyric(lyricText: string, tlyricText?: string): LyricLine[] {
     return map;
   };
 
-  // 解析主歌词为带时间的「行」，保留行内逐字标签的原始文本。
+  // 解析主歌词为带时间的「行」
   type RawLine = { time: number; raw: string };
   const rawLines: RawLine[] = [];
   (lyricText || "").split("\n").forEach((line) => {
     const stamps = Array.from(line.matchAll(timeRegex));
     if (stamps.length === 0) return;
-    const body = line.replace(timeRegex, "");
+    const body = line.replace(timeRegex, "").replace(wordTagRegex, "").trim();
     stamps.forEach((match) => {
       const t = tagToSeconds(match[1], match[2], match[3]);
       rawLines.push({ time: t, raw: body });
@@ -280,7 +226,7 @@ function parseLyric(lyricText: string, tlyricText?: string): LyricLine[] {
   const trans = parseTrans(tlyricText || "");
   const transTimes = Array.from(trans.keys()).sort((a, b) => a - b);
   const transNear = (t: number): string | undefined => {
-    // 翻译时间未必与主歌词完全相等，取最接近且 ≤0.4s 的那一条。
+    // 翻译时间未必与主歌词完全相等，取最接近且 ≤0.4s 的那一条
     let best: string | undefined;
     let bestDiff = 0.4;
     for (const tt of transTimes) {
@@ -293,65 +239,18 @@ function parseLyric(lyricText: string, tlyricText?: string): LyricLine[] {
     return best;
   };
 
-  const lines: LyricLine[] = rawLines.map((line, index) => {
-    const lineEnd =
-      index + 1 < rawLines.length ? rawLines[index + 1].time : line.time + 4;
-    const parsed = parseWordTags(line.raw, line.time, lineEnd);
-    const text = (parsed?.text ?? line.raw.replace(WORD_TAG, "")).trim();
-    const words =
-      parsed?.words ?? (text ? synthesizeWords(text, line.time, lineEnd) : undefined);
-    return {
-      time: line.time,
-      text,
-      words,
-      trans: transNear(line.time),
-    };
-  });
+  const lines: LyricLine[] = rawLines.map((line) => ({
+    time: line.time,
+    text: line.raw,
+    trans: transNear(line.time),
+  }));
 
-  // 主歌词为空但有翻译时，退化成纯翻译行（保持旧行为）。
+  // 主歌词为空但有翻译时，退化成纯翻译行
   if (lines.length === 0 && transTimes.length > 0) {
     return transTimes.map((t) => ({ time: t, text: trans.get(t) || "" }));
   }
 
   return lines.filter((line) => line.text || line.trans);
-}
-
-// 逐字歌词渲染：当前行用渐变把已唱过的字「点亮」，正在唱的字按词内进度部分填充。
-function KaraokeText({
-  line,
-  currentTime,
-  active,
-}: {
-  line: LyricLine;
-  currentTime: number;
-  active: boolean;
-}) {
-  // 非当前行：整行按已过/未过统一着色，开销最小。
-  if (!active || !line.words || line.words.length === 0) {
-    return <span>{line.text || line.trans}</span>;
-  }
-  return (
-    <span className="music-karaoke">
-      {line.words.map((word, i) => {
-        const ratio =
-          currentTime <= word.time
-            ? 0
-            : currentTime >= word.time + word.duration
-              ? 1
-              : (currentTime - word.time) / word.duration;
-        return (
-          <span
-            key={i}
-            className="music-karaoke-word"
-            style={{ ["--fill" as string]: `${Math.round(ratio * 100)}%` }}
-            data-text={word.text}
-          >
-            {word.text}
-          </span>
-        );
-      })}
-    </span>
-  );
 }
 
 function formatCount(value?: string | number) {
@@ -2165,7 +2064,6 @@ export default function Music() {
           currentSong={currentSong}
           lyricLines={lyricLines}
           activeLyricIndex={activeLyricIndex}
-          currentTime={currentTime}
           quality={quality}
           proxyEnabled={proxyEnabled}
           showSpectrum={showSpectrum}
@@ -3829,7 +3727,6 @@ function MusicDrawer({
   currentSong,
   lyricLines,
   activeLyricIndex,
-  currentTime,
   quality,
   proxyEnabled,
   showSpectrum,
@@ -3853,7 +3750,6 @@ function MusicDrawer({
   currentSong: MusicSong | null;
   lyricLines: LyricLine[];
   activeLyricIndex: number;
-  currentTime: number;
   quality: MusicQuality;
   proxyEnabled: boolean;
   showSpectrum: boolean;
@@ -3925,11 +3821,7 @@ function MusicDrawer({
                     }}
                   >
                     <p className="font-display font-semibold">
-                      <KaraokeText
-                        line={line}
-                        currentTime={currentTime}
-                        active={index === activeLyricIndex}
-                      />
+                      {line.text || line.trans}
                     </p>
                     {line.trans && <p className="mt-2 text-sm text-cream-faint">{line.trans}</p>}
                   </button>
@@ -4892,11 +4784,7 @@ function PlayerView({
                       }
                     >
                       <span>
-                        <KaraokeText
-                          line={line}
-                          currentTime={currentTime}
-                          active={index === activeLyricIndex}
-                        />
+                        {line.text || line.trans}
                       </span>
                       {line.trans && line.text && (
                         <span className="music-now-lyric-trans">{line.trans}</span>
