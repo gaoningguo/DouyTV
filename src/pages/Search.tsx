@@ -31,6 +31,7 @@ import type { ScriptDescriptor, ScriptSourceItem } from "@/source-script/types";
 import HotRecommendations from "@/components/HotRecommendations";
 import {
   fetchDoubanRecentHot,
+  fetchDoubanRecommends,
   fetchTodayBangumi,
   type DoubanItem,
 } from "@/lib/douban";
@@ -632,6 +633,11 @@ export default function Search() {
   const [searchOpen, setSearchOpen] = useState(false);
   const [showSourceBrowse, setShowSourceBrowse] = useState(false);
   const [input, setInput] = useState("");
+  const [searchPanelOpen, setSearchPanelOpen] = useState(false);
+  const [recentSearches, setRecentSearches] = useState<string[]>([]);
+  const [hotSearchKeywords, setHotSearchKeywords] = useState<string[]>([]);
+  const [recommendedKeywords, setRecommendedKeywords] = useState<string[]>([]);
+  const searchInputRef = useRef<HTMLInputElement>(null);
   const [directPlayTitle, setDirectPlayTitle] = useState<string | undefined>(undefined);
   const [directPlayError, setDirectPlayError] = useState<string | undefined>(undefined);
   const {
@@ -672,7 +678,184 @@ export default function Search() {
     hydrateLibrary();
     hydrateScripts();
     hydrateVodAssets();
+    // Load recent searches
+    const saved = localStorage.getItem("douytv:vod-recent-searches");
+    if (saved) {
+      try {
+        setRecentSearches(JSON.parse(saved));
+      } catch {
+        // ignore
+      }
+    }
+    // Load hot search keywords from Douban
+    void loadHotSearchKeywords();
   }, [hydrateLibrary, hydrateScripts, hydrateVodAssets]);
+
+  // Generate personalized recommendations based on search history content analysis
+  useEffect(() => {
+    const generateRecommendations = async () => {
+      const keywords = new Set<string>();
+
+      // Analyze recent searches to understand user interests
+      const recentSearchTerms = [...recentSearches, ...history].slice(0, 10);
+
+      console.log('[VOD Recommendations] Recent searches:', recentSearchTerms);
+
+      if (recentSearchTerms.length === 0) {
+        console.log('[VOD Recommendations] No search history, using empty');
+        setRecommendedKeywords([]);
+        return;
+      }
+
+      // Try to get recommendations from ALL enabled VOD scripts
+      const enabledScripts = scripts.filter(s => s.enabled);
+      console.log('[VOD Recommendations] Enabled scripts:', enabledScripts.length);
+
+      if (enabledScripts.length > 0) {
+        // Take the most recent search term
+        const mainTerm = recentSearchTerms[0];
+        console.log('[VOD Recommendations] Searching across ALL sources for:', mainTerm);
+
+        // Search across ALL sources in parallel (just like useSearch does)
+        const searchPromises = enabledScripts.map(async (script) => {
+          try {
+            const result = await callSearch(script, { keyword: mainTerm, page: 1 });
+            return result.list;
+          } catch (error) {
+            return [];
+          }
+        });
+
+        // Wait for all searches to complete
+        const allResults = await Promise.all(searchPromises);
+
+        // Flatten and aggregate all results
+        const aggregated = allResults.flat();
+        console.log('[VOD Recommendations] Total aggregated results from all sources:', aggregated.length);
+
+        // Shuffle results to mix content from different sources
+        const shuffled = [...aggregated].sort(() => Math.random() - 0.5);
+
+        // Extract unique titles from shuffled results
+        shuffled.forEach(item => {
+          // Exclude the search term itself and items from hot search
+          if (item.title !== mainTerm &&
+              item.title.length >= 2 &&
+              item.title.length <= 30 &&
+              !hotSearchKeywords.includes(item.title) &&
+              keywords.size < 6) {
+            keywords.add(item.title);
+          }
+        });
+
+        console.log('[VOD Recommendations] Extracted keywords:', keywords.size);
+      }
+
+      // Fallback: analyze search terms for patterns and recommend genres
+      if (keywords.size < 3) {
+        console.log('[VOD Recommendations] Not enough results, analyzing search patterns');
+        const genreMap = new Map<string, number>();
+
+        recentSearchTerms.forEach(term => {
+          if (/科幻|星际|未来|机器人|外星|流浪地球|三体/.test(term)) {
+            genreMap.set("科幻电影", (genreMap.get("科幻电影") || 0) + 2);
+          }
+          if (/悬疑|推理|侦探|犯罪|谋杀|唐探|唐人街/.test(term)) {
+            genreMap.set("悬疑推理", (genreMap.get("悬疑推理") || 0) + 2);
+          }
+          if (/动作|功夫|武侠|格斗|成龙|李连杰/.test(term)) {
+            genreMap.set("动作大片", (genreMap.get("动作大片") || 0) + 2);
+          }
+          if (/喜剧|搞笑|爆笑|周星驰|沈腾/.test(term)) {
+            genreMap.set("搞笑喜剧", (genreMap.get("搞笑喜剧") || 0) + 2);
+          }
+          if (/动漫|动画|番|哪吒|大鱼海棠/.test(term)) {
+            genreMap.set("国产动画", (genreMap.get("国产动画") || 0) + 2);
+          }
+          if (/爱情|恋爱|浪漫|情侣/.test(term)) {
+            genreMap.set("浪漫爱情", (genreMap.get("浪漫爱情") || 0) + 2);
+          }
+          if (/恐怖|惊悚|鬼|灵异|丧尸/.test(term)) {
+            genreMap.set("恐怖惊悚", (genreMap.get("恐怖惊悚") || 0) + 2);
+          }
+        });
+
+        // Also check watch history
+        [...historyRecords.slice(0, 10), ...favorites.slice(0, 5).map(f => ({ title: f.title }))]
+          .forEach(item => {
+            const title = item.title;
+            if (/科幻|星际|未来/.test(title)) genreMap.set("科幻电影", (genreMap.get("科幻电影") || 0) + 0.5);
+            if (/悬疑|推理|侦探/.test(title)) genreMap.set("悬疑推理", (genreMap.get("悬疑推理") || 0) + 0.5);
+            if (/动作|功夫|武侠/.test(title)) genreMap.set("动作大片", (genreMap.get("动作大片") || 0) + 0.5);
+            if (/喜剧|搞笑/.test(title)) genreMap.set("搞笑喜剧", (genreMap.get("搞笑喜剧") || 0) + 0.5);
+            if (/动漫|动画|番/.test(title)) genreMap.set("国产动画", (genreMap.get("国产动画") || 0) + 0.5);
+            if (/爱情|恋爱/.test(title)) genreMap.set("浪漫爱情", (genreMap.get("浪漫爱情") || 0) + 0.5);
+            if (/恐怖|惊悚/.test(title)) genreMap.set("恐怖惊悚", (genreMap.get("恐怖惊悚") || 0) + 0.5);
+          });
+
+        const topGenres = Array.from(genreMap.entries())
+          .sort((a, b) => b[1] - a[1])
+          .slice(0, Math.max(3, 6 - keywords.size));
+
+        topGenres.forEach(([genre]) => {
+          if (!hotSearchKeywords.includes(genre)) {
+            keywords.add(genre);
+          }
+        });
+      }
+
+      // Convert to array and limit to 6 items
+      const recommended = Array.from(keywords).slice(0, 6);
+      console.log('[VOD Recommendations] Final:', recommended);
+      setRecommendedKeywords(recommended);
+    };
+
+    void generateRecommendations();
+  }, [recentSearches, history, historyRecords, favorites, scripts, hotSearchKeywords]);
+
+  const loadHotSearchKeywords = async () => {
+    try {
+      // Fetch hot movies from Douban using recommend API (more reliable)
+      const hotMovies = await fetchDoubanRecommends({
+        kind: "movie",
+        sort: "T", // Sort by trending
+        limit: 12
+      });
+      // Extract titles as search keywords (take first 8)
+      const keywords = hotMovies.slice(0, 8).map(item => item.title);
+      setHotSearchKeywords(keywords);
+    } catch (error) {
+      console.warn("Failed to load hot search keywords:", error);
+      // Try fallback to TV shows if movies fail
+      try {
+        const hotTV = await fetchDoubanRecommends({
+          kind: "tv",
+          sort: "T",
+          limit: 8
+        });
+        const keywords = hotTV.map(item => item.title);
+        setHotSearchKeywords(keywords);
+      } catch {
+        // Ultimate fallback: empty array
+        setHotSearchKeywords([]);
+      }
+    }
+  };
+
+  const saveRecentSearch = useCallback((query: string) => {
+    const trimmed = query.trim();
+    if (!trimmed) return;
+    setRecentSearches((prev) => {
+      const updated = [trimmed, ...prev.filter((item) => item !== trimmed)].slice(0, 10);
+      localStorage.setItem("douytv:vod-recent-searches", JSON.stringify(updated));
+      return updated;
+    });
+  }, []);
+
+  const clearRecentSearches = useCallback(() => {
+    setRecentSearches([]);
+    localStorage.removeItem("douytv:vod-recent-searches");
+  }, []);
 
   const setVodTab = (tab: VodTab) => {
     setVodTabState(tab);
@@ -931,11 +1114,15 @@ export default function Search() {
       void search("");
       return;
     }
+    saveRecentSearch(kw);
+    setSearchPanelOpen(false);
     search(kw);
   };
 
   const quickSearch = (kw: string) => {
     setInput(kw);
+    saveRecentSearch(kw);
+    setSearchPanelOpen(false);
     setSearchOpen(true);
     search(kw);
   };
@@ -1056,92 +1243,167 @@ export default function Search() {
         }}
       >
         <div className="flex items-center gap-2.5 min-w-0">
-          {searchOpen ? (
-            <button
-              type="button"
-              onClick={() => setSearchOpen(false)}
-              className="w-9 h-9 rounded-full flex items-center justify-center tap text-cream-dim hover:text-cream"
-              style={{ background: "var(--ink-2)", border: "1px solid var(--cream-line)" }}
-              aria-label="返回点播"
-            >
-              <IconChevronLeft size={16} />
-            </button>
-          ) : (
-            <>
-              <span className="rec-dot" />
-              <span className="hidden sm:inline font-display text-sm font-extrabold text-cream">
-                点播
-              </span>
-            </>
-          )}
-          {searchOpen && (
-            <div className="min-w-0">
-              <p className="font-display text-base font-extrabold text-cream">搜索</p>
-              <p className="font-mono text-[10px] text-cream-faint">SEARCH VOD</p>
-            </div>
-          )}
+          <span className="rec-dot" />
+          <span className="hidden sm:inline font-display text-sm font-extrabold text-cream">
+            点播
+          </span>
         </div>
+
+        {/* Search Bar in Header - Always visible */}
         <div className="flex items-center gap-2">
-          {!searchOpen && (
-            <button
-              type="button"
-              onClick={() => setVodTab(vodTab === "mine" ? "home" : "mine")}
-              className="w-10 h-10 rounded-full flex items-center justify-center tap text-cream-dim hover:text-ember"
-              style={{ background: "var(--ink-2)", border: "1px solid var(--cream-line)" }}
-              aria-label={vodTab === "mine" ? "返回首页" : "我的"}
-              title={vodTab === "mine" ? "首页" : "我的"}
+          <div className="relative">
+            <div
+              className="search-field-shell flex items-center gap-2 px-3 py-2 rounded-full w-44 sm:w-64"
+              style={{
+                background: "var(--ink-2)",
+                border: "1px solid var(--cream-line)",
+              }}
             >
-              {vodTab === "mine" ? <IconHome size={16} /> : <IconArtist size={16} />}
-            </button>
-          )}
+              <IconSearch size={14} className="text-cream-faint shrink-0" />
+              <input
+                ref={searchInputRef}
+                type="text"
+                value={input}
+                onChange={(e) => setInput(e.target.value)}
+                onFocus={() => setSearchPanelOpen(true)}
+                onKeyDown={(e) => {
+                  if (e.key === "Enter") {
+                    e.preventDefault();
+                    onSubmit(e);
+                  }
+                }}
+                placeholder="搜索"
+                className="search-field-input flex-1 min-w-0 bg-transparent text-sm outline-none text-cream placeholder:text-cream-faint"
+              />
+              {input && (
+                <button
+                  type="button"
+                  onClick={() => {
+                    setInput("");
+                    setSearchOpen(false);
+                    void search("");
+                  }}
+                  className="text-cream-faint hover:text-cream tap p-0.5"
+                  aria-label="清除"
+                >
+                  <IconClose size={14} />
+                </button>
+              )}
+            </div>
+          </div>
+
+          <button
+            type="button"
+            onClick={() => setVodTab(vodTab === "mine" ? "home" : "mine")}
+            className="w-10 h-10 rounded-full flex items-center justify-center tap text-cream-dim hover:text-ember shrink-0"
+            style={{ background: "var(--ink-2)", border: "1px solid var(--cream-line)" }}
+            aria-label={vodTab === "mine" ? "返回首页" : "我的"}
+            title={vodTab === "mine" ? "首页" : "我的"}
+          >
+            {vodTab === "mine" ? <IconHome size={16} /> : <IconArtist size={16} />}
+          </button>
         </div>
       </div>
 
-      {searchOpen && (
-      <form
-        onSubmit={onSubmit}
-        className="shrink-0 flex items-center gap-2 px-4 py-3"
-        style={{
-          background: "rgba(14,15,17,0.78)",
-          borderBottom: "1px solid var(--cream-line)",
-        }}
-      >
-        <div
-          className="search-field-shell flex-1 flex items-center gap-2 px-3 py-2 rounded-full"
-          style={{
-            background: "var(--ink-2)",
-            border: "1px solid var(--cream-line)",
-          }}
-        >
-          <IconSearch size={14} className="text-cream-faint" />
-          <input
-            type="text"
-            value={input}
-            onChange={(e) => setInput(e.target.value)}
-            autoFocus
-            placeholder="搜索电影、剧集、综艺、动漫"
-            className="search-field-input flex-1 bg-transparent text-sm outline-none text-cream placeholder:text-cream-faint"
+      {/* Search Suggestions Panel - Render at top level with fixed positioning */}
+      {searchPanelOpen && !searchOpen && (
+        <>
+          <div
+            className="fixed inset-0 z-[998]"
+            onClick={() => setSearchPanelOpen(false)}
           />
-          {input && (
-            <button
-              type="button"
-              onClick={() => setInput("")}
-              className="text-cream-faint hover:text-cream tap p-0.5"
-              aria-label="清除"
-            >
-              <IconClose size={14} />
-            </button>
-          )}
-        </div>
-        <button
-          type="submit"
-          disabled={loading}
-          className="px-4 py-2 rounded-full text-xs font-display font-semibold tracking-wider tap disabled:opacity-50"
-          style={{ background: "var(--ember)", color: "var(--ink)" }}
-        >
-          搜索
-        </button>
-      </form>
+          <div
+            className="fixed overflow-y-auto rounded-xl shadow-2xl z-[999] left-4 right-4 sm:left-auto sm:right-6 sm:w-96 max-h-[calc(100vh-6rem)] sm:max-h-[32rem]"
+            style={{
+              top: "4.5rem",
+              background: "rgba(22,24,29,0.98)",
+              border: "1px solid var(--cream-line)",
+              backdropFilter: "blur(20px)",
+            }}
+          >
+            {/* Recent Searches */}
+            {recentSearches.length > 0 && (
+              <div className="p-4 border-b" style={{ borderColor: "var(--cream-line)" }}>
+                <div className="flex items-center justify-between mb-3">
+                  <h3 className="text-xs font-semibold text-cream-dim">近期搜索</h3>
+                  <button
+                    type="button"
+                    onClick={clearRecentSearches}
+                    className="text-xs text-cream-faint hover:text-ember"
+                  >
+                    清空
+                  </button>
+                </div>
+                <div className="flex flex-wrap gap-2">
+                  {recentSearches.map((item, index) => (
+                    <button
+                      key={index}
+                      type="button"
+                      onClick={() => quickSearch(item)}
+                      className="px-3 py-1.5 rounded-full text-xs transition-colors"
+                      style={{
+                        background: "rgba(242,232,213,0.08)",
+                        border: "1px solid var(--cream-line)",
+                        color: "var(--cream-dim)",
+                      }}
+                    >
+                      {item}
+                    </button>
+                  ))}
+                </div>
+              </div>
+            )}
+
+            {/* Personalized Recommendations */}
+            {recommendedKeywords.length > 0 && (
+              <div className="p-4 border-b" style={{ borderColor: "var(--cream-line)" }}>
+                <h3 className="text-xs font-semibold text-cream-dim mb-3">为你推荐</h3>
+                <div className="flex flex-wrap gap-2">
+                  {recommendedKeywords.map((item, index) => (
+                    <button
+                      key={index}
+                      type="button"
+                      onClick={() => quickSearch(item)}
+                      className="px-3 py-1.5 rounded-full text-xs transition-colors"
+                      style={{
+                        background: "rgba(255,129,97,0.12)",
+                        border: "1px solid rgba(255,129,97,0.3)",
+                        color: "var(--ember)",
+                      }}
+                    >
+                      {item}
+                    </button>
+                  ))}
+                </div>
+              </div>
+            )}
+
+            {/* Hot Searches */}
+            {hotSearchKeywords.length > 0 && (
+              <div className="p-4">
+                <h3 className="text-xs font-semibold text-cream-dim mb-3">热门影视</h3>
+                <div className="space-y-1">
+                  {hotSearchKeywords.map((item, index) => (
+                    <button
+                      key={index}
+                      type="button"
+                      onClick={() => quickSearch(item)}
+                      className="w-full px-3 py-2 rounded-lg text-left text-sm transition-colors hover:bg-cream-pale flex items-center gap-2"
+                    >
+                      <span
+                        className="font-mono text-xs w-5 text-center"
+                        style={{ color: index < 3 ? "var(--ember)" : "var(--cream-faint)" }}
+                      >
+                        {index + 1}
+                      </span>
+                      <span style={{ color: "var(--cream)" }}>{item}</span>
+                    </button>
+                  ))}
+                </div>
+              </div>
+            )}
+          </div>
+        </>
       )}
 
       <div
@@ -1263,6 +1525,23 @@ export default function Search() {
               <span className="text-ember">{visibleCount} 结果</span>
             </div>
             <div className="flex items-center gap-1.5">
+              <button
+                type="button"
+                onClick={() => {
+                  setInput("");
+                  setSearchOpen(false);
+                  void search("");
+                }}
+                className="w-8 h-8 rounded-lg flex items-center justify-center tap text-cream-dim hover:text-cream"
+                style={{
+                  background: "var(--ink-2)",
+                  border: "1px solid var(--cream-line)",
+                }}
+                aria-label="关闭搜索"
+                title="关闭搜索"
+              >
+                <IconClose size={14} />
+              </button>
               <button
                 type="button"
                 onClick={() => search(keyword, 1, { force: true })}

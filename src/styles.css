@@ -1447,6 +1447,32 @@ code {
   color: var(--ember) !important;
 }
 
+/* 逐字歌词：当前行的每个字按词内进度从暗色填充到 ember */
+.music-karaoke {
+  display: inline;
+}
+.music-karaoke-word {
+  position: relative;
+  display: inline-block;
+  white-space: pre;
+  color: rgba(242, 232, 213, 0.32);
+}
+/* 用伪元素叠一层 ember 文字，宽度按 --fill 裁切，实现「点亮」效果 */
+.music-karaoke-word::after {
+  content: attr(data-text);
+  position: absolute;
+  left: 0;
+  top: 0;
+  width: 100%;
+  overflow: hidden;
+  white-space: pre;
+  color: var(--ember);
+  -webkit-clip-path: inset(0 calc(100% - var(--fill, 0%)) 0 0);
+  clip-path: inset(0 calc(100% - var(--fill, 0%)) 0 0);
+  transition: clip-path 90ms linear, -webkit-clip-path 90ms linear;
+  pointer-events: none;
+}
+
 @media (max-width: 640px) {
   .music-topbar .music-tabline {
     gap: 18px;

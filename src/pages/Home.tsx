@@ -1858,7 +1858,7 @@ function FeedCaption({
 }) {
   return (
     <div
-      className="absolute left-4 right-24 text-cream pointer-events-none z-20"
+      className="absolute left-4 right-24 text-cream pointer-events-none z-10"
       style={{
         bottom: desktop
           ? 86
@@ -1930,7 +1930,7 @@ function LiveCaption({
   return (
     <>
       <div
-        className="absolute left-4 right-24 text-cream pointer-events-none z-20"
+        className="absolute left-4 right-24 text-cream pointer-events-none z-10"
         style={{
           bottom: desktop
             ? 82

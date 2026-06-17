@@ -1,5 +1,21 @@
 import { isLikelyShortPreviewDuration } from "./types";
 
+/** 解析结果只是试听片段时抛出，调用方可据此区分「试听」与「真正失败」。 */
+export class MusicPreviewError extends Error {
+  readonly preview = true;
+  constructor(message = "当前解析源只返回试听片段，已跳过") {
+    super(message);
+    this.name = "MusicPreviewError";
+  }
+}
+
+export function isMusicPreviewError(error: unknown): boolean {
+  return (
+    error instanceof MusicPreviewError ||
+    (typeof error === "object" && error !== null && (error as { preview?: boolean }).preview === true)
+  );
+}
+
 export async function waitForUsableMusicAudio(
   audio: HTMLAudioElement,
   expectedDuration?: number,
@@ -38,7 +54,7 @@ export async function waitForUsableMusicAudio(
     function check() {
       const duration = readDuration();
       if (isLikelyShortPreviewDuration(duration, expectedDuration)) {
-        fail(new Error("当前解析源只返回试听片段，已跳过"));
+        fail(new MusicPreviewError());
         return;
       }
       if (duration || audio.readyState >= 1) finish(duration);

@@ -17,7 +17,6 @@ import {
   IconChevronRight,
   IconFilm,
   IconPlay,
-  IconSearch,
 } from "@/components/Icon";
 import { wrapImage } from "@/lib/proxy";
 
@@ -64,7 +63,6 @@ export default function HotRecommendations({
   onPickTitle,
   variant = "compact",
   resolvingTitle,
-  onOpenSearch,
   onOpenSourceBrowse,
 }: Props) {
   const [kind, setKind] = useState<DoubanKind>(readKind);
@@ -203,7 +201,7 @@ export default function HotRecommendations({
               </button>
             ))}
           </div>
-          {variant === "home" && onOpenSearch && (
+          {/* {variant === "home" && onOpenSearch && (
             <button
               type="button"
               onClick={onOpenSearch}
@@ -218,7 +216,7 @@ export default function HotRecommendations({
             >
               <IconSearch size={15} />
             </button>
-          )}
+          )} */}
           {variant === "home" && onOpenSourceBrowse && (
             <button
               type="button"
