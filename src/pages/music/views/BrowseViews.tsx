@@ -1,12 +1,16 @@
 import { useEffect, useState } from "react";
 import { IconAlbum, IconArtist, IconFilm, IconWave } from "@/components/Icon";
 import {
+  getNeteaseArtistList,
+  getNeteaseTopArtists,
+  isNeteaseAntiBotError,
   getNeteaseMvList,
   getNeteaseRadioRecommend,
   musicSongKey,
   type MusicSong,
   type MusicSongListSummary,
   type MusicSourceDescriptor,
+  type NeteaseArtist,
   type NeteaseMv,
 } from "@/lib/music";
 import { wrapImage } from "@/lib/proxy";
@@ -139,79 +143,148 @@ export function MvView({
   );
 }
 
-const ARTIST_CATEGORIES = ["全部", "华语", "欧美", "日本", "韩国", "其他"];
+const ARTIST_AREAS: Array<{ label: string; area: number }> = [
+  { label: "全部", area: -1 },
+  { label: "华语", area: 7 },
+  { label: "欧美", area: 96 },
+  { label: "日本", area: 8 },
+  { label: "韩国", area: 16 },
+  { label: "其他", area: 0 },
+];
 const ARTIST_PREFIXES = [
   "热门", "A", "B", "C", "D", "E", "F", "G", "H", "I", "J", "K", "L", "M",
   "N", "O", "P", "Q", "R", "S", "T", "U", "V", "W", "X", "Y", "Z", "#",
 ];
 
-/** 歌手页 —— 借鉴 Tabos：分类 + 首字母筛选 + 头像网格（LX 无歌手榜，占位交互）。 */
+/**
+ * 歌手广场 —— 对齐 SPlayer artist.ts：/artist/list（按区域 area + 首字母 initial 筛选）
+ * 与 /top/artists（热门）。仅外部自部署网易源可用；内置源受 -462 反爬限制时降级提示。
+ */
 export function ArtistsView({
-  artists,
+  source,
   onOpenArtist,
 }: {
-  artists: Array<{ name: string; cover?: string }>;
-  onOpenArtist: (name: string) => void;
+  source: MusicSourceDescriptor | null;
+  onOpenArtist: (id: string) => void;
 }) {
-  const [category, setCategory] = useState("全部");
+  const [area, setArea] = useState(-1);
   const [prefix, setPrefix] = useState("热门");
+  const [artists, setArtists] = useState<NeteaseArtist[]>([]);
+  const [loading, setLoading] = useState(false);
+  const [restricted, setRestricted] = useState(false);
+
+  useEffect(() => {
+    if (!source) {
+      setArtists([]);
+      setRestricted(false);
+      return;
+    }
+    let cancelled = false;
+    setLoading(true);
+    setRestricted(false);
+    (async () => {
+      try {
+        // initial：「热门」走 top/artists，「#」用 0，字母用其 charCode。
+        const list =
+          prefix === "热门"
+            ? await getNeteaseTopArtists(source, 90)
+            : await getNeteaseArtistList(source, {
+                area,
+                initial: prefix === "#" ? 0 : prefix.toLowerCase(),
+                limit: 90,
+              });
+        if (!cancelled) setArtists(list);
+      } catch (error) {
+        if (!cancelled) {
+          setArtists([]);
+          if (isNeteaseAntiBotError(error)) setRestricted(true);
+        }
+      } finally {
+        if (!cancelled) setLoading(false);
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [source?.id, area, prefix]);
+
   return (
     <div className="music-page-wrap space-y-5">
-      <PageHeader title="歌手" subtitle="按分类与首字母浏览" />
-      <div className="music-artist-filter-row">
-        {ARTIST_CATEGORIES.map((c) => (
-          <button
-            key={c}
-            type="button"
-            onClick={() => setCategory(c)}
-            className="music-af-btn"
-            data-active={category === c || undefined}
-          >
-            {c}
-          </button>
-        ))}
-      </div>
-      <div className="music-artist-prefix-row">
-        {ARTIST_PREFIXES.map((p) => (
-          <button
-            key={p}
-            type="button"
-            onClick={() => setPrefix(p)}
-            className="music-af-btn music-af-btn-sm"
-            data-active={prefix === p || undefined}
-          >
-            {p}
-          </button>
-        ))}
-      </div>
-      {artists.length === 0 ? (
+      <PageHeader title="歌手" subtitle="按区域与首字母浏览" />
+      {!source || restricted ? (
         <PlaceholderState
           icon={<IconArtist size={40} />}
-          title="按分类浏览歌手"
-          desc="后端接入歌手榜数据后，这里会展示对应分类与首字母的歌手头像墙。"
+          title="歌手广场需自部署网易源"
+          desc="内置网易源受官方反爬限制（-462），无法浏览歌手分类。在「音乐源」添加自部署 NeteaseCloudMusicApi 源后即可使用。"
         />
       ) : (
-        <div className="music-artist-grid">
-          {artists.map((artist) => (
-            <button
-              key={artist.name}
-              type="button"
-              onClick={() => onOpenArtist(artist.name)}
-              className="music-artist-card"
-            >
-              <span className="music-artist-avatar">
-                {artist.cover ? (
-                  <img src={artist.cover} alt="" className="h-full w-full object-cover" />
-                ) : (
-                  <span className="grid h-full w-full place-items-center bg-ink-3 text-cream-faint">
-                    <IconAlbum size={28} />
+        <>
+          <div className="music-artist-filter-row">
+            {ARTIST_AREAS.map((item) => (
+              <button
+                key={item.label}
+                type="button"
+                onClick={() => setArea(item.area)}
+                className="music-af-btn"
+                data-active={area === item.area || undefined}
+              >
+                {item.label}
+              </button>
+            ))}
+          </div>
+          <div className="music-artist-prefix-row">
+            {ARTIST_PREFIXES.map((p) => (
+              <button
+                key={p}
+                type="button"
+                onClick={() => setPrefix(p)}
+                className="music-af-btn music-af-btn-sm"
+                data-active={prefix === p || undefined}
+              >
+                {p}
+              </button>
+            ))}
+          </div>
+          {loading ? (
+            <div className="music-artist-grid">
+              {Array.from({ length: 12 }).map((_, i) => (
+                <div key={i} className="aspect-square rounded-full skeleton-shimmer" />
+              ))}
+            </div>
+          ) : artists.length === 0 ? (
+            <PlaceholderState
+              icon={<IconArtist size={40} />}
+              title="暂无歌手"
+              desc="该分类下没有取到歌手，换个区域或首字母试试。"
+            />
+          ) : (
+            <div className="music-artist-grid">
+              {artists.map((artist) => (
+                <button
+                  key={artist.id}
+                  type="button"
+                  onClick={() => onOpenArtist(artist.id)}
+                  className="music-artist-card"
+                >
+                  <span className="music-artist-avatar">
+                    {artist.cover ? (
+                      <img
+                        src={wrapImage(artist.cover)}
+                        alt=""
+                        className="h-full w-full object-cover"
+                      />
+                    ) : (
+                      <span className="grid h-full w-full place-items-center bg-ink-3 text-cream-faint">
+                        <IconAlbum size={28} />
+                      </span>
+                    )}
                   </span>
-                )}
-              </span>
-              <span className="music-artist-card-name line-clamp-1">{artist.name}</span>
-            </button>
-          ))}
-        </div>
+                  <span className="music-artist-card-name line-clamp-1">{artist.name}</span>
+                </button>
+              ))}
+            </div>
+          )}
+        </>
       )}
     </div>
   );

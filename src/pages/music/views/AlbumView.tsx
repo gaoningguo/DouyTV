@@ -11,6 +11,7 @@ export function AlbumView({
   cover,
   songs,
   loading,
+  restricted,
   currentSong,
   isPlaying,
   isFavorite,
@@ -30,6 +31,7 @@ export function AlbumView({
   cover?: string;
   songs: MusicSong[];
   loading: boolean;
+  restricted?: boolean;
   currentSong: MusicSong | null;
   isPlaying: boolean;
   isFavorite: (song: MusicSong) => boolean;
@@ -49,6 +51,14 @@ export function AlbumView({
   const albumArtist = artist || relatedArtist || mostCommonArtist(songs);
   return (
     <div className="music-album-page space-y-10 pb-4">
+      {restricted && (
+        <div
+          className="rounded-lg px-4 py-2.5 text-xs text-cream-dim"
+          style={{ background: "rgba(255,107,53,0.08)", border: "1px solid rgba(255,107,53,0.3)" }}
+        >
+          完整专辑曲目需自部署 NeteaseCloudMusicApi 源；当前为搜索派生数据。
+        </div>
+      )}
       <section className="music-ob-album-hero">
         <div
           aria-hidden

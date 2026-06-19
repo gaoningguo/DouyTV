@@ -18,6 +18,8 @@ export function ArtistView({
   albums,
   similar,
   loading,
+  meta,
+  restricted,
   currentSong,
   isPlaying,
   isFavorite,
@@ -32,9 +34,11 @@ export function ArtistView({
 }: {
   name: string;
   songs: MusicSong[];
-  albums: Array<{ name: string; cover?: string; song: MusicSong }>;
+  albums: Array<{ id?: string; name: string; cover?: string }>;
   similar: Array<{ name: string; cover?: string; count: number; song: MusicSong }>;
   loading: boolean;
+  meta?: { cover?: string; briefDesc?: string; musicSize?: number; albumSize?: number } | null;
+  restricted?: boolean;
   currentSong: MusicSong | null;
   isPlaying: boolean;
   isFavorite: (song: MusicSong) => boolean;
@@ -44,15 +48,27 @@ export function ArtistView({
   onFavorite: (song: MusicSong) => void;
   onQueue: (song: MusicSong) => void;
   onAddToPlaylist: (song: MusicSong) => void;
-  onOpenAlbum: (album: string, artist?: string) => void;
+  onOpenAlbum: (album: string, artist?: string, id?: string) => void;
   onOpenArtist: (artist: string) => void;
 }) {
   const [showAllSongs, setShowAllSongs] = useState(false);
   const heroSong = songs.find((song) => song.cover) ?? songs[0];
-  const heroCover = heroSong?.cover ? wrapImage(heroSong.cover) : undefined;
+  const heroCover = meta?.cover
+    ? wrapImage(meta.cover)
+    : heroSong?.cover
+      ? wrapImage(heroSong.cover)
+      : undefined;
   const visibleSongs = showAllSongs ? songs : songs.slice(0, 8);
   return (
     <div className="music-album-page space-y-10 pb-4">
+      {restricted && (
+        <div
+          className="rounded-lg px-4 py-2.5 text-xs text-cream-dim"
+          style={{ background: "rgba(255,107,53,0.08)", border: "1px solid rgba(255,107,53,0.3)" }}
+        >
+          完整歌手资料（头像 / 简介 / 专辑）需自部署 NeteaseCloudMusicApi 源；当前为搜索派生数据。
+        </div>
+      )}
       <section className="music-ob-album-hero">
         <div
           aria-hidden
@@ -82,12 +98,20 @@ export function ArtistView({
                 {name}
               </h1>
               <div className="mt-3 flex flex-wrap items-center gap-3 text-sm text-cream-dim">
-                {songs.length > 0 && (
+                {(meta?.musicSize || songs.length > 0) && (
                   <span>
-                    {songs.length} 首歌曲{albums.length > 0 ? ` · ${albums.length} 张专辑` : ""}
+                    {meta?.musicSize ?? songs.length} 首歌曲
+                    {(meta?.albumSize ?? albums.length) > 0
+                      ? ` · ${meta?.albumSize ?? albums.length} 张专辑`
+                      : ""}
                   </span>
                 )}
               </div>
+              {meta?.briefDesc && (
+                <p className="mt-3 line-clamp-2 max-w-xl text-sm text-cream-faint">
+                  {meta.briefDesc}
+                </p>
+              )}
               <div className="mt-6 flex flex-wrap items-center gap-3">
                 <button
                   type="button"
@@ -181,9 +205,9 @@ export function ArtistView({
           <div className="grid grid-cols-2 gap-6 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-6">
             {albums.map((album) => (
               <button
-                key={album.name}
+                key={album.id || album.name}
                 type="button"
-                onClick={() => onOpenAlbum(album.name, name)}
+                onClick={() => onOpenAlbum(album.name, name, album.id)}
                 className="group text-left"
               >
                 <div className="music-ob-album-cover">

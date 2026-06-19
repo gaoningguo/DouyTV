@@ -20,12 +20,19 @@ import {
   getMusicBoards,
   getMusicHotSearch,
   getMusicSonglistDetail,
+  getNeteaseAlbum,
+  getNeteaseArtist,
+  getNeteaseArtistAlbums,
+  getNeteaseHotSearch,
   getNeteaseMvUrl,
   getNeteaseNewSongRecommend,
   getNeteasePlaylistSongs,
   getNeteaseRadioPrograms,
+  getNeteaseSimiSongs,
   importMusicSourceFromText,
+  isNeteaseAntiBotError,
   parseNeteasePlaylistInput,
+  resolveNeteaseArtistId,
   isMusicPreviewError,
   musicSongKey,
   normalizeMusicPlatform,
@@ -108,9 +115,6 @@ export default function Music() {
   const playByQueueOffsetRef = useRef<((offset: number) => Promise<void>) | null>(null);
   const previewSkipChainRef = useRef(0);
   const queueRef = useRef<MusicSong[]>([]);
-  // 「为你推荐」防抖动：只在真正影响排序的输入变化时重算，并丢弃过期的异步结果
-  const recommendSignatureRef = useRef("");
-  const recommendRunRef = useRef(0);
   const location = useLocation();
   const navigate = useNavigate();
   const view = deriveView(location.pathname);
@@ -134,14 +138,19 @@ export default function Music() {
   const albumParams = useMemo(() => {
     const match = location.pathname.match(/^\/music\/album\/([^/]+)/);
     if (!match) return null;
-    const artist = new URLSearchParams(location.search).get("artist") || "";
-    return { name: decodeURIComponent(match[1]), artist };
+    const query = new URLSearchParams(location.search);
+    const artist = query.get("artist") || "";
+    // 真专辑 id（来自歌手页/搜索的真接口）；无 id 的旧入口走文本派生回退。
+    const id = query.get("id") || "";
+    return { name: decodeURIComponent(match[1]), artist, id };
   }, [location.pathname, location.search]);
   const artistParams = useMemo(() => {
     const match = location.pathname.match(/^\/music\/artist\/([^/]+)/);
     if (!match) return null;
-    return { name: decodeURIComponent(match[1]) };
-  }, [location.pathname]);
+    // 真歌手 id（来自歌手广场/搜索/专辑的真接口）；无 id 的旧入口走搜索派生回退。
+    const id = new URLSearchParams(location.search).get("id") || "";
+    return { name: decodeURIComponent(match[1]), id };
+  }, [location.pathname, location.search]);
   const [libraryTab, setLibraryTab] = useState<LibraryTab>("favorites");
   const [drawer, setDrawer] = useState<DrawerView>(null);
   const [keyword, setKeyword] = useState("");
@@ -205,11 +214,25 @@ export default function Music() {
   const [albumArtist, setAlbumArtist] = useState("");
   const [artistSongs, setArtistSongs] = useState<MusicSong[]>([]);
   const [artistAlbums, setArtistAlbums] = useState<
-    Array<{ name: string; cover?: string; song: MusicSong }>
+    Array<{ id?: string; name: string; cover?: string }>
   >([]);
   const [artistSimilar, setArtistSimilar] = useState<
     Array<{ name: string; cover?: string; count: number; song: MusicSong }>
   >([]);
+  const [artistMeta, setArtistMeta] = useState<{
+    cover?: string;
+    briefDesc?: string;
+    musicSize?: number;
+    albumSize?: number;
+  } | null>(null);
+  // 内置/无外部网易源时富接口受 -462 限制，页面降级为派生数据 + 提示。
+  const [artistRestricted, setArtistRestricted] = useState(false);
+  const [albumRestricted, setAlbumRestricted] = useState(false);
+  const [albumMeta, setAlbumMeta] = useState<{
+    cover?: string;
+    desc?: string;
+    publishTime?: number;
+  } | null>(null);
   const [artistLoading, setArtistLoading] = useState(false);
   const [addToPlaylistSong, setAddToPlaylistSong] = useState<MusicSong | null>(null);
   const [newPlaylistName, setNewPlaylistName] = useState("");
@@ -293,175 +316,6 @@ export default function Music() {
       }
     }
   }, [hydrate]);
-
-  // 「为你推荐」纯粹基于用户个人行为（播放历史 / 收藏 / 搜索）生成，
-  // 不混入热门搜索 —— 热门搜索是单独的「热门搜索」分区。
-  // 评分维度：播放次数 × 近因衰减 × 完成度，叠加收藏与搜索信号。
-  useEffect(() => {
-    // 排序只关心歌手 / 播放次数 / 收藏 / 搜索词，不关心每 10 秒刷新的播放进度。
-    // 用这些字段拼一个签名，签名不变就不重算，避免播放过程中频繁抖动。
-    const signature = JSON.stringify({
-      h: history
-        .slice(0, 80)
-        .map((r) => `${r.artist}|${r.playCount || 0}`),
-      f: favorites.slice(0, 60).map((s) => s.artist),
-      s: recentSearches.slice(0, 8),
-      src: sources.filter((x) => x.enabled).map((x) => x.id),
-    });
-    if (signature === recommendSignatureRef.current) return;
-    recommendSignatureRef.current = signature;
-    const runId = ++recommendRunRef.current;
-    const isStale = () => runId !== recommendRunRef.current;
-
-    const generateRecommendations = async () => {
-      // ---- 提取候选歌手：主歌手归一，过滤过长/过短噪声 ----
-      const primaryArtist = (raw?: string) => {
-        const name = (raw || "")
-          .split(/[/、,，&]| feat\.? | ft\.? /i)[0]
-          .trim();
-        return name.length >= 2 && name.length <= 15 ? name : "";
-      };
-
-      // 近因衰减：以「天」为半衰期，越近的播放权重越高（7 天衰减到约一半）。
-      const now = Date.now();
-      const recencyFactor = (timestamp?: number) => {
-        if (!timestamp) return 0.5;
-        const ageDays = Math.max(0, (now - timestamp) / 86_400_000);
-        return 0.3 + 0.7 * Math.pow(0.5, ageDays / 7);
-      };
-
-      // 完成度：听完整首 → 满权重；早早跳过 → 降权（只有 position 数据时才计算）。
-      const completionFactor = (position?: number, duration?: number) => {
-        if (!duration || duration <= 0 || position === undefined) return 1;
-        const ratio = position / duration;
-        if (ratio >= 0.6) return 1;
-        if (ratio >= 0.25) return 0.7;
-        return 0.4; // 听了不到 1/4 就切走，几乎不算偏好
-      };
-
-      // 加权歌手分：历史(次数 × 近因 × 完成度) > 收藏 > 搜索词
-      const artistScore = new Map<string, number>();
-      const bump = (artist: string, weight: number) => {
-        if (!artist || weight <= 0) return;
-        artistScore.set(artist, (artistScore.get(artist) || 0) + weight);
-      };
-
-      // 1. 播放历史 —— 最强信号
-      history.slice(0, 80).forEach((record) => {
-        const artist = primaryArtist(record.artist);
-        const base = 3 * Math.min(record.playCount || 1, 5);
-        bump(
-          artist,
-          base *
-            recencyFactor(record.lastPlayedAt) *
-            completionFactor(record.position, record.duration)
-        );
-      });
-
-      // 2. 收藏 —— 明确的喜好信号
-      favorites.slice(0, 60).forEach((song) => {
-        bump(primaryArtist(song.artist), 2);
-      });
-
-      // 3. 搜索历史 —— 把像歌手名的搜索词也算作信号
-      const recentSearchTerms = recentSearches.slice(0, 8);
-      recentSearchTerms.forEach((term, index) => {
-        if (term.length >= 2 && term.length <= 8 && !/歌|曲|音乐|专辑|榜|热门/.test(term)) {
-          // 越靠前的搜索越近，给一点点近因加成
-          bump(term, 1.5 * (1 - index * 0.06));
-        }
-      });
-
-      // 搜索词集合：用于去重，避免「为你推荐」与上方「近期搜索」展示同一个词
-      const recentSearchSet = new Set(recentSearches.map((t) => t.trim()));
-
-      const topArtists = Array.from(artistScore.entries())
-        .sort((a, b) => b[1] - a[1])
-        .slice(0, 5)
-        .map(([artist]) => artist);
-
-      // 推荐里优先放「不是刚搜过」的歌手，已搜过的留作种子但不直接展示
-      const keywords = new Set<string>(
-        topArtists.filter((artist) => !recentSearchSet.has(artist))
-      );
-
-      // ---- 流派偏好：综合历史 / 收藏 / 搜索词 ----
-      const genreMap = new Map<string, number>();
-      const detectGenre = (text: string, weight: number) => {
-        const t = text.toLowerCase();
-        if (/民谣|acoustic|folk/.test(t)) genreMap.set("民谣", (genreMap.get("民谣") || 0) + weight);
-        if (/摇滚|rock|punk/.test(t)) genreMap.set("摇滚", (genreMap.get("摇滚") || 0) + weight);
-        if (/说唱|rap|hip.?hop/.test(t)) genreMap.set("说唱", (genreMap.get("说唱") || 0) + weight);
-        if (/古风|国风/.test(t)) genreMap.set("古风", (genreMap.get("古风") || 0) + weight);
-        if (/粤语|cantonese/.test(t)) genreMap.set("粤语", (genreMap.get("粤语") || 0) + weight);
-        if (/电子|edm|house/.test(t)) genreMap.set("电子", (genreMap.get("电子") || 0) + weight);
-        if (/爵士|jazz/.test(t)) genreMap.set("爵士", (genreMap.get("爵士") || 0) + weight);
-      };
-      history.slice(0, 60).forEach((r) =>
-        detectGenre(`${r.title} ${r.artist || ""}`, recencyFactor(r.lastPlayedAt))
-      );
-      favorites.slice(0, 40).forEach((s) => detectGenre(`${s.title} ${s.artist || ""}`, 0.8));
-      recentSearchTerms.forEach((term) => detectGenre(term, 2));
-
-      Array.from(genreMap.entries())
-        .filter(([, score]) => score >= 1.5)
-        .sort((a, b) => b[1] - a[1])
-        .slice(0, 2)
-        .forEach(([genre]) => keywords.add(genre));
-
-      // 没有任何个人信号时，「为你推荐」留空（不退化成热门搜索）
-      if (keywords.size === 0 && topArtists.length === 0) {
-        if (!isStale()) setRecommendedKeywords([]);
-        return;
-      }
-
-      // 即时展示（先给出轻量结果，避免等待网络）
-      if (keywords.size > 0 && !isStale()) {
-        setRecommendedKeywords(Array.from(keywords).slice(0, 6));
-      }
-
-      // ---- 异步扩展：挖掘「相关 / 相似」歌手 ----
-      // 种子优先用最近一次搜索词 —— 让「为你推荐」明显贴合用户刚搜过的内容；
-      // 没有可用搜索词时再退回到历史里分最高的歌手。
-      const enabledSourceList = sources.filter((s) => s.enabled);
-      const searchSeed = recentSearchTerms.find(
-        (term) =>
-          term.length >= 2 && term.length <= 8 && !/歌|曲|音乐|专辑|榜|热门/.test(term)
-      );
-      const seedArtist = searchSeed || topArtists[0];
-      if (enabledSourceList.length > 0 && seedArtist && keywords.size < 6) {
-        try {
-          const searchResults = await searchMusicSources(enabledSourceList, seedArtist, 1, 20);
-          const relatedArtists: string[] = [];
-          const seen = new Set<string>();
-          searchResults.list.forEach((song: MusicSong) => {
-            const artist = primaryArtist(song.artist);
-            // 排除种子本身、已在推荐里的、以及与搜索词完全相同的（那是「近期搜索」分区的内容）
-            if (
-              artist &&
-              artist !== seedArtist &&
-              !keywords.has(artist) &&
-              !recentSearchSet.has(artist) &&
-              !seen.has(artist)
-            ) {
-              seen.add(artist);
-              relatedArtists.push(artist);
-            }
-          });
-          // 相关歌手放在前面，确保「贴合搜索」的结果优先于历史推荐占满有限的位置
-          const merged = new Set<string>([
-            ...relatedArtists.slice(0, Math.max(2, 6 - keywords.size)),
-            ...keywords,
-          ]);
-          if (!isStale()) setRecommendedKeywords(Array.from(merged).slice(0, 6));
-        } catch {
-          // 网络失败时保留即时结果
-        }
-      }
-    };
-
-    void generateRecommendations();
-  }, [recentSearches, favorites, history, sources]);
 
   const saveRecentSearch = useCallback((query: string) => {
     const trimmed = query.trim();
@@ -562,6 +416,27 @@ export default function Music() {
   useEffect(() => {
     if (view === "recommend") void loadNeteaseRecommend();
   }, [view, loadNeteaseRecommend]);
+
+  // 「网易热搜」改用真接口（/search/hot/detail，对齐 SPlayer searchHot）填充搜索面板推荐区。
+  // 不再自造客户端打分引擎——照参考项目实现；无网易源时留空，由下方 LX 热门搜索兜底。
+  useEffect(() => {
+    if (!extrasSource) {
+      setRecommendedKeywords([]);
+      return;
+    }
+    let cancelled = false;
+    (async () => {
+      try {
+        const words = await getNeteaseHotSearch(extrasSource, 8);
+        if (!cancelled) setRecommendedKeywords(words);
+      } catch {
+        if (!cancelled) setRecommendedKeywords([]);
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [extrasSource]);
 
   const lyricLines = useMemo(
     () => parseLyric({ lyric: lyricText, tlyric: tlyricText, yrc: yrcText, romalrc: romaText }),
@@ -1323,12 +1198,14 @@ export default function Music() {
   }, [songlistParams?.source, songlistParams?.id, discoverySource]);
 
   const openAlbum = useCallback(
-    (album: string, artist?: string) => {
+    (album: string, artist?: string, id?: string) => {
       const name = (album || "").trim();
-      if (!name) return;
-      navigate(
-        `/music/album/${encodeURIComponent(name)}${artist ? `?artist=${encodeURIComponent(artist)}` : ""}`
-      );
+      if (!name && !id) return;
+      const query = new URLSearchParams();
+      if (artist) query.set("artist", artist);
+      if (id) query.set("id", id);
+      const qs = query.toString();
+      navigate(`/music/album/${encodeURIComponent(name || id || "")}${qs ? `?${qs}` : ""}`);
     },
     [navigate]
   );
@@ -1340,10 +1217,32 @@ export default function Music() {
     setAlbumSongs([]);
     setAlbumArtistWorks([]);
     setAlbumArtist(albumParams.artist || "");
+    setAlbumMeta(null);
+    setAlbumRestricted(false);
     setAlbumLoading(true);
     (async () => {
+      // 有真专辑 id + 网易源 → 真接口 /album?id=（对齐 SPlayer album.ts）。
+      if (albumParams.id && extrasSource) {
+        try {
+          const detail = await getNeteaseAlbum(extrasSource, albumParams.id);
+          if (cancelled) return;
+          setAlbumSongs(detail.songs);
+          setAlbumArtist(detail.album.artist || albumParams.artist || "");
+          setAlbumMeta({
+            cover: detail.album.cover,
+            desc: detail.album.desc,
+            publishTime: detail.album.publishTime,
+          });
+          setAlbumLoading(false);
+          return;
+        } catch (albumError) {
+          if (cancelled) return;
+          // 内置源 -462 → 标记降级，继续走派生回退。
+          if (isNeteaseAntiBotError(albumError)) setAlbumRestricted(true);
+        }
+      }
       try {
-        // 没有专辑详情接口：按「专辑名 歌手」搜索，再筛出同专辑曲目。
+        // 无 id 或真接口受限：按「专辑名 歌手」搜索，再筛出同专辑曲目（派生回退）。
         const query = albumParams.artist
           ? `${albumParams.name} ${albumParams.artist}`
           : albumParams.name;
@@ -1391,7 +1290,18 @@ export default function Music() {
       cancelled = true;
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [albumParams?.name, albumParams?.artist, enabledSources.length]);
+  }, [albumParams?.name, albumParams?.artist, albumParams?.id, extrasSource, enabledSources.length]);
+
+  // 跳真歌手页（带真 id）：来自歌手广场/搜索/专辑详情的真接口数据。
+  const openArtistById = useCallback(
+    (id: string, name?: string) => {
+      if (!id) return;
+      navigate(
+        `/music/artist/${encodeURIComponent(name || id)}?id=${encodeURIComponent(id)}`
+      );
+    },
+    [navigate]
+  );
 
   const openArtist = useCallback(
     (artist?: string) => {
@@ -1399,9 +1309,17 @@ export default function Music() {
         .split(/[/、,，&]| feat\.? | ft\.? /i)[0]
         .trim();
       if (!name) return;
+      // 有网易源时先解析真 id 跳真接口页；解析不到再走派生页。
+      if (extrasSource) {
+        void resolveNeteaseArtistId(extrasSource, name).then((id) => {
+          if (id) openArtistById(id, name);
+          else navigate(`/music/artist/${encodeURIComponent(name)}`);
+        });
+        return;
+      }
       navigate(`/music/artist/${encodeURIComponent(name)}`);
     },
-    [navigate]
+    [navigate, extrasSource, openArtistById]
   );
 
   useEffect(() => {
@@ -1411,23 +1329,78 @@ export default function Music() {
     setArtistSongs([]);
     setArtistAlbums([]);
     setArtistSimilar([]);
+    setArtistMeta(null);
+    setArtistRestricted(false);
     setArtistLoading(true);
     (async () => {
+      // 有真歌手 id + 网易源 → 真接口（/artists 热门曲 + /artist/album 专辑 + /simi/song 相似）。
+      if (artistParams.id && extrasSource) {
+        try {
+          const [detail, albums] = await Promise.all([
+            getNeteaseArtist(extrasSource, artistParams.id),
+            getNeteaseArtistAlbums(extrasSource, artistParams.id, 24).catch(() => []),
+          ]);
+          if (cancelled) return;
+          setArtistSongs(detail.songs);
+          setArtistMeta({
+            cover: detail.artist.cover,
+            briefDesc: detail.artist.briefDesc,
+            musicSize: detail.artist.musicSize,
+            albumSize: detail.artist.albumSize,
+          });
+          setArtistAlbums(
+            albums.map((album) => ({
+              id: album.id,
+              name: album.name,
+              cover: album.pic,
+            }))
+          );
+          // 相似歌手：从相似歌曲聚合（匿名相似歌手接口需登录，照参考用 simi/song 派生）。
+          try {
+            const simi = await getNeteaseSimiSongs(extrasSource, detail.songs[0]?.id || artistParams.id);
+            if (!cancelled) {
+              const bySimilar = new Map<
+                string,
+                { name: string; cover?: string; count: number; song: MusicSong }
+              >();
+              simi.forEach((song) => {
+                const primary = (song.artist || "").split(/[/、,，&]/)[0].trim();
+                if (!primary || normalizeSongText(primary) === normalizeSongText(detail.artist.name))
+                  return;
+                const key = normalizeSongText(primary);
+                const entry = bySimilar.get(key);
+                if (entry) {
+                  entry.count += 1;
+                  if (!entry.cover && song.cover) entry.cover = song.cover;
+                } else {
+                  bySimilar.set(key, { name: primary, cover: song.cover, count: 1, song });
+                }
+              });
+              setArtistSimilar(Array.from(bySimilar.values()).slice(0, 8));
+            }
+          } catch {
+            if (!cancelled) setArtistSimilar([]);
+          }
+          setArtistLoading(false);
+          return;
+        } catch (artistError) {
+          if (cancelled) return;
+          if (isNeteaseAntiBotError(artistError)) setArtistRestricted(true);
+        }
+      }
       try {
-        // 没有歌手详情接口：按歌手名搜索，再从结果里聚合热门歌曲、专辑与合作歌手。
+        // 无 id 或真接口受限：按歌手名搜索，从结果聚合热门歌曲/专辑/合作歌手（派生回退）。
         const response = await searchMusicSources(enabledSources, artistParams.name, 1, 60);
         if (cancelled) return;
         const target = normalizeSongText(artistParams.name);
         const songs = dedupeSearchSongs(response.list);
-        // 优先展示歌手名匹配的曲目，其它作为补充。
         const primary = songs.filter((song) =>
           normalizeSongText(song.artist).includes(target)
         );
         const ordered = primary.length > 0 ? primary : songs;
         setArtistSongs(ordered);
 
-        // 专辑与发行：按专辑名聚合，每张取首封面。
-        const byAlbum = new Map<string, { name: string; cover?: string; song: MusicSong }>();
+        const byAlbum = new Map<string, { name: string; cover?: string }>();
         ordered.forEach((song) => {
           const name = (song.album || "").trim();
           if (!name) return;
@@ -1437,12 +1410,11 @@ export default function Music() {
           if (entry) {
             if (!entry.cover && song.cover) entry.cover = song.cover;
           } else {
-            byAlbum.set(key, { name, cover: song.cover, song });
+            byAlbum.set(key, { name, cover: song.cover });
           }
         });
         setArtistAlbums(Array.from(byAlbum.values()).slice(0, 12));
 
-        // 粉丝也喜欢：从结果里的合作歌手聚合（排除歌手本人）。
         const bySimilar = new Map<
           string,
           { name: string; cover?: string; count: number; song: MusicSong }
@@ -1486,7 +1458,7 @@ export default function Music() {
       cancelled = true;
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [artistParams?.name, enabledSources.length]);
+  }, [artistParams?.name, artistParams?.id, extrasSource, enabledSources.length]);
 
   const addLxServer = async () => {
     if (!lxBaseUrl.trim()) {
@@ -2027,10 +1999,10 @@ export default function Music() {
                 </div>
               )}
 
-              {/* Personalized Recommendations */}
+              {/* 网易热搜榜（真接口 /search/hot/detail；无网易源时下方 LX 热门搜索兜底） */}
               {recommendedKeywords.length > 0 && (
                 <div className="p-4 border-b" style={{ borderColor: "var(--cream-line)" }}>
-                  <h3 className="text-xs font-semibold text-cream-dim mb-3">为你推荐</h3>
+                  <h3 className="text-xs font-semibold text-cream-dim mb-3">网易热搜</h3>
                   <div className="flex flex-wrap gap-2">
                     {recommendedKeywords.map((item, index) => (
                       <button
@@ -2160,6 +2132,8 @@ export default function Music() {
                   albums={artistAlbums}
                   similar={artistSimilar}
                   loading={artistLoading}
+                  meta={artistMeta}
+                  restricted={artistRestricted}
                   currentSong={currentSong}
                   isPlaying={isPlaying}
                   isFavorite={isFavorite}
@@ -2171,15 +2145,17 @@ export default function Music() {
                   onFavorite={toggleFavorite}
                   onQueue={appendToQueue}
                   onAddToPlaylist={setAddToPlaylistSong}
-                  onOpenAlbum={(album, artist) => openAlbum(album, artist)}
+                  onOpenAlbum={(album, artist, id) => openAlbum(album, artist, id)}
                   onOpenArtist={(artist) => openArtist(artist)}
                 />
               ) : view === "album" ? (
                 <AlbumView
                   name={albumParams?.name || "专辑"}
                   artist={albumArtist}
+                  cover={albumMeta?.cover}
                   songs={albumSongs}
                   loading={albumLoading}
+                  restricted={albumRestricted}
                   currentSong={currentSong}
                   isPlaying={isPlaying}
                   isFavorite={isFavorite}
@@ -2362,7 +2338,7 @@ export default function Music() {
                   onAddToPlaylist={setAddToPlaylistSong}
                 />
               ) : view === "artists" ? (
-                <ArtistsView artists={[]} onOpenArtist={(name) => openArtist(name)} />
+                <ArtistsView source={extrasSource} onOpenArtist={(id) => openArtistById(id)} />
               ) : view === "mv" ? (
                 <MvView source={extrasSource} onPlay={(mv) => void playMv(mv)} />
               ) : view === "radio" ? (
