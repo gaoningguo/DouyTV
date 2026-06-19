@@ -378,6 +378,26 @@ export async function searchNeteasePlaylists(
   }
 }
 
+/** 推荐新歌(/personalized/newsong,匿名可用)→ 可播放歌曲。对齐 SPlayer rec.ts personalized("newsong")。 */
+export async function getNeteaseNewSongRecommend(
+  source: MusicSourceDescriptor,
+  limit = 30
+): Promise<MusicSong[]> {
+  const url = isExternal(source)
+    ? `${cleanBaseUrl(source.baseUrl)}/personalized/newsong?limit=${limit}`
+    : `${NETEASE_BASE}/api/personalized/newsong?limit=${limit}`;
+  const record = asRecord(await getJson(url, headersFor(source)));
+  if (asNumber(record?.code) === -462) return [];
+  const rawList = Array.isArray(record?.result) ? record?.result : [];
+  return (rawList ?? [])
+    .map((item) => {
+      const row = asRecord(item);
+      // 每项含完整 song 对象(/personalized/newsong 形态);回退用项自身。
+      return normalizeNeteaseSong(source, asRecord(row?.song) ?? row);
+    })
+    .filter((item): item is MusicSong => !!item);
+}
+
 // ── MV / 视频(端点对齐 SPlayer src/api/video.ts、rec.ts)──
 
 export interface NeteaseMv {

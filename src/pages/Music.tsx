@@ -21,6 +21,7 @@ import {
   getMusicHotSearch,
   getMusicSonglistDetail,
   getNeteaseMvUrl,
+  getNeteaseNewSongRecommend,
   getNeteasePlaylistSongs,
   getNeteaseRadioPrograms,
   importMusicSourceFromText,
@@ -171,6 +172,7 @@ export default function Music() {
   const [cyreneBaseUrl, setCyreneBaseUrl] = useState("https://music.nekofun.top");
   const [cyreneMode, setCyreneMode] = useState<"omni" | "tunehub" | "lx">("omni");
   const [mvPlay, setMvPlay] = useState<{ url: string; title: string } | null>(null);
+  const [neteaseRecommend, setNeteaseRecommend] = useState<MusicSong[]>([]);
   const [boards, setBoards] = useState<MusicDiscoveryBoard[]>([]);
   const [selectedBoard, setSelectedBoard] = useState<MusicDiscoveryBoard | null>(null);
   const [boardSongs, setBoardSongs] = useState<MusicSong[]>([]);
@@ -526,6 +528,23 @@ export default function Music() {
     );
   }, [enabledSources]);
 
+  // 每日推荐:有网易源用 /personalized/newsong 填充(对齐 SPlayer 推荐;真·私人FM/每日歌曲需登录,匿名不可用)。
+  const loadNeteaseRecommend = useCallback(async () => {
+    if (!extrasSource) {
+      setNeteaseRecommend([]);
+      return;
+    }
+    try {
+      setNeteaseRecommend(await getNeteaseNewSongRecommend(extrasSource, 30));
+    } catch {
+      setNeteaseRecommend([]);
+    }
+  }, [extrasSource]);
+
+  useEffect(() => {
+    if (view === "recommend") void loadNeteaseRecommend();
+  }, [view, loadNeteaseRecommend]);
+
   const lyricLines = useMemo(
     () => parseLyric({ lyric: lyricText, tlyric: tlyricText, yrc: yrcText, romalrc: romaText }),
     [lyricText, tlyricText, yrcText, romaText]
@@ -559,8 +578,11 @@ export default function Music() {
   const librarySongs = libraryTab === "favorites" ? favorites : history;
   // 每日推荐：LX 无 FM 接口，用收藏 + 历史 + 榜单聚合去重填充，等后端接入再替换。
   const recommendSongs = useMemo(
-    () => dedupeSongs([...favorites, ...history, ...boardSongs]).slice(0, 30),
-    [favorites, history, boardSongs]
+    () =>
+      neteaseRecommend.length > 0
+        ? neteaseRecommend
+        : dedupeSongs([...favorites, ...history, ...boardSongs]).slice(0, 30),
+    [neteaseRecommend, favorites, history, boardSongs]
   );
 
   const playSong = useCallback(
@@ -2193,7 +2215,10 @@ export default function Music() {
                     recommendSongs[0] &&
                     void playSong(recommendSongs[0], recommendSongs)
                   }
-                  onReload={() => void loadDiscovery()}
+                  onReload={() => {
+                    void loadDiscovery();
+                    void loadNeteaseRecommend();
+                  }}
                   onPlay={(song, songs) => void playSong(song, songs)}
                   onFavorite={toggleFavorite}
                   onQueue={appendToQueue}
