@@ -113,6 +113,8 @@ interface MusicStore {
   removeFromPlaylist: (id: string, songKey: string) => void;
   clearPlaylist: (id: string) => void;
   isInPlaylist: (id: string, song: MusicSong) => boolean;
+  /** WebDAV 拉取后:把远端音乐数据合并进当前 store(收藏/历史/歌单 union 去重),非覆盖。 */
+  importMerge: (remote: unknown) => { favorites: number; history: number; playlists: number };
 }
 
 const STORAGE_KEY = "douytv:music";
@@ -563,5 +565,52 @@ export const useMusicStore = create<MusicStore>((set, get) => ({
     if (!playlist) return false;
     const key = musicSongKey(song);
     return playlist.songs.some((item) => musicSongKey(item) === key);
+  },
+  importMerge: (remote) => {
+    const state = get();
+    const r = (remote && typeof remote === "object" ? remote : {}) as PersistedMusicState;
+    const remoteFavorites = Array.isArray(r.favorites) ? r.favorites : [];
+    const remoteHistory = Array.isArray(r.history) ? r.history : [];
+    const remotePlaylists = Array.isArray(r.playlists) ? r.playlists : [];
+    // 收藏:union 去重(本地优先顺序)。
+    const favorites = dedupeSongs([...remoteFavorites, ...state.favorites]);
+    // 历史:按 key 合并,保留 playCount 较大、lastPlayedAt 较新的。
+    const historyMap = new Map<string, MusicHistoryRecord>();
+    for (const rec of [...state.history, ...remoteHistory]) {
+      const key = musicSongKey(rec);
+      const exist = historyMap.get(key);
+      if (!exist) {
+        historyMap.set(key, rec);
+      } else {
+        historyMap.set(key, {
+          ...exist,
+          playCount: Math.max(exist.playCount ?? 0, rec.playCount ?? 0),
+          lastPlayedAt: Math.max(exist.lastPlayedAt ?? 0, rec.lastPlayedAt ?? 0),
+          position: (rec.lastPlayedAt ?? 0) > (exist.lastPlayedAt ?? 0) ? rec.position : exist.position,
+        });
+      }
+    }
+    const history = [...historyMap.values()]
+      .sort((a, b) => (b.lastPlayedAt ?? 0) - (a.lastPlayedAt ?? 0))
+      .slice(0, HISTORY_LIMIT);
+    // 歌单:按 id 合并(同 id union 歌曲去重;新 id 追加)。
+    const playlistMap = new Map<string, MusicUserPlaylist>();
+    for (const pl of state.playlists) playlistMap.set(pl.id, pl);
+    for (const pl of remotePlaylists.map(normalizePlaylist)) {
+      const exist = playlistMap.get(pl.id);
+      if (!exist) {
+        playlistMap.set(pl.id, pl);
+      } else {
+        playlistMap.set(pl.id, updatePlaylistCover({
+          ...exist,
+          songs: dedupeSongs([...exist.songs, ...pl.songs]).slice(0, PLAYLIST_LIMIT),
+          updatedAt: Math.max(exist.updatedAt, pl.updatedAt),
+        }));
+      }
+    }
+    const playlists = [...playlistMap.values()];
+    set({ favorites, history, playlists });
+    persist(get());
+    return { favorites: favorites.length, history: history.length, playlists: playlists.length };
   },
 }));

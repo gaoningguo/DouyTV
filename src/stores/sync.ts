@@ -17,6 +17,7 @@ import {
   testConnection,
   type WebDAVConfig,
 } from "@/lib/sync/webdav";
+import { useMusicStore } from "@/stores/music";
 
 const BASE_URL_KEY = "douytv:sync-webdav-url";
 const USER_KEY = "douytv:sync-webdav-user";
@@ -243,6 +244,15 @@ export const useSyncStore = create<SyncStore>((set, get) => ({
         return { ok: false, message: "远端文件格式不正确" };
       }
       const applied = applySnapshot(parsed.data);
+      // 音乐收藏/歌单/历史:合并去重并实时生效(applySnapshot 整键覆盖后,用 union 修正并刷新运行中的 store)。
+      const remoteMusic = parsed.data["douytv:music"];
+      if (remoteMusic && typeof remoteMusic === "object") {
+        try {
+          useMusicStore.getState().importMerge(remoteMusic);
+        } catch (e) {
+          console.warn("[sync] music merge failed", e);
+        }
+      }
       const now = Date.now();
       try {
         localStorage.setItem(LAST_SYNC_KEY, String(now));
