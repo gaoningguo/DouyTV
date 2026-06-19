@@ -12,6 +12,7 @@ import Live from "@/pages/Live";
 import NetworkRoom from "@/pages/live/NetworkRoom";
 import Local from "@/pages/Local";
 import Music from "@/pages/Music";
+import { DesktopLyric } from "@/pages/music/DesktopLyric";
 import Settings from "@/pages/Settings";
 import SettingsLocalScan from "@/pages/settings/LocalScan";
 import SettingsProxy from "@/pages/settings/Proxy";
@@ -139,6 +140,11 @@ export default function App() {
       : 0;
   const hasOverlayLiveRoom =
     !!backgroundLocation && location.pathname.startsWith("/live/room/");
+
+  // 桌面歌词独立窗口：完全脱离主布局/导航，只渲染歌词层（透明背景）。
+  if (location.pathname === "/music/desktop-lyric") {
+    return <DesktopLyric />;
+  }
 
   return (
     <AppDialogProvider>

@@ -1,5 +1,5 @@
 import { musicSongKey, type MusicSong, type MusicSongListSummary } from "@/lib/music";
-import { type LyricLine, type MusicView } from "./types";
+import { type MusicView } from "./types";
 
 export function aggregateMusicLabel(value?: string, fallback = "聚合推荐") {
   const cleaned = (value || "")
@@ -84,77 +84,6 @@ export function mergeSongCandidates(
   return next;
 }
 
-function tagToSeconds(min: string, sec: string, frac?: string): number {
-  const m = Number(min);
-  const s = Number(sec);
-  const ms = frac ? Number(frac.padEnd(3, "0")) : 0;
-  if (!Number.isFinite(m) || !Number.isFinite(s)) return 0;
-  return m * 60 + s + ms / 1000;
-}
-
-export function parseLyric(lyricText: string, tlyricText?: string): LyricLine[] {
-  const timeRegex = /\[(\d{2}):(\d{2})(?:\.(\d{2,3}))?\]/g;
-  const wordTagRegex = /<(\d{1,2}):(\d{2})(?:\.(\d{1,3}))?>/g;
-
-  // 解析翻译（只取行级时间 → 文本）
-  const parseTrans = (text: string) => {
-    const map = new Map<number, string>();
-    text.split("\n").forEach((line) => {
-      const matches = Array.from(line.matchAll(timeRegex));
-      if (matches.length === 0) return;
-      const content = line.replace(timeRegex, "").replace(wordTagRegex, "").trim();
-      matches.forEach((match) => {
-        const t = tagToSeconds(match[1], match[2], match[3]);
-        if (content) map.set(t, content);
-      });
-    });
-    return map;
-  };
-
-  // 解析主歌词为带时间的「行」
-  type RawLine = { time: number; raw: string };
-  const rawLines: RawLine[] = [];
-  (lyricText || "").split("\n").forEach((line) => {
-    const stamps = Array.from(line.matchAll(timeRegex));
-    if (stamps.length === 0) return;
-    const body = line.replace(timeRegex, "").replace(wordTagRegex, "").trim();
-    stamps.forEach((match) => {
-      const t = tagToSeconds(match[1], match[2], match[3]);
-      rawLines.push({ time: t, raw: body });
-    });
-  });
-  rawLines.sort((a, b) => a.time - b.time);
-
-  const trans = parseTrans(tlyricText || "");
-  const transTimes = Array.from(trans.keys()).sort((a, b) => a - b);
-  const transNear = (t: number): string | undefined => {
-    // 翻译时间未必与主歌词完全相等，取最接近且 ≤0.4s 的那一条
-    let best: string | undefined;
-    let bestDiff = 0.4;
-    for (const tt of transTimes) {
-      const diff = Math.abs(tt - t);
-      if (diff <= bestDiff) {
-        bestDiff = diff;
-        best = trans.get(tt);
-      }
-    }
-    return best;
-  };
-
-  const lines: LyricLine[] = rawLines.map((line) => ({
-    time: line.time,
-    text: line.raw,
-    trans: transNear(line.time),
-  }));
-
-  // 主歌词为空但有翻译时，退化成纯翻译行
-  if (lines.length === 0 && transTimes.length > 0) {
-    return transTimes.map((t) => ({ time: t, text: trans.get(t) || "" }));
-  }
-
-  return lines.filter((line) => line.text || line.trans);
-}
-
 export function formatCount(value?: string | number) {
   const numeric =
     typeof value === "number"
@@ -175,11 +104,17 @@ export function safeFilename(value: string) {
 export function deriveView(pathname: string): MusicView {
   if (pathname.startsWith("/music/search")) return "search";
   if (pathname.startsWith("/music/library")) return "library";
+  if (pathname.startsWith("/music/recent")) return "recent";
+  if (pathname.startsWith("/music/local")) return "local";
   if (pathname.startsWith("/music/sources")) return "sources";
   if (pathname.startsWith("/music/player")) return "player";
+  if (pathname.startsWith("/music/recommend")) return "recommend";
+  if (pathname.startsWith("/music/toplist")) return "toplist";
   if (pathname.startsWith("/music/songlists")) return "songlists";
   if (pathname.startsWith("/music/songlist")) return "songlist";
-  if (pathname.startsWith("/music/album")) return "album";
+  if (pathname.startsWith("/music/artists")) return "artists";
   if (pathname.startsWith("/music/artist")) return "artist";
+  if (pathname.startsWith("/music/mv")) return "mv";
+  if (pathname.startsWith("/music/album")) return "album";
   return "discover";
 }

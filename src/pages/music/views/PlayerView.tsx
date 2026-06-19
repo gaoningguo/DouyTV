@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from "react";
+import { useState } from "react";
 import {
   IconBookmark,
   IconChevronDown,
@@ -11,6 +11,7 @@ import {
   IconSkipBackward,
   IconSkipForward,
   IconStats,
+  IconSubtitle,
   IconVolume,
   IconVolumeMute,
 } from "@/components/Icon";
@@ -24,6 +25,8 @@ import { PLAY_MODE_ICON, PLAY_MODE_LABEL, QUALITY_OPTIONS } from "../constants";
 import { type LyricLine } from "../types";
 import { CoverArt, IconButton } from "../components/ui";
 import { SongList } from "../components/SongList";
+import { LyricStage } from "../components/LyricStage";
+import { Spectrum } from "../components/Spectrum";
 
 export function PlayerView({
   currentSong,
@@ -38,7 +41,10 @@ export function PlayerView({
   playMode,
   queue,
   lyricLines,
-  activeLyricIndex,
+  getAudioTime,
+  lyricShowTrans,
+  lyricShowRoma,
+  lyricFontScale,
   showSpectrum,
   sleepTimerEndAt,
   sleepRemaining,
@@ -59,6 +65,9 @@ export function PlayerView({
   onClearQueue,
   onSpectrum,
   onSleep,
+  desktopLyricOn,
+  onDesktopLyric,
+  desktopLyricAvailable,
 }: {
   currentSong: MusicSong | null;
   currentCover?: string;
@@ -72,7 +81,10 @@ export function PlayerView({
   playMode: MusicPlayMode;
   queue: MusicSong[];
   lyricLines: LyricLine[];
-  activeLyricIndex: number;
+  getAudioTime: () => number;
+  lyricShowTrans: boolean;
+  lyricShowRoma: boolean;
+  lyricFontScale: number;
   showSpectrum: boolean;
   sleepTimerEndAt: number | null;
   sleepRemaining: number;
@@ -93,21 +105,13 @@ export function PlayerView({
   onClearQueue: () => void;
   onSpectrum: (enabled: boolean) => void;
   onSleep: (minutes: number) => void;
+  desktopLyricOn: boolean;
+  onDesktopLyric: () => void;
+  desktopLyricAvailable: boolean;
 }) {
   const [panel, setPanel] = useState<"lyrics" | "queue">("lyrics");
-  const lyricRef = useRef<HTMLDivElement>(null);
   const safeDuration = duration > 0 && Number.isFinite(duration) ? duration : 0;
   const progressValue = Math.min(currentTime, safeDuration || 1);
-
-  useEffect(() => {
-    if (panel !== "lyrics") return;
-    const stage = lyricRef.current;
-    if (!stage) return;
-    const active = stage.querySelector<HTMLElement>("[data-active='true']");
-    if (active) {
-      active.scrollIntoView({ block: "center", behavior: "smooth" });
-    }
-  }, [activeLyricIndex, panel]);
 
   return (
     <section className="music-now-playing flex-1 min-h-0">
@@ -147,13 +151,29 @@ export function PlayerView({
 
         <div className="music-now-body">
           <div className="music-now-art-col">
-            <div className="music-now-art">
-              <CoverArt src={currentCover} title={currentSong?.title} size="detail" spinning={isPlaying} />
+            <div className="music-turntable" data-playing={isPlaying || undefined}>
+              {/* 后方黑胶唱片盘 */}
+              <div className="music-turntable-disc" aria-hidden>
+                <span className="music-turntable-disc-ring" />
+                <span className="music-turntable-disc-ring music-turntable-disc-ring2" />
+                {/* 封面嵌在唱片中心 */}
+                <span className="music-turntable-label">
+                  <CoverArt
+                    src={currentCover}
+                    title={currentSong?.title}
+                    size="detail"
+                    spinning={false}
+                  />
+                </span>
+              </div>
+              {/* 唱针 */}
+              <span className="music-turntable-needle" aria-hidden>
+                <span className="music-turntable-needle-arm" />
+                <span className="music-turntable-needle-head" />
+              </span>
               {showSpectrum && isPlaying && (
                 <div className="music-now-equalizer" aria-hidden>
-                  {Array.from({ length: 14 }).map((_, index) => (
-                    <span key={index} style={{ animationDelay: `${index * 70}ms` }} />
-                  ))}
+                  <Spectrum bars={28} playing={isPlaying} className="music-spectrum-canvas" />
                 </div>
               )}
             </div>
@@ -195,34 +215,15 @@ export function PlayerView({
               )}
             </div>
             {panel === "lyrics" ? (
-              <div ref={lyricRef} className="music-now-lyrics">
-                {lyricLines.length === 0 ? (
-                  <div className="grid h-full place-items-center text-sm text-cream-faint">
-                    暂无歌词
-                  </div>
-                ) : (
-                  lyricLines.map((line, index) => (
-                    <button
-                      key={`${line.time}:${index}`}
-                      type="button"
-                      data-active={index === activeLyricIndex}
-                      onClick={() => onSeek(line.time)}
-                      className={
-                        index === activeLyricIndex
-                          ? "music-now-lyric music-now-lyric-active"
-                          : "music-now-lyric"
-                      }
-                    >
-                      <span>
-                        {line.text || line.trans}
-                      </span>
-                      {line.trans && line.text && (
-                        <span className="music-now-lyric-trans">{line.trans}</span>
-                      )}
-                    </button>
-                  ))
-                )}
-              </div>
+              <LyricStage
+                lines={lyricLines}
+                getTime={getAudioTime}
+                onSeek={onSeek}
+                variant="panel"
+                showTrans={lyricShowTrans}
+                showRoma={lyricShowRoma}
+                fontScale={lyricFontScale}
+              />
             ) : (
               <div className="music-now-queue">
                 <SongList
@@ -312,6 +313,15 @@ export function PlayerView({
             <IconButton label="下载" onClick={onDownload}>
               <IconDownload size={17} />
             </IconButton>
+            {desktopLyricAvailable && (
+              <IconButton
+                label={desktopLyricOn ? "关闭桌面歌词" : "桌面歌词"}
+                active={desktopLyricOn}
+                onClick={onDesktopLyric}
+              >
+                <IconSubtitle size={17} />
+              </IconButton>
+            )}
             <IconButton
               label={showSpectrum ? "关闭频谱" : "开启频谱"}
               active={showSpectrum}

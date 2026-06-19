@@ -10,6 +10,7 @@ import { formatDuration, musicSongKey, type MusicSong } from "@/lib/music";
 import { wrapImage } from "@/lib/proxy";
 import { type MusicUserPlaylist } from "@/stores/music";
 import { type LibraryTab } from "../types";
+import { type MusicDownloadItem } from "@/stores/musicDownload";
 import { EmptyBlock, IconButton } from "../components/ui";
 import { PlaylistPanel } from "../components/PlaylistPanel";
 
@@ -31,6 +32,9 @@ export function LibraryView({
   onClearPlaylist,
   onRemoveFromPlaylist,
   librarySongs,
+  downloads,
+  onRemoveDownload,
+  onClearDownloads,
 }: {
   tab: LibraryTab;
   onTab: (tab: LibraryTab) => void;
@@ -49,6 +53,9 @@ export function LibraryView({
   onClearPlaylist: (id: string) => void;
   onRemoveFromPlaylist: (id: string, songKey: string) => void;
   librarySongs: MusicSong[];
+  downloads: MusicDownloadItem[];
+  onRemoveDownload: (taskId: string) => void;
+  onClearDownloads: () => void;
 }) {
   const favoriteCover = favorites.find((song) => song.cover)?.cover;
   const recentCover = history.find((song) => song.cover)?.cover;
@@ -145,10 +152,15 @@ export function LibraryView({
         </button>
         <button
           type="button"
-          className="pb-4 text-cream-dim font-medium whitespace-nowrap opacity-40 cursor-not-allowed"
-          disabled
+          onClick={() => onTab("downloads")}
+          className="pb-4 font-medium whitespace-nowrap transition-colors"
+          style={{
+            color: tab === "downloads" ? "var(--ember)" : "var(--cream-dim)",
+            borderBottom: tab === "downloads" ? "2px solid var(--ember)" : "2px solid transparent",
+            fontWeight: tab === "downloads" ? "bold" : "medium",
+          }}
         >
-          下载内容
+          下载内容 {downloads.length > 0 ? downloads.length : ""}
         </button>
         {tab === "history" && history.length > 0 && (
           <button
@@ -170,9 +182,76 @@ export function LibraryView({
             新建歌单
           </button>
         )}
+        {tab === "downloads" && downloads.length > 0 && (
+          <button
+            type="button"
+            onClick={onClearDownloads}
+            className="ml-auto pb-4 text-xs text-cream-faint hover:text-ember tap"
+          >
+            清空记录
+          </button>
+        )}
       </div>
 
       {/* Content based on selected tab */}
+      {tab === "downloads" && (
+        <section className="space-y-2">
+          {downloads.length === 0 ? (
+            <EmptyBlock text="还没有下载。在播放器点下载按钮即可缓存到本地" />
+          ) : (
+            downloads.map((item) => (
+              <div
+                key={item.taskId}
+                className="flex items-center gap-4 p-3 rounded-xl hover:bg-white/5 transition-colors"
+              >
+                <div className="w-11 h-11 rounded-lg overflow-hidden shrink-0 bg-white/5">
+                  {item.cover ? (
+                    <img src={wrapImage(item.cover)} alt="" className="w-full h-full object-cover" />
+                  ) : (
+                    <div className="w-full h-full grid place-items-center">
+                      <IconAlbum size={20} className="text-cream-faint" />
+                    </div>
+                  )}
+                </div>
+                <div className="min-w-0 flex-1">
+                  <p className="line-clamp-1 font-medium">{item.title}</p>
+                  <p className="line-clamp-1 text-xs text-cream-faint">{item.artist}</p>
+                  {item.status === "downloading" && (
+                    <div className="mt-1.5 h-1 rounded-full bg-white/10 overflow-hidden">
+                      <div
+                        className="h-full rounded-full transition-all"
+                        style={{ width: `${item.progress}%`, background: "var(--ember)" }}
+                      />
+                    </div>
+                  )}
+                </div>
+                <span
+                  className="text-xs font-mono shrink-0"
+                  style={{ color: item.status === "error" ? "#ff6b6b" : "var(--cream-faint)" }}
+                >
+                  {item.status === "done"
+                    ? "已完成"
+                    : item.status === "downloading"
+                      ? `${Math.round(item.progress)}%`
+                      : item.status === "error"
+                        ? "失败"
+                        : item.status === "paused"
+                          ? "已暂停"
+                          : "等待中"}
+                </span>
+                <button
+                  type="button"
+                  onClick={() => onRemoveDownload(item.taskId)}
+                  className="shrink-0 text-cream-faint hover:text-ember tap text-xs"
+                >
+                  移除
+                </button>
+              </div>
+            ))
+          )}
+        </section>
+      )}
+
       {tab === "playlists" && (
         <>
           {playlists.length === 0 ? (

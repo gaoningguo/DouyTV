@@ -447,6 +447,151 @@ code {
   text-shadow: 0 0 24px rgba(255, 107, 53, 0.4);
 }
 
+/* ============ 音乐内部侧栏（借鉴 Tabos 玻璃侧栏，CRT 皮肤）============ */
+.music-sidebar {
+  width: 208px;
+  min-width: 208px;
+  flex-shrink: 0;
+  display: flex;
+  flex-direction: column;
+  margin: 8px 0 8px 8px;
+  border-radius: 14px;
+  background: linear-gradient(180deg, rgba(31, 35, 43, 0.72), rgba(14, 15, 17, 0.78));
+  border: 1px solid var(--cream-line);
+  box-shadow: 0 2px 18px rgba(0, 0, 0, 0.35);
+  backdrop-filter: blur(18px);
+  overflow: hidden;
+}
+@media (max-width: 860px) {
+  .music-sidebar {
+    display: none;
+  }
+}
+
+.music-sidebar-brand {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  height: 52px;
+  padding: 0 16px;
+  border-bottom: 1px solid var(--cream-line);
+  color: var(--cream);
+}
+
+.music-sidebar-scroll {
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+  padding: 10px 0;
+}
+.music-sidebar-scroll::-webkit-scrollbar {
+  width: 0;
+}
+
+.music-sidebar-section {
+  padding: 0 8px;
+  margin-bottom: 6px;
+}
+
+.music-sidebar-label {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 12px 18px 6px;
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: var(--cream-faint);
+}
+
+.music-sidebar-add {
+  display: grid;
+  place-items: center;
+  width: 20px;
+  height: 20px;
+  border-radius: 6px;
+  color: var(--cream-faint);
+  transition: background 150ms ease, color 150ms ease;
+}
+.music-sidebar-add:hover {
+  background: var(--ember-soft);
+  color: var(--ember);
+}
+
+.music-sidebar-item {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  width: 100%;
+  padding: 8px 10px;
+  margin-bottom: 2px;
+  border-radius: 8px;
+  font-size: 13px;
+  color: var(--cream-dim);
+  text-align: left;
+  transition: background 150ms ease, color 150ms ease;
+}
+.music-sidebar-item:hover {
+  background: var(--cream-pale);
+  color: var(--cream);
+}
+.music-sidebar-item[data-active] {
+  background: var(--ember-soft);
+  color: var(--ember);
+}
+
+.music-sidebar-icon {
+  flex-shrink: 0;
+  display: grid;
+  place-items: center;
+  color: inherit;
+}
+.music-sidebar-item[data-active] .music-sidebar-icon {
+  color: var(--ember);
+}
+
+.music-sidebar-text {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+
+.music-sidebar-count {
+  flex-shrink: 0;
+  font-family: var(--font-mono, monospace);
+  font-size: 10px;
+  color: var(--cream-faint);
+}
+
+.music-sidebar-playlists {
+  max-height: none;
+}
+
+.music-sidebar-empty {
+  padding: 6px 10px;
+  font-size: 12px;
+  color: var(--cream-faint);
+}
+
+.music-sidebar-foot {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  height: 46px;
+  padding: 0 18px;
+  border-top: 1px solid var(--cream-line);
+  font-size: 13px;
+  color: var(--cream-dim);
+  transition: color 150ms ease, background 150ms ease;
+}
+.music-sidebar-foot:hover {
+  color: var(--cream);
+  background: var(--cream-pale);
+}
+
 .music-ob-hero {
   position: relative;
   overflow: hidden;
@@ -581,6 +726,178 @@ code {
 
 .music-ob-hero-eq span.is-active {
   animation: music-hero-pulse 1s ease-in-out infinite;
+}
+
+/* ============ 黑胶唱片 Hero（借鉴 Tabos 场景，CRT 配色）============ */
+.music-vinyl-hero {
+  position: relative;
+  overflow: hidden;
+  border-radius: 16px;
+  min-height: 268px;
+  display: flex;
+  border: 1px solid var(--cream-line);
+}
+
+.music-vinyl-hero-bg {
+  position: absolute;
+  inset: 0;
+  background-size: cover;
+  background-position: center;
+  filter: blur(28px) saturate(1.2);
+  transform: scale(1.2);
+  opacity: 0.55;
+}
+
+.music-vinyl-hero-veil {
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(
+    100deg,
+    rgba(9, 9, 9, 0.92) 0%,
+    rgba(13, 13, 13, 0.72) 42%,
+    rgba(13, 13, 13, 0.38) 100%
+  );
+}
+
+.music-vinyl-hero-body {
+  position: relative;
+  z-index: 2;
+  flex: 1;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 24px;
+  padding: 36px 44px;
+}
+
+.music-vinyl-hero-info {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  max-width: 540px;
+}
+
+.music-vinyl-hero-title {
+  font-family: var(--font-display, inherit);
+  font-size: clamp(24px, 3.2vw, 38px);
+  line-height: 1.1;
+  font-weight: 800;
+  color: #fff;
+}
+
+/* —— 黑胶场景：封面 + 后方唱片 —— */
+.music-vinyl-scene {
+  --vinyl-cover: clamp(150px, 15vw, 188px);
+  --vinyl-disc: calc(var(--vinyl-cover) * 0.92);
+  --vinyl-notch: 28px;
+  --vinyl-cy: calc(var(--vinyl-cover) * 0.5);
+  position: relative;
+  flex-shrink: 0;
+  width: calc(var(--vinyl-cover) * 1.5);
+  height: var(--vinyl-cover);
+}
+@media (max-width: 720px) {
+  .music-vinyl-scene {
+    display: none;
+  }
+}
+
+.music-vinyl-cover {
+  position: absolute;
+  left: 0;
+  top: 0;
+  z-index: 3;
+  width: var(--vinyl-cover);
+  height: var(--vinyl-cover);
+  border-radius: 16px;
+  overflow: hidden;
+  background: var(--ink-3);
+  box-shadow: 0 16px 34px rgba(0, 0, 0, 0.5), 0 0 0 1px var(--cream-line);
+  /* 右侧切出圆形缺口，露出后方唱片 */
+  -webkit-mask: radial-gradient(
+    circle at 100% var(--vinyl-cy),
+    transparent 0 var(--vinyl-notch),
+    #000 calc(var(--vinyl-notch) + 1px)
+  );
+  mask: radial-gradient(
+    circle at 100% var(--vinyl-cy),
+    transparent 0 var(--vinyl-notch),
+    #000 calc(var(--vinyl-notch) + 1px)
+  );
+}
+.music-vinyl-cover img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  display: block;
+}
+.music-vinyl-cover-ph {
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(135deg, var(--ink-3), var(--ink-2));
+}
+
+.music-vinyl-disc {
+  position: absolute;
+  left: calc(var(--vinyl-cover) - var(--vinyl-disc) * 0.5);
+  top: calc(var(--vinyl-cy) - var(--vinyl-disc) * 0.5);
+  z-index: 2;
+  width: var(--vinyl-disc);
+  height: var(--vinyl-disc);
+  border-radius: 50%;
+  background:
+    radial-gradient(circle at center, #f7f7f7 0 9px, #151515 10px 12px, transparent 13px),
+    repeating-radial-gradient(circle at center, rgba(255, 255, 255, 0.07) 0 1px, transparent 1px 4px),
+    radial-gradient(circle at 35% 28%, var(--ember-soft), transparent 30%),
+    #0c0c0e;
+  box-shadow: 0 18px 38px rgba(0, 0, 0, 0.55);
+}
+
+.music-vinyl-scene.is-spinning .music-vinyl-disc {
+  animation: music-vinyl-spin 3.8s linear infinite;
+}
+
+.music-vinyl-disc-ring {
+  position: absolute;
+  inset: 9px;
+  border-radius: 50%;
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  box-shadow: inset 0 0 0 9px rgba(255, 255, 255, 0.02),
+    inset 0 0 0 22px rgba(255, 255, 255, 0.02);
+}
+
+.music-vinyl-disc-label {
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  width: 34px;
+  height: 34px;
+  border-radius: 50%;
+  transform: translate(-50%, -50%);
+  background: radial-gradient(circle, var(--ember) 0 30%, var(--ember-deep) 31% 100%);
+}
+
+.music-vinyl-play {
+  position: absolute;
+  left: var(--vinyl-cover);
+  top: var(--vinyl-cy);
+  z-index: 6;
+  width: 42px;
+  height: 42px;
+  border-radius: 50%;
+  display: grid;
+  place-items: center;
+  transform: translate(-50%, -50%);
+  color: var(--ink);
+  background: var(--ember);
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.4), 0 0 18px var(--ember-glow);
+  transition: transform 150ms ease;
+}
+.music-vinyl-play:hover {
+  transform: translate(-50%, -50%) scale(1.08);
+}
+.music-vinyl-play:active {
+  transform: translate(-50%, -50%) scale(0.92);
 }
 
 .music-ob-discovery-card {
@@ -1687,8 +2004,9 @@ code {
   position: absolute;
   inset: 0;
   background:
-    radial-gradient(120% 80% at 50% 0%, rgba(10, 10, 10, 0.55), transparent),
-    linear-gradient(180deg, rgba(8, 8, 8, 0.82), rgba(8, 8, 8, 0.96));
+    radial-gradient(120% 80% at 50% 0%, rgba(var(--music-accent-rgb, 255, 107, 53), 0.22), transparent 60%),
+    radial-gradient(120% 80% at 50% 0%, rgba(10, 10, 10, 0.5), transparent),
+    linear-gradient(180deg, rgba(8, 8, 8, 0.8), rgba(8, 8, 8, 0.96));
   backdrop-filter: blur(40px);
   -webkit-backdrop-filter: blur(40px);
 }
@@ -1739,6 +2057,7 @@ code {
   display: flex;
   align-items: flex-end;
   gap: 3px;
+  width: 180px;
   height: 26px;
   pointer-events: none;
 }
@@ -1817,6 +2136,258 @@ code {
   font-size: 12px;
   color: var(--cream-faint);
 }
+
+/* ── 逐字歌词舞台（LyricStage：RAF 词级扫光 + 行模糊聚焦）── */
+.lyric-stage {
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow-y: auto;
+  display: flex;
+  flex-direction: column;
+  scrollbar-width: none;
+}
+.lyric-stage::-webkit-scrollbar {
+  display: none;
+}
+.lyric-stage-panel {
+  gap: 4px;
+  padding: 20px 18px;
+}
+.lyric-stage-fullscreen {
+  gap: 10px;
+  padding: 24vh 8% 40vh;
+  align-items: flex-start;
+}
+.lyric-line {
+  width: 100%;
+  text-align: left;
+  border: 0;
+  background: transparent;
+  border-radius: 10px;
+  padding: 8px 10px;
+  line-height: 1.42;
+  color: var(--cream-faint);
+  opacity: 0.42;
+  cursor: pointer;
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  filter: blur(0.6px);
+  transition: opacity 240ms ease, filter 240ms ease, transform 260ms cubic-bezier(0.22, 1, 0.36, 1);
+  transform-origin: left center;
+}
+.lyric-stage-panel .lyric-line {
+  font-size: calc(16px * var(--lyric-scale, 1));
+}
+.lyric-stage-fullscreen .lyric-line {
+  font-size: calc(clamp(20px, 2.6vw, 34px) * var(--lyric-scale, 1));
+  font-weight: 700;
+  padding: 10px 4px;
+  filter: blur(1.4px);
+  opacity: 0.32;
+}
+.lyric-line:hover {
+  opacity: 0.7;
+  filter: blur(0);
+}
+.lyric-line.is-active {
+  color: var(--music-accent, var(--ember));
+  opacity: 1;
+  filter: blur(0);
+  transform: scale(1.03);
+}
+.lyric-line-main {
+  display: inline-block;
+}
+/* 词级扫光：base 暗底 + fill 用 clip-path 按 --sweep 揭示亮色 */
+.lyric-words {
+  position: relative;
+  display: inline-block;
+}
+.lyric-words-base {
+  color: color-mix(in srgb, var(--music-accent, var(--ember)) 34%, var(--cream-faint));
+}
+.lyric-words-fill {
+  position: absolute;
+  inset: 0;
+  color: var(--cream);
+  text-shadow: 0 0 14px color-mix(in srgb, var(--music-accent, var(--ember)) 55%, transparent);
+  clip-path: inset(0 calc(100% - var(--sweep, 0%)) 0 0);
+  will-change: clip-path;
+}
+.lyric-line-roma {
+  font-size: 0.72em;
+  color: var(--cream-faint);
+  opacity: 0.8;
+}
+.lyric-line-trans {
+  font-size: 0.78em;
+  color: var(--cream-dim);
+}
+.lyric-stage-fullscreen .lyric-line-roma,
+.lyric-stage-fullscreen .lyric-line-trans {
+  font-size: 0.5em;
+}
+
+/* ── 均衡器面板 ── */
+.music-eq-presets {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+.music-eq-presets button {
+  height: 28px;
+  padding: 0 12px;
+  border-radius: 999px;
+  font-size: 12px;
+  color: var(--cream-dim);
+  background: var(--ink-2);
+  border: 1px solid var(--cream-line);
+  transition: color 140ms ease, background 140ms ease, border-color 140ms ease;
+}
+.music-eq-presets button:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+}
+.music-eq-presets button.is-active {
+  color: var(--ember);
+  background: var(--ember-soft);
+  border-color: var(--ember);
+}
+.music-eq-bands {
+  display: flex;
+  justify-content: space-between;
+  gap: 6px;
+  padding: 8px 2px 0;
+}
+.music-eq-bands[data-disabled="true"] {
+  opacity: 0.42;
+}
+.music-eq-band {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 6px;
+  flex: 1 1 0;
+  min-width: 0;
+}
+.music-eq-gain {
+  font-family: "JetBrains Mono", monospace;
+  font-size: 10px;
+  color: var(--ember);
+  min-height: 12px;
+}
+.music-eq-slider {
+  height: 96px;
+  width: 18px;
+  accent-color: var(--ember);
+  cursor: pointer;
+}
+.music-eq-freq {
+  font-family: "JetBrains Mono", monospace;
+  font-size: 9px;
+  color: var(--cream-faint);
+}
+.music-spectrum-canvas {
+  width: 100%;
+  height: 100%;
+  display: block;
+}
+
+/* ── 桌面歌词独立窗口 ── */
+.desktop-lyric-root {
+  position: relative;
+  width: 100vw;
+  height: 100vh;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  background: transparent;
+  user-select: none;
+  overflow: hidden;
+  padding: 8px 20px;
+}
+.desktop-lyric-drag {
+  position: absolute;
+  inset: 0;
+  z-index: 0;
+  cursor: move;
+}
+.desktop-lyric-line {
+  position: relative;
+  z-index: 1;
+  display: inline-block;
+  max-width: 100%;
+  pointer-events: none;
+  font-family: "Bricolage Grotesque", "PingFang SC", system-ui, sans-serif;
+  font-weight: 800;
+  font-size: clamp(24px, 7vh, 48px);
+  line-height: 1.2;
+  white-space: nowrap;
+}
+.desktop-lyric-base {
+  color: rgba(255, 255, 255, 0.34);
+  -webkit-text-stroke: 1px rgba(0, 0, 0, 0.55);
+  paint-order: stroke fill;
+}
+.desktop-lyric-fill {
+  position: absolute;
+  inset: 0;
+  color: #ffd9a8;
+  -webkit-text-stroke: 1px rgba(0, 0, 0, 0.55);
+  paint-order: stroke fill;
+  text-shadow: 0 0 18px rgba(255, 107, 53, 0.7);
+  clip-path: inset(0 100% 0 0);
+  will-change: clip-path;
+}
+.desktop-lyric-trans {
+  position: relative;
+  z-index: 1;
+  pointer-events: none;
+  font-family: "Bricolage Grotesque", system-ui, sans-serif;
+  font-size: clamp(13px, 3vh, 20px);
+  color: rgba(255, 255, 255, 0.72);
+  text-shadow: 0 1px 6px rgba(0, 0, 0, 0.85);
+  white-space: nowrap;
+}
+.desktop-lyric-bar {
+  position: absolute;
+  z-index: 20;
+  top: 8px;
+  right: 10px;
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  padding: 4px 6px;
+  border-radius: 999px;
+  background: rgba(14, 15, 17, 0.78);
+  border: 1px solid rgba(242, 232, 213, 0.12);
+  backdrop-filter: blur(10px);
+  opacity: 0;
+  transform: translateY(-4px);
+  transition: opacity 180ms ease, transform 180ms ease;
+  pointer-events: none;
+}
+.desktop-lyric-bar.is-show {
+  opacity: 1;
+  transform: translateY(0);
+  pointer-events: auto;
+}
+.desktop-lyric-bar button {
+  width: 28px;
+  height: 28px;
+  display: grid;
+  place-items: center;
+  border-radius: 999px;
+  color: var(--cream-dim);
+  transition: color 140ms ease, background 140ms ease;
+}
+.desktop-lyric-bar button:hover {
+  color: var(--ember);
+  background: rgba(242, 232, 213, 0.08);
+}
 .music-now-queue {
   flex: 1 1 auto;
   min-height: 0;
@@ -1851,14 +2422,14 @@ code {
   display: grid;
   place-items: center;
   border-radius: 999px;
-  background: var(--ember);
+  background: var(--music-accent, var(--ember));
   color: var(--ink);
-  box-shadow: 0 0 26px rgba(255, 107, 53, 0.42);
-  transition: transform 160ms ease, box-shadow 160ms ease;
+  box-shadow: 0 0 26px rgba(var(--music-accent-rgb, 255, 107, 53), 0.42);
+  transition: transform 160ms ease, box-shadow 160ms ease, background 320ms ease;
 }
 .music-now-play:hover {
   transform: scale(1.06);
-  box-shadow: 0 0 34px rgba(255, 107, 53, 0.55);
+  box-shadow: 0 0 34px rgba(var(--music-accent-rgb, 255, 107, 53), 0.55);
 }
 .music-now-play:active {
   transform: scale(0.95);
@@ -2387,3 +2958,846 @@ textarea:focus-visible {
   }
 }
 
+
+/* ============ 倒影卡片轨道（借鉴 Tabos carousel reflection）============ */
+.music-reflect-rail {
+  padding: 6px 4px 44px;
+  scroll-snap-type: x mandatory;
+}
+
+.music-reflect-card {
+  position: relative;
+  flex: 0 0 168px;
+  width: 168px;
+  scroll-snap-align: start;
+  text-align: left;
+  transition: transform 360ms cubic-bezier(0.25, 0.1, 0.25, 1);
+}
+.music-reflect-card:hover {
+  transform: translateY(-4px);
+}
+
+.music-reflect-cover {
+  position: relative;
+  width: 168px;
+  height: 168px;
+  border-radius: 14px;
+  overflow: hidden;
+  background: var(--ink-3);
+  box-shadow: 0 8px 26px rgba(0, 0, 0, 0.4), 0 0 0 1px var(--cream-line);
+}
+
+.music-reflect-img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  display: block;
+  transition: transform 400ms ease;
+}
+.music-reflect-card:hover .music-reflect-cover .music-reflect-img {
+  transform: scale(1.05);
+}
+
+.music-reflect-ph {
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(135deg, var(--ink-3), var(--ink-2));
+}
+
+.music-reflect-badge {
+  position: absolute;
+  left: 8px;
+  top: 8px;
+  z-index: 2;
+  padding: 2px 8px;
+  border-radius: 999px;
+  font-family: var(--font-mono, monospace);
+  font-size: 9px;
+  font-weight: 700;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: var(--ember);
+  background: rgba(9, 9, 9, 0.66);
+  border: 1px solid var(--ember-soft);
+  backdrop-filter: blur(6px);
+}
+
+.music-reflect-shine {
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(180deg, rgba(255, 255, 255, 0.12), transparent 40%);
+  pointer-events: none;
+}
+
+/* 镜面倒影：复制封面、翻转、渐隐 */
+.music-reflect-mirror {
+  position: absolute;
+  top: calc(168px + 2px);
+  left: 6%;
+  right: 6%;
+  height: 34px;
+  overflow: hidden;
+  border-radius: 0 0 14px 14px;
+  pointer-events: none;
+  opacity: 0.32;
+  transform: scaleY(-1);
+  -webkit-mask-image: linear-gradient(to bottom, rgba(0, 0, 0, 0.35), transparent);
+  mask-image: linear-gradient(to bottom, rgba(0, 0, 0, 0.35), transparent);
+  transition: opacity 360ms ease;
+}
+.music-reflect-card:hover .music-reflect-mirror {
+  opacity: 0.5;
+}
+
+.music-reflect-meta {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  padding: 10px 2px 0;
+}
+
+.music-reflect-title {
+  font-family: var(--font-display, inherit);
+  font-size: 13px;
+  font-weight: 700;
+  color: var(--cream);
+}
+
+.music-reflect-sub {
+  font-size: 11px;
+  color: var(--cream-faint);
+}
+
+/* ============ 我喜欢网格（借鉴 Tabos fm-home-liked）============ */
+.music-liked-grid {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 10px;
+}
+@media (min-width: 1100px) {
+  .music-liked-grid {
+    grid-template-columns: repeat(8, minmax(0, 1fr));
+  }
+}
+.music-liked-item {
+  position: relative;
+  height: 104px;
+  border-radius: 12px;
+  overflow: hidden;
+  background: var(--ink-3);
+  border: 1px solid var(--cream-line);
+  box-shadow: 0 4px 14px rgba(0, 0, 0, 0.32);
+  transition: transform 200ms ease, box-shadow 200ms ease;
+}
+.music-liked-item:hover {
+  transform: translateY(-3px);
+  box-shadow: 0 10px 24px rgba(0, 0, 0, 0.45);
+}
+.music-liked-img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  transition: transform 400ms ease;
+}
+.music-liked-item:hover .music-liked-img {
+  transform: scale(1.08);
+}
+.music-liked-ph {
+  display: grid;
+  place-items: center;
+  width: 100%;
+  height: 100%;
+  color: var(--cream-faint);
+}
+.music-liked-veil {
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(180deg, transparent 38%, rgba(0, 0, 0, 0.72));
+  pointer-events: none;
+}
+.music-liked-name {
+  position: absolute;
+  left: 8px;
+  right: 8px;
+  bottom: 8px;
+  z-index: 2;
+  font-family: var(--font-display, inherit);
+  font-size: 12px;
+  font-weight: 700;
+  color: #fff;
+  text-shadow: 0 1px 4px rgba(0, 0, 0, 0.8);
+}
+.music-liked-play {
+  position: absolute;
+  right: 8px;
+  top: 8px;
+  z-index: 3;
+  width: 30px;
+  height: 30px;
+  display: grid;
+  place-items: center;
+  border-radius: 50%;
+  color: var(--ink);
+  background: var(--ember);
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.4);
+  opacity: 0;
+  transform: scale(0.7);
+  transition: opacity 160ms ease, transform 160ms ease;
+}
+.music-liked-item:hover .music-liked-play {
+  opacity: 1;
+  transform: scale(1);
+}
+
+/* ============ 排行榜卡片网格（借鉴 Tabos discover-chart-card）============ */
+.music-chart-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
+  gap: 16px;
+}
+.music-chart-card {
+  display: flex;
+  gap: 14px;
+  padding: 16px;
+  border-radius: 14px;
+  background: rgba(255, 255, 255, 0.04);
+  border: 1px solid var(--cream-line);
+  box-shadow: 0 8px 20px rgba(0, 0, 0, 0.25);
+  transition: background 180ms ease, border-color 180ms ease;
+}
+.music-chart-card:hover {
+  background: rgba(255, 255, 255, 0.06);
+  border-color: var(--ember-soft);
+}
+.music-chart-cover {
+  position: relative;
+  flex: 0 0 88px;
+  width: 88px;
+  height: 88px;
+  border-radius: 10px;
+  overflow: hidden;
+  align-self: center;
+  box-shadow: 0 6px 16px rgba(0, 0, 0, 0.35);
+}
+.music-chart-cover-play {
+  position: absolute;
+  inset: 0;
+  display: grid;
+  place-items: center;
+  color: #fff;
+  background: rgba(0, 0, 0, 0.45);
+  opacity: 0;
+  transition: opacity 160ms ease;
+}
+.music-chart-cover:hover .music-chart-cover-play {
+  opacity: 1;
+}
+.music-chart-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  width: 100%;
+  margin-bottom: 8px;
+  text-align: left;
+}
+.music-chart-head:hover h3 {
+  color: var(--ember);
+}
+.music-chart-tracks {
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+}
+.music-chart-track {
+  display: grid;
+  grid-template-columns: 18px minmax(0, 1fr);
+  align-items: center;
+  gap: 8px;
+  width: 100%;
+  font-size: 13px;
+  line-height: 1.25;
+}
+.music-chart-rank {
+  font-family: var(--font-mono, monospace);
+  font-weight: 700;
+  text-align: center;
+}
+.music-chart-track:hover span {
+  color: var(--ember) !important;
+}
+
+/* ============ 发现页三栏 Hero（借鉴 Tabos fm-home-hero）============ */
+.music-hero3 {
+  display: grid;
+  grid-template-columns: minmax(0, 1.6fr) minmax(0, 0.85fr) minmax(0, 0.95fr);
+  gap: 14px;
+  align-items: stretch;
+}
+@media (max-width: 1080px) {
+  .music-hero3 {
+    grid-template-columns: 1fr 1fr;
+  }
+  .music-hero3-main {
+    grid-column: 1 / -1;
+  }
+}
+@media (max-width: 680px) {
+  .music-hero3 {
+    grid-template-columns: 1fr;
+  }
+  .music-hero3-banner,
+  .music-hero3-liked {
+    display: none !important;
+  }
+}
+
+/* 左：黑胶主卡 */
+.music-hero3-main {
+  position: relative;
+  overflow: hidden;
+  border-radius: 16px;
+  min-height: 220px;
+  border: 1px solid var(--cream-line);
+}
+.music-hero3-main-body {
+  position: relative;
+  z-index: 2;
+  height: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  padding: 28px 32px;
+}
+.music-hero3-info {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  min-width: 0;
+}
+.music-hero3-title {
+  font-family: var(--font-display, inherit);
+  font-size: clamp(20px, 2.4vw, 32px);
+  line-height: 1.1;
+  font-weight: 800;
+  color: #fff;
+}
+
+/* 中：推荐歌单 Banner 卡 */
+.music-hero3-banner {
+  position: relative;
+  border-radius: 16px;
+  overflow: hidden;
+  min-height: 220px;
+  border: 1px solid var(--cream-line);
+  background: var(--ink-3);
+  text-align: left;
+  transition: transform 200ms ease;
+}
+.music-hero3-banner:hover {
+  transform: translateY(-3px);
+}
+.music-hero3-banner-img {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  transition: transform 500ms ease;
+}
+.music-hero3-banner:hover .music-hero3-banner-img {
+  transform: scale(1.08);
+}
+.music-hero3-banner-ph {
+  position: absolute;
+  inset: 0;
+  display: grid;
+  place-items: center;
+  color: var(--cream-faint);
+}
+.music-hero3-banner-veil {
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(180deg, rgba(0, 0, 0, 0.1) 30%, rgba(0, 0, 0, 0.82));
+}
+.music-hero3-banner-body {
+  position: absolute;
+  left: 16px;
+  right: 16px;
+  bottom: 16px;
+  z-index: 2;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+/* 右：我喜欢 2×2 网格 */
+.music-hero3-liked {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  grid-template-rows: 1fr 1fr;
+  gap: 10px;
+  min-height: 220px;
+}
+.music-hero3-liked-item {
+  position: relative;
+  border-radius: 12px;
+  overflow: hidden;
+  background: var(--ink-3);
+  border: 1px solid var(--cream-line);
+  transition: transform 200ms ease;
+}
+.music-hero3-liked-item:hover {
+  transform: translateY(-2px);
+}
+
+/* ============ 新歌速递卡片（借鉴 Tabos discover-new-song-card）============ */
+.music-newsong-card {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex: 0 0 248px;
+  width: 248px;
+  padding: 8px;
+  border-radius: 12px;
+  background: rgba(255, 255, 255, 0.04);
+  border: 1px solid var(--cream-line);
+  transition: background 160ms ease, transform 160ms ease;
+}
+.music-newsong-card:hover {
+  background: rgba(255, 255, 255, 0.07);
+  transform: translateY(-2px);
+}
+.music-newsong-cover {
+  position: relative;
+  flex: 0 0 52px;
+  width: 52px;
+  height: 52px;
+  border-radius: 8px;
+  overflow: hidden;
+}
+.music-newsong-play {
+  position: absolute;
+  inset: 0;
+  display: grid;
+  place-items: center;
+  color: #fff;
+  background: rgba(0, 0, 0, 0.45);
+  opacity: 0;
+  transition: opacity 150ms ease;
+}
+.music-newsong-card:hover .music-newsong-play {
+  opacity: 1;
+}
+
+/* ============ MV 视频卡片（借鉴 Tabos discover-mv-card）============ */
+.music-mv-card {
+  flex: 0 0 248px;
+  width: 248px;
+  text-align: left;
+  transition: transform 200ms ease;
+}
+.music-mv-card:hover {
+  transform: translateY(-3px);
+}
+.music-mv-cover {
+  position: relative;
+  width: 100%;
+  aspect-ratio: 16 / 9;
+  border-radius: 12px;
+  overflow: hidden;
+  background: var(--ink-3);
+  border: 1px solid var(--cream-line);
+  box-shadow: 0 8px 22px rgba(0, 0, 0, 0.35);
+}
+.music-mv-img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  transition: transform 400ms ease;
+}
+.music-mv-card:hover .music-mv-img {
+  transform: scale(1.06);
+}
+.music-mv-ph {
+  display: grid;
+  place-items: center;
+  width: 100%;
+  height: 100%;
+  color: var(--cream-faint);
+}
+.music-mv-veil {
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(180deg, transparent 55%, rgba(0, 0, 0, 0.5));
+  pointer-events: none;
+}
+.music-mv-play {
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  transform: translate(-50%, -50%) scale(0.8);
+  width: 46px;
+  height: 46px;
+  display: grid;
+  place-items: center;
+  border-radius: 50%;
+  color: var(--ink);
+  background: var(--ember);
+  box-shadow: 0 6px 18px rgba(0, 0, 0, 0.45);
+  opacity: 0;
+  transition: opacity 180ms ease, transform 180ms ease;
+}
+.music-mv-card:hover .music-mv-play {
+  opacity: 1;
+  transform: translate(-50%, -50%) scale(1);
+}
+.music-mv-name {
+  display: block;
+  margin-top: 8px;
+  font-family: var(--font-display, inherit);
+  font-size: 13px;
+  font-weight: 700;
+  color: var(--cream);
+}
+.music-mv-sub {
+  display: block;
+  font-size: 11px;
+  color: var(--cream-faint);
+}
+
+/* ============ 各页面通用页头 / 容器 / 占位 ============ */
+.music-page-wrap {
+  padding-bottom: 16px;
+}
+.music-page-head {
+  display: flex;
+  align-items: flex-end;
+  justify-content: space-between;
+  gap: 16px;
+  margin-bottom: 22px;
+}
+.music-page-title {
+  font-family: var(--font-display, inherit);
+  font-size: clamp(22px, 2.6vw, 30px);
+  font-weight: 800;
+  color: var(--cream);
+  line-height: 1.1;
+}
+.music-page-sub {
+  margin-top: 6px;
+  font-size: 13px;
+  color: var(--cream-dim);
+}
+.music-placeholder {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  text-align: center;
+  min-height: 46vh;
+  padding: 40px 20px;
+  border-radius: 16px;
+  background: rgba(242, 232, 213, 0.03);
+  border: 1px dashed var(--cream-line);
+}
+.music-placeholder-icon {
+  display: grid;
+  place-items: center;
+  width: 78px;
+  height: 78px;
+  margin-bottom: 18px;
+  border-radius: 50%;
+  color: var(--ember);
+  background: var(--ember-soft);
+}
+.music-placeholder-badge {
+  margin-top: 18px;
+  padding: 4px 14px;
+  border-radius: 999px;
+  font-family: var(--font-mono, monospace);
+  font-size: 11px;
+  letter-spacing: 0.1em;
+  color: var(--cream-faint);
+  border: 1px solid var(--cream-line);
+}
+
+/* ============ 排行榜页（官方榜 + 全部榜单封面网格）============ */
+.music-toplist-official-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(340px, 1fr));
+  gap: 16px;
+}
+.music-toplist-cover-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(120px, 1fr));
+  gap: 14px;
+}
+.music-toplist-cover-card {
+  text-align: left;
+  transition: transform 180ms ease;
+}
+.music-toplist-cover-card:hover {
+  transform: translateY(-3px);
+}
+.music-toplist-cover-img {
+  display: block;
+  width: 100%;
+  aspect-ratio: 1 / 1;
+  border-radius: 12px;
+  overflow: hidden;
+  border: 1px solid var(--cream-line);
+  box-shadow: 0 6px 18px rgba(0, 0, 0, 0.32);
+}
+.music-toplist-cover-card[data-active] .music-toplist-cover-img {
+  border-color: var(--ember);
+  box-shadow: 0 0 0 1px var(--ember), 0 8px 22px var(--ember-soft);
+}
+.music-toplist-cover-name {
+  display: block;
+  margin-top: 8px;
+  font-family: var(--font-display, inherit);
+  font-size: 12px;
+  font-weight: 700;
+  color: var(--cream-dim);
+}
+.music-toplist-cover-card[data-active] .music-toplist-cover-name {
+  color: var(--ember);
+}
+
+/* ============ MV 网格 ============ */
+.music-mv-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
+  gap: 18px;
+}
+.music-mv-grid .music-mv-card {
+  flex: none;
+  width: auto;
+}
+
+/* ============ 歌手页（分类 + 字母筛选 + 头像网格）============ */
+.music-artist-filter-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+.music-artist-prefix-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+.music-af-btn {
+  height: 32px;
+  padding: 0 14px;
+  border-radius: 999px;
+  font-size: 13px;
+  color: var(--cream-dim);
+  border: 1px solid var(--cream-line);
+  background: transparent;
+  transition: color 150ms ease, background 150ms ease, border-color 150ms ease;
+}
+.music-af-btn:hover {
+  color: var(--cream);
+  background: var(--cream-pale);
+}
+.music-af-btn[data-active] {
+  color: var(--ink);
+  background: var(--ember);
+  border-color: var(--ember);
+  font-weight: 700;
+}
+.music-af-btn-sm {
+  height: 28px;
+  padding: 0 10px;
+  font-size: 12px;
+  font-family: var(--font-mono, monospace);
+}
+.music-artist-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(120px, 1fr));
+  gap: 16px;
+}
+.music-artist-card {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 10px;
+  transition: transform 180ms ease;
+}
+.music-artist-card:hover {
+  transform: translateY(-3px);
+}
+.music-artist-avatar {
+  display: block;
+  width: 100%;
+  aspect-ratio: 1 / 1;
+  border-radius: 50%;
+  overflow: hidden;
+  border: 1px solid var(--cream-line);
+  box-shadow: 0 6px 18px rgba(0, 0, 0, 0.3);
+}
+.music-artist-card:hover .music-artist-avatar {
+  border-color: var(--ember-soft);
+}
+.music-artist-card-name {
+  font-family: var(--font-display, inherit);
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--cream-dim);
+  text-align: center;
+}
+.music-artist-card:hover .music-artist-card-name {
+  color: var(--cream);
+}
+
+/* ============ 每日推荐页大头部 ============ */
+.music-recommend-hero {
+  position: relative;
+  overflow: hidden;
+  border-radius: 16px;
+  border: 1px solid var(--cream-line);
+  min-height: 200px;
+}
+.music-recommend-hero-body {
+  position: relative;
+  z-index: 2;
+  display: flex;
+  align-items: center;
+  gap: 22px;
+  padding: 32px;
+}
+.music-recommend-date {
+  flex-shrink: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  width: 96px;
+  height: 96px;
+  border-radius: 16px;
+  background: rgba(9, 9, 9, 0.5);
+  border: 1px solid var(--ember-soft);
+  box-shadow: 0 0 24px var(--ember-soft);
+}
+.music-recommend-day {
+  font-family: var(--font-display, inherit);
+  font-size: 40px;
+  font-weight: 800;
+  line-height: 1;
+  color: var(--ember);
+}
+.music-recommend-month {
+  margin-top: 4px;
+  font-size: 12px;
+  color: var(--cream-dim);
+}
+@media (max-width: 560px) {
+  .music-recommend-date {
+    display: none;
+  }
+}
+
+/* ============ 全屏播放页唱片机（借鉴 Tabos fp-record-disc + needle）============ */
+.music-turntable {
+  position: relative;
+  display: grid;
+  place-items: center;
+  width: min(72vw, 340px);
+  height: min(72vw, 340px);
+  filter: drop-shadow(0 30px 50px rgba(0, 0, 0, 0.5));
+}
+
+/* 后方黑胶盘：同心纹理，播放时转动 */
+.music-turntable-disc {
+  position: relative;
+  width: 100%;
+  height: 100%;
+  border-radius: 50%;
+  display: grid;
+  place-items: center;
+  background:
+    repeating-radial-gradient(
+      circle at center,
+      rgba(255, 255, 255, 0.05) 0px,
+      rgba(255, 255, 255, 0.05) 1px,
+      rgba(0, 0, 0, 0) 1px,
+      rgba(0, 0, 0, 0) 4px
+    ),
+    radial-gradient(circle at 35% 28%, var(--ember-soft), transparent 32%),
+    radial-gradient(circle at center, #1a1c20 0%, #0a0b0d 60%, #050608 100%);
+  border: 4px solid rgba(255, 255, 255, 0.14);
+  box-shadow: inset 0 0 40px rgba(0, 0, 0, 0.7), 0 26px 80px -36px rgba(0, 0, 0, 0.96);
+}
+.music-turntable[data-playing] .music-turntable-disc {
+  animation: music-vinyl-spin 8s linear infinite;
+}
+
+.music-turntable-disc-ring {
+  position: absolute;
+  inset: 9%;
+  border-radius: 50%;
+  border: 1px solid rgba(255, 255, 255, 0.06);
+}
+.music-turntable-disc-ring2 {
+  inset: 18%;
+}
+
+/* 封面嵌在唱片中心（圆形） */
+.music-turntable-label {
+  position: relative;
+  z-index: 2;
+  width: 62%;
+  height: 62%;
+  border-radius: 50%;
+  overflow: hidden;
+  box-shadow: 0 0 0 6px rgba(0, 0, 0, 0.55), 0 0 0 7px rgba(255, 255, 255, 0.08);
+}
+.music-turntable-label > div {
+  width: 100% !important;
+  height: 100% !important;
+  border-radius: 50% !important;
+}
+.music-turntable-label img {
+  border-radius: 50% !important;
+}
+
+/* 唱针：默认抬起，播放时摆入 */
+.music-turntable-needle {
+  position: absolute;
+  top: -6%;
+  right: 8%;
+  z-index: 4;
+  width: 26%;
+  height: 42%;
+  transform-origin: top right;
+  transform: rotate(-32deg);
+  transition: transform 500ms cubic-bezier(0.34, 1.3, 0.5, 1);
+  pointer-events: none;
+}
+.music-turntable[data-playing] .music-turntable-needle {
+  transform: rotate(-6deg);
+}
+.music-turntable-needle-arm {
+  position: absolute;
+  top: 8%;
+  right: 12%;
+  width: 8px;
+  height: 78%;
+  border-radius: 4px;
+  background: linear-gradient(180deg, #d8d8dc, #8b8b90);
+  box-shadow: 0 2px 6px rgba(0, 0, 0, 0.5);
+  transform: rotate(18deg);
+  transform-origin: top right;
+}
+.music-turntable-needle-head {
+  position: absolute;
+  top: 4%;
+  right: 6%;
+  width: 22px;
+  height: 22px;
+  border-radius: 50%;
+  background: radial-gradient(circle at 35% 30%, #f0f0f3, #6e6e73);
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.55);
+}

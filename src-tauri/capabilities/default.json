@@ -2,7 +2,7 @@
   "$schema": "../gen/schemas/desktop-schema.json",
   "identifier": "default",
   "description": "Default capability for the main window",
-  "windows": ["main", "cf-challenge"],
+  "windows": ["main", "cf-challenge", "desktop-lyric"],
   "permissions": [
     "core:default",
     "core:window:default",

@@ -194,6 +194,15 @@ function normalizeLyricPayload(payload: unknown): MusicLyricResult {
   return {
     lyric: asString(data?.lyric) || asString(data?.lrc) || "",
     tlyric: asString(data?.tlyric) || asString(data?.trc),
+    // 逐字歌词字段在各 LX 服务端命名不一：lxlyric/yrc/rlyric(网易) / qrc(QQ)。
+    yrc:
+      asString(data?.yrc) ||
+      asString(data?.lxlyric) ||
+      asString(data?.rlyric) ||
+      asString(data?.qrc) ||
+      asString(data?.mrc) ||
+      undefined,
+    romalrc: asString(data?.romalrc) || asString(data?.roma) || asString(data?.rtlyric) || undefined,
   };
 }
 
@@ -261,6 +270,8 @@ export async function resolveLxServer(
         quality: serverQuality,
         lyric: lyric.lyric,
         tlyric: lyric.tlyric,
+        yrc: lyric.yrc,
+        romalrc: lyric.romalrc,
       };
     }
   }
@@ -281,5 +292,7 @@ export async function resolveLxServer(
     quality: asString(data?.type) || serverQuality,
     lyric: lyric.lyric,
     tlyric: lyric.tlyric,
+    yrc: lyric.yrc,
+    romalrc: lyric.romalrc,
   };
 }

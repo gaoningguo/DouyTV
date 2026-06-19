@@ -513,6 +513,134 @@ fn header_value<'a>(headers: &'a HashMap<String, String>, key: &str) -> Option<&
         .map(|(_, v)| v.as_str())
 }
 
+#[derive(Debug, Deserialize)]
+pub struct MusicDownloadRequest {
+    pub task_id: String,
+    pub url: String,
+    #[serde(default)]
+    pub headers: HashMap<String, String>,
+    pub title: String,
+    pub artist: String,
+    pub download_dir: Option<String>,
+    pub proxy_url: Option<String>,
+}
+
+/// 音乐下载根目录：自定义 > 系统音频目录/DouyTV > 下载目录/DouyTV。
+fn music_download_root(app: &tauri::AppHandle, custom_dir: Option<&str>) -> Result<PathBuf, String> {
+    let root = if let Some(dir) = custom_dir.map(str::trim).filter(|s| !s.is_empty()) {
+        PathBuf::from(dir)
+    } else {
+        let base = app
+            .path()
+            .audio_dir()
+            .or_else(|_| app.path().download_dir())
+            .or_else(|_| app.path().app_data_dir())
+            .map_err(|e| format!("resolve audio dir: {e}"))?;
+        base.join("DouyTV")
+    };
+    std::fs::create_dir_all(&root).map_err(|e| format!("create music dir: {e}"))?;
+    Ok(root)
+}
+
+/// 从 URL / content-type 推断音频扩展名，默认 mp3。
+fn music_extension(url: &str, content_type: Option<&str>) -> String {
+    if let Some(ct) = content_type {
+        let ct = ct.to_lowercase();
+        if ct.contains("flac") {
+            return "flac".to_string();
+        }
+        if ct.contains("mp4") || ct.contains("m4a") || ct.contains("aac") {
+            return "m4a".to_string();
+        }
+        if ct.contains("wav") {
+            return "wav".to_string();
+        }
+        if ct.contains("ogg") {
+            return "ogg".to_string();
+        }
+        if ct.contains("mpeg") || ct.contains("mp3") {
+            return "mp3".to_string();
+        }
+    }
+    match ext_from_url(url).as_deref() {
+        Some(e @ ("flac" | "m4a" | "wav" | "ogg" | "aac" | "mp3")) => e.to_string(),
+        _ => "mp3".to_string(),
+    }
+}
+
+/// 下载单首音乐到本地（带 Referer/UA、进度事件、暂停支持）。
+#[tauri::command]
+async fn music_download(
+    app: tauri::AppHandle,
+    req: MusicDownloadRequest,
+) -> Result<VodDownloadResult, String> {
+    let client = match download_client(req.proxy_url.as_deref()) {
+        Ok(c) => c,
+        Err(e) => {
+            emit_vod_download_progress(&app, &req.task_id, "error", 0.0, 0, None, None, Some(e.clone()));
+            return Err(e);
+        }
+    };
+
+    let run = async {
+        let root = music_download_root(&app, req.download_dir.as_deref())?;
+        let artist = sanitize_file_component(&req.artist, "未知歌手");
+        let title = sanitize_file_component(&req.title, "未知歌曲");
+
+        let head_resp = apply_download_headers(client.head(&req.url), &req.url, &req.headers)
+            .send()
+            .await
+            .ok();
+        let content_type = head_resp
+            .as_ref()
+            .and_then(|r| r.headers().get("content-type"))
+            .and_then(|v| v.to_str().ok());
+        let ext = music_extension(&req.url, content_type);
+        let path = unique_path(root.join(format!("{artist} - {title}.{ext}")));
+
+        emit_vod_download_progress(&app, &req.task_id, "downloading", 0.0, 0, None, Some(&path), None);
+        let bytes = download_url_to_file(
+            &app,
+            &req.task_id,
+            &client,
+            &req.url,
+            &req.headers,
+            &path,
+            0.0,
+            100.0,
+            0,
+        )
+        .await?;
+        Ok::<VodDownloadResult, String>(VodDownloadResult {
+            path: path.to_string_lossy().to_string(),
+            bytes,
+            kind: "file".to_string(),
+        })
+    };
+
+    match run.await {
+        Ok(result) => {
+            emit_vod_download_progress(
+                &app,
+                &req.task_id,
+                "done",
+                100.0,
+                result.bytes,
+                Some(result.bytes),
+                Some(Path::new(&result.path)),
+                None,
+            );
+            Ok(result)
+        }
+        Err(e) => {
+            let status = if e == "DOWNLOAD_PAUSED" { "paused" } else { "error" };
+            emit_vod_download_progress(&app, &req.task_id, status, 0.0, 0, None, None, Some(e.clone()));
+            Err(e)
+        }
+    }
+}
+
+
 fn download_client(proxy: Option<&str>) -> Result<reqwest::Client, String> {
     let mut builder = reqwest::Client::builder()
         .connect_timeout(Duration::from_secs(20))
@@ -2308,6 +2436,87 @@ fn get_stream_proxy_port() -> Option<u16> {
     stream_proxy::port()
 }
 
+/// 打开/关闭桌面歌词独立窗口：无边框、置顶、透明背景，加载内部路由 /music/desktop-lyric。
+/// 主窗口通过 `emit("desktop-lyric", payload)` 把当前歌词/进度推给它。
+#[tauri::command]
+async fn open_desktop_lyric(app: tauri::AppHandle) -> Result<bool, String> {
+    #[cfg(any(target_os = "android", target_os = "ios"))]
+    {
+        let _ = app;
+        return Ok(false);
+    }
+
+    #[cfg(not(any(target_os = "android", target_os = "ios")))]
+    {
+        use tauri::webview::Color;
+        use tauri::{Manager, WebviewUrl, WebviewWindowBuilder};
+
+        if let Some(win) = app.get_webview_window("desktop-lyric") {
+            let _ = win.show();
+            let _ = win.set_focus();
+            return Ok(true);
+        }
+
+        let builder = WebviewWindowBuilder::new(
+            &app,
+            "desktop-lyric",
+            WebviewUrl::App("index.html#/music/desktop-lyric".into()),
+        )
+        .title("桌面歌词")
+        .inner_size(820.0, 150.0)
+        .min_inner_size(360.0, 80.0)
+        .focused(false)
+        .decorations(false)
+        .transparent(true)
+        .background_color(Color(0, 0, 0, 0))
+        .always_on_top(true)
+        .skip_taskbar(true)
+        .resizable(true)
+        .shadow(false);
+
+        let win = builder
+            .build()
+            .map_err(|e| format!("build desktop-lyric window failed: {e}"))?;
+        let _ = win.show();
+        Ok(true)
+    }
+}
+
+/// 切换桌面歌词窗口的鼠标穿透（点击穿透到桌面）。锁定时穿透，解锁时可拖动。
+#[tauri::command]
+fn set_desktop_lyric_passthrough(app: tauri::AppHandle, ignore: bool) -> Result<(), String> {
+    use tauri::Manager;
+    if let Some(win) = app.get_webview_window("desktop-lyric") {
+        win.set_ignore_cursor_events(ignore)
+            .map_err(|e| e.to_string())?;
+    }
+    Ok(())
+}
+
+#[tauri::command]
+fn close_desktop_lyric(app: tauri::AppHandle) -> Result<(), String> {
+    use tauri::Manager;
+    if let Some(win) = app.get_webview_window("desktop-lyric") {
+        let _ = win.destroy();
+    }
+    Ok(())
+}
+
+#[tauri::command]
+fn is_desktop_lyric_open(app: tauri::AppHandle) -> bool {
+    use tauri::Manager;
+    app.get_webview_window("desktop-lyric").is_some()
+}
+
+#[tauri::command]
+fn push_desktop_lyric(app: tauri::AppHandle, payload: serde_json::Value) -> Result<(), String> {
+    use tauri::Manager;
+    if let Some(win) = app.get_webview_window("desktop-lyric") {
+        win.emit("desktop-lyric", payload).map_err(|e| e.to_string())?;
+    }
+    Ok(())
+}
+
 /// Stripchat Mouflon 解扰用 `pkey:pdkey` 对。前端持久化在 localStorage,
 /// 启动时调一次 `set_mouflon_keys` 把全部条目灌进进程内 jar(进程退出即丢)。
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -2736,10 +2945,16 @@ pub fn run() {
             script_http_h2,
             scan_local_videos,
             vod_download_media,
+            music_download,
             vod_set_download_paused,
             open_vod_download_path,
             read_system_proxy,
             get_stream_proxy_port,
+            open_desktop_lyric,
+            close_desktop_lyric,
+            is_desktop_lyric_open,
+            set_desktop_lyric_passthrough,
+            push_desktop_lyric,
             open_cf_challenge,
             set_mouflon_keys,
             get_mouflon_keys,
