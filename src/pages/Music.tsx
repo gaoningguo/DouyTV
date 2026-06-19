@@ -99,6 +99,7 @@ import { PlayerView } from "./music/views/PlayerView";
 
 export default function Music() {
   const audioRef = useRef<HTMLAudioElement>(null);
+  const muteRestoreRef = useRef(0.8);
   const playRequestRef = useRef(0);
   const lastHistorySaveRef = useRef(0);
   const pendingAutoPlayRef = useRef(false);
@@ -1781,6 +1782,62 @@ export default function Music() {
       // position > duration 等边界情况会抛，忽略。
     }
   }, [currentTime, duration, currentSong, playbackRate]);
+
+  // 应用内键盘快捷键(对齐 SPlayer:空格播放/暂停、方向键快进退/切歌、上下音量、M 静音、L 收藏)。
+  useEffect(() => {
+    const onKey = (event: KeyboardEvent) => {
+      const target = event.target as HTMLElement | null;
+      if (
+        target &&
+        (target.tagName === "INPUT" ||
+          target.tagName === "TEXTAREA" ||
+          target.tagName === "SELECT" ||
+          target.isContentEditable)
+      ) {
+        return;
+      }
+      const audio = audioRef.current;
+      switch (event.code) {
+        case "Space":
+          event.preventDefault();
+          void togglePlay();
+          break;
+        case "ArrowRight":
+          if (event.ctrlKey || event.metaKey) void playByQueueOffset(1);
+          else if (audio) seekTo(Math.min((audio.currentTime || 0) + 5, audio.duration || 0));
+          break;
+        case "ArrowLeft":
+          if (event.ctrlKey || event.metaKey) void playByQueueOffset(-1);
+          else if (audio) seekTo(Math.max((audio.currentTime || 0) - 5, 0));
+          break;
+        case "ArrowUp":
+          event.preventDefault();
+          setVolume(Math.min(1, (audio?.volume ?? volume) + 0.05));
+          break;
+        case "ArrowDown":
+          event.preventDefault();
+          setVolume(Math.max(0, (audio?.volume ?? volume) - 0.05));
+          break;
+        case "KeyM": {
+          const v = audio?.volume ?? volume;
+          if (v > 0) {
+            muteRestoreRef.current = v;
+            setVolume(0);
+          } else {
+            setVolume(muteRestoreRef.current || 0.8);
+          }
+          break;
+        }
+        case "KeyL":
+          if (currentSong) toggleFavorite(currentSong);
+          break;
+        default:
+          break;
+      }
+    };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [togglePlay, playByQueueOffset, seekTo, setVolume, volume, currentSong, toggleFavorite]);
 
   const isPlayerRoute = view === "player";
 

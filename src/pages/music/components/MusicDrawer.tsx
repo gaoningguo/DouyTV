@@ -254,6 +254,32 @@ export function MusicDrawer({
                   <p className="mt-2 text-xs text-cream-faint">剩余 {formatDuration(sleepRemaining)} 后暂停</p>
                 )}
               </section>
+              <section>
+                <h3 className="font-display text-sm font-semibold mb-2">键盘快捷键</h3>
+                <div className="space-y-1.5 text-xs text-cream-dim">
+                  {[
+                    ["空格", "播放 / 暂停"],
+                    ["← / →", "快退 / 快进 5 秒"],
+                    ["Ctrl + ← / →", "上一首 / 下一首"],
+                    ["↑ / ↓", "音量 + / −"],
+                    ["M", "静音切换"],
+                    ["L", "收藏当前歌曲"],
+                  ].map(([key, desc]) => (
+                    <div key={key} className="flex items-center justify-between">
+                      <span className="text-cream-faint">{desc}</span>
+                      <kbd
+                        className="font-mono text-[11px] px-2 py-0.5 rounded"
+                        style={{ background: "var(--ink-2)", border: "1px solid var(--cream-line)" }}
+                      >
+                        {key}
+                      </kbd>
+                    </div>
+                  ))}
+                </div>
+                <p className="mt-2 text-xs text-cream-faint">
+                  系统媒体键(播放/暂停/上下曲)经 MediaSession 全局生效;数据同步在「设置 · 同步」配置 WebDAV。
+                </p>
+              </section>
             </div>
           )}
         </div>
