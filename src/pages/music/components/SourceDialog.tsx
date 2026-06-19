@@ -8,12 +8,16 @@ export function SourceDialog({
   importText,
   lxBaseUrl,
   lxToken,
+  neteaseBaseUrl,
   onImportText,
   onLxBaseUrl,
   onLxToken,
+  onNeteaseBaseUrl,
   onClose,
   onImport,
   onAddLx,
+  onAddNeteaseBuiltin,
+  onAddNeteaseExternal,
   onToggle,
   onDelete,
   onRename,
@@ -22,12 +26,16 @@ export function SourceDialog({
   importText: string;
   lxBaseUrl: string;
   lxToken: string;
+  neteaseBaseUrl: string;
   onImportText: (value: string) => void;
   onLxBaseUrl: (value: string) => void;
   onLxToken: (value: string) => void;
+  onNeteaseBaseUrl: (value: string) => void;
   onClose: () => void;
   onImport: () => void;
   onAddLx: () => void;
+  onAddNeteaseBuiltin: () => void;
+  onAddNeteaseExternal: () => void;
   onToggle: (id: string) => void;
   onDelete: (source: MusicSourceDescriptor) => void;
   onRename: (source: MusicSourceDescriptor, name: string) => void;
@@ -44,6 +52,21 @@ export function SourceDialog({
           </button>
         </header>
         <div className="flex-1 overflow-y-auto p-4 space-y-4">
+          <section>
+            <h3 className="text-sm font-display font-bold mb-2">网易云音乐</h3>
+            <div className="flex flex-col gap-2">
+              <div className="flex items-center gap-2">
+                <div className="flex-1 text-xs text-cream-faint">
+                  内置直连 music.163.com，免部署、全平台、开箱即用（搜索/歌词/发现；免费曲 320k、版权曲 128k，VIP 曲自动回落其它源）。
+                </div>
+                <button type="button" onClick={onAddNeteaseBuiltin} className="h-9 px-4 rounded-lg text-xs font-display font-bold tap shrink-0" style={{ background: "var(--ember)", color: "var(--ink)" }}>添加内置源</button>
+              </div>
+              <div className="grid md:grid-cols-[1fr_auto] gap-2">
+                <input value={neteaseBaseUrl} onChange={(event) => onNeteaseBaseUrl(event.target.value)} placeholder="自部署 NeteaseCloudMusicApi 地址（可选，如 http://127.0.0.1:3000）" className="h-10 rounded-lg px-3 bg-ink text-sm outline-none text-cream" style={{ border: "1px solid var(--cream-line)" }} />
+                <button type="button" onClick={onAddNeteaseExternal} className="h-10 px-4 rounded-lg text-xs font-display font-bold tap" style={{ background: "var(--vhs)", color: "var(--ink)" }}>添加自部署</button>
+              </div>
+            </div>
+          </section>
           <section>
             <h3 className="text-sm font-display font-bold mb-2">添加 LX Music API Server</h3>
             <div className="grid md:grid-cols-[1fr_180px_auto] gap-2">

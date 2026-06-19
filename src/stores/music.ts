@@ -1,5 +1,6 @@
 import { create } from "zustand";
 import {
+  createBuiltinNeteaseSource,
   musicSongKey,
   normalizeMusicSourceDescriptor,
   type MusicHistoryRecord,
@@ -31,12 +32,21 @@ interface PersistedMusicState {
   volume?: number;
   proxyEnabled?: boolean;
   showSpectrum?: boolean;
+  eqEnabled?: boolean;
+  eqPreset?: string;
+  eqGains?: number[];
+  lyricShowTrans?: boolean;
+  lyricShowRoma?: boolean;
+  lyricFontScale?: number;
+  lyricOffsets?: Record<string, number>;
   sleepTimerEndAt?: number | null;
   queue?: MusicSong[];
   currentSong?: MusicSong | null;
   favorites?: MusicSong[];
   history?: MusicHistoryRecord[];
   playlists?: MusicUserPlaylist[];
+  /** 是否已注入过内置网易源（只注一次，尊重用户删除）。 */
+  neteaseBuiltinSeeded?: boolean;
 }
 
 interface MusicStore {
@@ -48,12 +58,20 @@ interface MusicStore {
   volume: number;
   proxyEnabled: boolean;
   showSpectrum: boolean;
+  eqEnabled: boolean;
+  eqPreset: string;
+  eqGains: number[];
+  lyricShowTrans: boolean;
+  lyricShowRoma: boolean;
+  lyricFontScale: number;
+  lyricOffsets: Record<string, number>;
   sleepTimerEndAt: number | null;
   queue: MusicSong[];
   currentSong: MusicSong | null;
   favorites: MusicSong[];
   history: MusicHistoryRecord[];
   playlists: MusicUserPlaylist[];
+  neteaseBuiltinSeeded: boolean;
   hydrate: () => void;
   installSource: (source: MusicSourceDescriptor) => void;
   uninstallSource: (id: string) => void;
@@ -65,6 +83,13 @@ interface MusicStore {
   setVolume: (volume: number) => void;
   setProxyEnabled: (enabled: boolean) => void;
   setShowSpectrum: (enabled: boolean) => void;
+  setEqEnabled: (enabled: boolean) => void;
+  setEqPreset: (preset: string, gains: number[]) => void;
+  setEqGain: (index: number, gain: number) => void;
+  setLyricShowTrans: (show: boolean) => void;
+  setLyricShowRoma: (show: boolean) => void;
+  setLyricFontScale: (scale: number) => void;
+  setLyricOffset: (songKey: string, offset: number) => void;
   setSleepTimerEndAt: (endAt: number | null) => void;
   setQueue: (songs: MusicSong[], current?: MusicSong) => void;
   appendToQueue: (song: MusicSong) => void;
@@ -88,6 +113,19 @@ const STORAGE_KEY = "douytv:music";
 const HISTORY_LIMIT = 300;
 const QUEUE_LIMIT = 500;
 const PLAYLIST_LIMIT = 1000;
+const EQ_BAND_COUNT = 9;
+
+function normalizeEqGains(input?: number[]): number[] {
+  const base = Array.from({ length: EQ_BAND_COUNT }, () => 0);
+  if (!Array.isArray(input)) return base;
+  for (let i = 0; i < EQ_BAND_COUNT; i += 1) {
+    const value = input[i];
+    if (typeof value === "number" && Number.isFinite(value)) {
+      base[i] = Math.min(12, Math.max(-12, value));
+    }
+  }
+  return base;
+}
 
 function loadState(): PersistedMusicState {
   try {
@@ -109,12 +147,20 @@ function persist(state: MusicStore) {
     volume: state.volume,
     proxyEnabled: state.proxyEnabled,
     showSpectrum: state.showSpectrum,
+    eqEnabled: state.eqEnabled,
+    eqPreset: state.eqPreset,
+    eqGains: state.eqGains,
+    lyricShowTrans: state.lyricShowTrans,
+    lyricShowRoma: state.lyricShowRoma,
+    lyricFontScale: state.lyricFontScale,
+    lyricOffsets: state.lyricOffsets,
     sleepTimerEndAt: state.sleepTimerEndAt,
     queue: state.queue,
     currentSong: state.currentSong,
     favorites: state.favorites,
     history: state.history,
     playlists: state.playlists,
+    neteaseBuiltinSeeded: state.neteaseBuiltinSeeded,
   };
   try {
     localStorage.setItem(STORAGE_KEY, JSON.stringify(payload));
@@ -182,18 +228,31 @@ export const useMusicStore = create<MusicStore>((set, get) => ({
   volume: 0.82,
   proxyEnabled: true,
   showSpectrum: true,
+  eqEnabled: false,
+  eqPreset: "flat",
+  eqGains: normalizeEqGains(),
+  lyricShowTrans: true,
+  lyricShowRoma: true,
+  lyricFontScale: 1,
+  lyricOffsets: {},
   sleepTimerEndAt: null,
   queue: [],
   currentSong: null,
   favorites: [],
   history: [],
   playlists: [],
+  neteaseBuiltinSeeded: false,
   hydrate: () => {
     if (get().hydrated) return;
     const stored = loadState();
-    const sources = (stored.sources ?? []).map((source) =>
+    let sources = (stored.sources ?? []).map((source) =>
       normalizeMusicSourceDescriptor(source)
     );
+    // 首次注入一个开箱即用的内置网易源（只注一次，之后尊重用户删除）。
+    const seeded = stored.neteaseBuiltinSeeded ?? false;
+    if (!seeded && !sources.some((source) => source.kind === "netease-api")) {
+      sources = [createBuiltinNeteaseSource(), ...sources];
+    }
     set({
       sources,
       activeSourceId: ensureActiveSource(stored.activeSourceId, sources),
@@ -205,6 +264,19 @@ export const useMusicStore = create<MusicStore>((set, get) => ({
           : 0.82,
       proxyEnabled: stored.proxyEnabled ?? true,
       showSpectrum: stored.showSpectrum ?? true,
+      eqEnabled: stored.eqEnabled ?? false,
+      eqPreset: stored.eqPreset ?? "flat",
+      eqGains: normalizeEqGains(stored.eqGains),
+      lyricShowTrans: stored.lyricShowTrans ?? true,
+      lyricShowRoma: stored.lyricShowRoma ?? true,
+      lyricFontScale:
+        typeof stored.lyricFontScale === "number"
+          ? Math.min(1.6, Math.max(0.7, stored.lyricFontScale))
+          : 1,
+      lyricOffsets:
+        stored.lyricOffsets && typeof stored.lyricOffsets === "object"
+          ? stored.lyricOffsets
+          : {},
       sleepTimerEndAt:
         typeof stored.sleepTimerEndAt === "number" && stored.sleepTimerEndAt > Date.now()
           ? stored.sleepTimerEndAt
@@ -214,8 +286,11 @@ export const useMusicStore = create<MusicStore>((set, get) => ({
       favorites: dedupeSongs(stored.favorites ?? []),
       history: (stored.history ?? []).slice(0, HISTORY_LIMIT),
       playlists: (stored.playlists ?? []).map(normalizePlaylist),
+      neteaseBuiltinSeeded: true,
       hydrated: true,
     });
+    // 锁定首次注入结果（内置网易源 + seeded 标记），避免下次重复注入。
+    if (!seeded) persist(get());
   },
   installSource: (source) => {
     const normalized = normalizeMusicSourceDescriptor(source);
@@ -273,8 +348,45 @@ export const useMusicStore = create<MusicStore>((set, get) => ({
     set({ showSpectrum });
     persist(get());
   },
+  setEqEnabled: (eqEnabled) => {
+    set({ eqEnabled });
+    persist(get());
+  },
+  setEqPreset: (eqPreset, gains) => {
+    set({ eqPreset, eqGains: normalizeEqGains(gains) });
+    persist(get());
+  },
+  setEqGain: (index, gain) => {
+    const next = [...get().eqGains];
+    if (index >= 0 && index < next.length) {
+      next[index] = Math.min(12, Math.max(-12, gain));
+      // 手动调任一频段即视为自定义。
+      set({ eqGains: next, eqPreset: "custom" });
+      persist(get());
+    }
+  },
   setSleepTimerEndAt: (sleepTimerEndAt) => {
     set({ sleepTimerEndAt });
+    persist(get());
+  },
+  setLyricShowTrans: (lyricShowTrans) => {
+    set({ lyricShowTrans });
+    persist(get());
+  },
+  setLyricShowRoma: (lyricShowRoma) => {
+    set({ lyricShowRoma });
+    persist(get());
+  },
+  setLyricFontScale: (scale) => {
+    set({ lyricFontScale: Math.min(1.6, Math.max(0.7, scale)) });
+    persist(get());
+  },
+  setLyricOffset: (songKey, offset) => {
+    const clamped = Math.min(10, Math.max(-10, offset));
+    const next = { ...get().lyricOffsets };
+    if (Math.abs(clamped) < 0.05) delete next[songKey];
+    else next[songKey] = Math.round(clamped * 10) / 10;
+    set({ lyricOffsets: next });
     persist(get());
   },
   setQueue: (songs, current) => {

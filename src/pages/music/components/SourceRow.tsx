@@ -2,6 +2,21 @@ import { IconCheck, IconSettings, IconTrash } from "@/components/Icon";
 import { type MusicSourceDescriptor } from "@/lib/music";
 import { IconButton } from "./ui";
 
+const KIND_LABELS: Record<MusicSourceDescriptor["kind"], string> = {
+  "lx-server": "LX 音乐源",
+  "plugin-js": "JS 插件",
+  "aggregate-http": "聚合源",
+  "netease-api": "网易云",
+};
+
+function sourceTypeLabel(source: MusicSourceDescriptor): string {
+  const base = KIND_LABELS[source.kind] ?? source.kind;
+  if (source.kind === "netease-api") {
+    return `${base} · ${source.neteaseMode === "external" ? "自部署" : "内置"}`;
+  }
+  return base;
+}
+
 export function SourceRow({
   source,
   active,
@@ -25,7 +40,7 @@ export function SourceRow({
       <div className="min-w-0 flex-1">
         <input value={source.name} onChange={(event) => onRename(event.target.value)} className="w-full bg-transparent text-sm font-display font-semibold text-cream outline-none" />
         <p className="text-xs text-cream-faint line-clamp-1">
-          {source.kind} {source.baseUrl ? `/ ${source.baseUrl}` : source.description || ""}
+          {sourceTypeLabel(source)} {source.baseUrl ? `/ ${source.baseUrl}` : source.description ? `/ ${source.description}` : ""}
         </p>
       </div>
       <button type="button" onClick={onToggle} className="h-8 px-3 rounded-lg text-xs tap" style={{ background: source.enabled ? "var(--phosphor-soft)" : "var(--ink-3)", color: source.enabled ? "var(--phosphor)" : "var(--cream-dim)" }}>

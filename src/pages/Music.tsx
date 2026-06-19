@@ -26,6 +26,9 @@ import {
   normalizeMusicPlatform,
   normalizeMusicSourceDescriptor,
   resolveMusicSource,
+  resolveMusicSourceWithFallback,
+  prefetchMusicSource,
+  takePrefetchedSource,
   searchMusicSource,
   searchMusicSources,
   waitForUsableMusicAudio,
@@ -38,9 +41,11 @@ import {
   type MusicSongListTag,
   type MusicSourceDescriptor,
 } from "@/lib/music";
-import { wrapImage } from "@/lib/proxy";
+import { wrapImage, isTauri } from "@/lib/proxy";
+import { getCoverColor } from "@/lib/music/coverColor";
+import { useMusicDownloadStore } from "@/stores/musicDownload";
 import { useMusicStore } from "@/stores/music";
-import { type DrawerView, type LibraryTab, type MusicView } from "./music/types";
+import { type DrawerView, type LibraryTab, type MusicView, type ChartCard } from "./music/types";
 import {
   dedupeSearchSongs,
   dedupeSongs,
@@ -49,16 +54,31 @@ import {
   mostCommonArtist,
   musicSearchKey,
   normalizeSongText,
-  parseLyric,
-  safeFilename,
 } from "./music/utils";
-import { TextTab } from "./music/components/ui";
+import { parseLyric } from "./music/lyric/parse";
+import {
+  applyEqGains,
+  ensureAudioGraph,
+  resumeAudioGraph,
+} from "@/lib/music/audioGraph";
+import {
+  openDesktopLyric,
+  closeDesktopLyric,
+  isDesktopLyricOpen,
+  pushDesktopLyricLine,
+  pushDesktopLyricTime,
+} from "./music/desktopLyricBridge";
 import { EmptyMusicState } from "./music/components/ui";
+import { MusicSidebar } from "./music/components/MusicSidebar";
 import { PlayerBar } from "./music/components/PlayerBar";
 import { MusicDrawer } from "./music/components/MusicDrawer";
 import { SourceDialog } from "./music/components/SourceDialog";
 import { AddToPlaylistDialog } from "./music/components/AddToPlaylistDialog";
 import { DiscoverView } from "./music/views/DiscoverView";
+import { ToplistView } from "./music/views/ToplistView";
+import { RecommendView } from "./music/views/RecommendView";
+import { RecentView, MvView, ArtistsView } from "./music/views/BrowseViews";
+import { LocalView } from "./music/views/shared";
 import { SonglistsView } from "./music/views/SonglistsView";
 import { SearchView } from "./music/views/SearchView";
 import { LibraryView } from "./music/views/LibraryView";
@@ -120,6 +140,7 @@ export default function Music() {
   const [hasMore, setHasMore] = useState(false);
   const [searching, setSearching] = useState(false);
   const [searchPanelOpen, setSearchPanelOpen] = useState(false);
+  const [desktopLyricOn, setDesktopLyricOn] = useState(false);
   const [recentSearches, setRecentSearches] = useState<string[]>([]);
   const [recommendedKeywords, setRecommendedKeywords] = useState<string[]>([]);
   const searchInputRef = useRef<HTMLInputElement>(null);
@@ -135,13 +156,17 @@ export default function Music() {
   const [duration, setDuration] = useState(0);
   const [lyricText, setLyricText] = useState("");
   const [tlyricText, setTlyricText] = useState("");
+  const [yrcText, setYrcText] = useState("");
+  const [romaText, setRomaText] = useState("");
   const [sourceDialogOpen, setSourceDialogOpen] = useState(false);
   const [importText, setImportText] = useState("");
   const [lxBaseUrl, setLxBaseUrl] = useState("http://35.208.239.12:9527/");
   const [lxToken, setLxToken] = useState("");
+  const [neteaseBaseUrl, setNeteaseBaseUrl] = useState("");
   const [boards, setBoards] = useState<MusicDiscoveryBoard[]>([]);
   const [selectedBoard, setSelectedBoard] = useState<MusicDiscoveryBoard | null>(null);
   const [boardSongs, setBoardSongs] = useState<MusicSong[]>([]);
+  const [chartCards, setChartCards] = useState<ChartCard[]>([]);
   const [hotSearch, setHotSearch] = useState<MusicHotSearchItem[]>([]);
   const [songlists, setSonglists] = useState<MusicSongListSummary[]>([]);
   const [songTags, setSongTags] = useState<MusicSongListTag[]>([]);
@@ -173,6 +198,7 @@ export default function Music() {
   const [addToPlaylistSong, setAddToPlaylistSong] = useState<MusicSong | null>(null);
   const [newPlaylistName, setNewPlaylistName] = useState("");
   const [sleepRemaining, setSleepRemaining] = useState(0);
+  const [coverColor, setCoverColor] = useState<{ accent: string; deep: string } | null>(null);
 
   const hydrate = useMusicStore((state) => state.hydrate);
   const sources = useMusicStore((state) => state.sources);
@@ -188,6 +214,20 @@ export default function Music() {
   const setProxyEnabled = useMusicStore((state) => state.setProxyEnabled);
   const showSpectrum = useMusicStore((state) => state.showSpectrum);
   const setShowSpectrum = useMusicStore((state) => state.setShowSpectrum);
+  const eqEnabled = useMusicStore((state) => state.eqEnabled);
+  const setEqEnabled = useMusicStore((state) => state.setEqEnabled);
+  const eqPreset = useMusicStore((state) => state.eqPreset);
+  const setEqPreset = useMusicStore((state) => state.setEqPreset);
+  const eqGains = useMusicStore((state) => state.eqGains);
+  const setEqGain = useMusicStore((state) => state.setEqGain);
+  const lyricShowTrans = useMusicStore((state) => state.lyricShowTrans);
+  const setLyricShowTrans = useMusicStore((state) => state.setLyricShowTrans);
+  const lyricShowRoma = useMusicStore((state) => state.lyricShowRoma);
+  const setLyricShowRoma = useMusicStore((state) => state.setLyricShowRoma);
+  const lyricFontScale = useMusicStore((state) => state.lyricFontScale);
+  const setLyricFontScale = useMusicStore((state) => state.setLyricFontScale);
+  const lyricOffsets = useMusicStore((state) => state.lyricOffsets);
+  const setLyricOffset = useMusicStore((state) => state.setLyricOffset);
   const sleepTimerEndAt = useMusicStore((state) => state.sleepTimerEndAt);
   const setSleepTimerEndAt = useMusicStore((state) => state.setSleepTimerEndAt);
   const queue = useMusicStore((state) => state.queue);
@@ -214,9 +254,15 @@ export default function Music() {
   const addToPlaylist = useMusicStore((state) => state.addToPlaylist);
   const removeFromPlaylist = useMusicStore((state) => state.removeFromPlaylist);
   const clearPlaylist = useMusicStore((state) => state.clearPlaylist);
+  const hydrateDownloads = useMusicDownloadStore((state) => state.hydrate);
+  const enqueueDownload = useMusicDownloadStore((state) => state.enqueue);
+  const downloadItems = useMusicDownloadStore((state) => state.items);
+  const removeDownload = useMusicDownloadStore((state) => state.remove);
+  const clearDownloads = useMusicDownloadStore((state) => state.clearFinished);
 
   useEffect(() => {
     hydrate();
+    hydrateDownloads();
     // Load recent searches from localStorage
     const saved = localStorage.getItem("douytv:music-recent-searches");
     if (saved) {
@@ -416,6 +462,11 @@ export default function Music() {
     if (audioRef.current) audioRef.current.volume = volume;
   }, [volume]);
 
+  // 均衡器实时同步：启用时套当前增益，关闭时归零（不拆图，置零等效旁路）。
+  useEffect(() => {
+    applyEqGains(eqEnabled ? eqGains : eqGains.map(() => 0));
+  }, [eqEnabled, eqGains]);
+
   useEffect(() => {
     const audio = audioRef.current;
     if (!audio || !audioUrl || !pendingAutoPlayRef.current) return;
@@ -458,8 +509,8 @@ export default function Music() {
   }, [activeSource, enabledSources]);
 
   const lyricLines = useMemo(
-    () => parseLyric(lyricText, tlyricText),
-    [lyricText, tlyricText]
+    () => parseLyric({ lyric: lyricText, tlyric: tlyricText, yrc: yrcText, romalrc: romaText }),
+    [lyricText, tlyricText, yrcText, romaText]
   );
 
   const activeLyricIndex = useMemo(() => {
@@ -472,7 +523,27 @@ export default function Music() {
   }, [currentTime, lyricLines]);
 
   const currentCover = currentSong?.cover ? wrapImage(currentSong.cover) : undefined;
+
+  // 封面取色 → 动态主题强调色（失败回退到默认 ember）。
+  useEffect(() => {
+    let cancelled = false;
+    if (!currentCover) {
+      setCoverColor(null);
+      return;
+    }
+    void getCoverColor(currentCover).then((color) => {
+      if (!cancelled) setCoverColor(color);
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, [currentCover]);
   const librarySongs = libraryTab === "favorites" ? favorites : history;
+  // 每日推荐：LX 无 FM 接口，用收藏 + 历史 + 榜单聚合去重填充，等后端接入再替换。
+  const recommendSongs = useMemo(
+    () => dedupeSongs([...favorites, ...history, ...boardSongs]).slice(0, 30),
+    [favorites, history, boardSongs]
+  );
 
   const playSong = useCallback(
     async (song: MusicSong, contextSongs: MusicSong[] = [], autoChain = false) => {
@@ -527,12 +598,20 @@ export default function Music() {
         setCurrentSong(candidate);
         setQueue(queueForCandidate, candidate);
         try {
-          const play = await resolveMusicSource(source, candidate, quality, {
-            proxy: proxyEnabled,
-          });
+          // 命中预取则秒播，否则带音质降级解析。
+          const play =
+            takePrefetchedSource(source.id, candidate.id, quality) ??
+            (await resolveMusicSourceWithFallback(source, candidate, quality, {
+              proxy: proxyEnabled,
+            }));
           if (requestId !== playRequestRef.current) return "stale";
           const audio = audioRef.current;
           if (audio) {
+            // crossOrigin 必须在赋 src 前设；只有走本地代理（CORS-clean）才设，
+            // 否则裸 CDN 直链会因 CORS 加载失败。
+            audio.crossOrigin = /^https?:\/\/127\.0\.0\.1[:/]/.test(play.url)
+              ? "anonymous"
+              : null;
             audio.autoplay = true;
             audio.src = play.url;
             audio.load();
@@ -546,9 +625,18 @@ export default function Music() {
           setAudioUrl(play.url);
           setLyricText(play.lyric || "");
           setTlyricText(play.tlyric || "");
+          setYrcText(play.yrc || "");
+          setRomaText(play.romalrc || "");
           setCurrentTime(0);
           noteHistory(candidate, 0, candidate.durationSec ?? 0);
           if (audio) {
+            // CORS-clean 音频才接 Web Audio 图（频谱 + 均衡器）。建图后输出永久走图。
+            if (audio.crossOrigin === "anonymous") {
+              if (ensureAudioGraph(audio)) {
+                resumeAudioGraph();
+                if (eqEnabled) applyEqGains(eqGains);
+              }
+            }
             await audio
               .play()
               .then(() => {
@@ -558,6 +646,21 @@ export default function Music() {
               .catch(() => {
                 setIsPlaying(false);
               });
+          }
+          // 顺序播放时后台预取下一首，命中后切歌秒播。
+          if (playMode === "loop") {
+            const idx = queueForCandidate.findIndex(
+              (item) => musicSongKey(item) === musicSongKey(candidate)
+            );
+            const next = idx >= 0 ? queueForCandidate[idx + 1] : undefined;
+            if (next) {
+              const nextSource = sources.find(
+                (item) => item.enabled && item.id === next.sourceId
+              );
+              if (nextSource) {
+                void prefetchMusicSource(nextSource, next, quality, { proxy: proxyEnabled });
+              }
+            }
           }
           return "played";
         } catch (playError) {
@@ -643,7 +746,7 @@ export default function Music() {
         await appAlert(message, { title: "播放失败", tone: "warning" });
       }
     },
-    [noteHistory, proxyEnabled, quality, setCurrentSong, setQueue, sources]
+    [eqEnabled, eqGains, noteHistory, playMode, proxyEnabled, quality, setCurrentSong, setQueue, sources]
   );
 
   const playByQueueOffset = useCallback(
@@ -705,7 +808,12 @@ export default function Music() {
         setAudioUrl(play.url);
         setLyricText(play.lyric || lyricText);
         setTlyricText(play.tlyric || tlyricText);
+        setYrcText(play.yrc || yrcText);
+        setRomaText(play.romalrc || romaText);
         audio.pause();
+        audio.crossOrigin = /^https?:\/\/127\.0\.0\.1[:/]/.test(play.url)
+          ? "anonymous"
+          : null;
         audio.src = play.url;
         audio.addEventListener(
           "loadedmetadata",
@@ -735,9 +843,11 @@ export default function Music() {
       currentTime,
       lyricText,
       proxyEnabled,
+      romaText,
       setQuality,
       sources,
       tlyricText,
+      yrcText,
     ]
   );
 
@@ -881,6 +991,7 @@ export default function Music() {
     if (!discoverySource) {
       setBoards([]);
       setBoardSongs([]);
+      setChartCards([]);
       setHotSearch([]);
       setSonglists([]);
       return;
@@ -910,9 +1021,31 @@ export default function Music() {
         } else {
           setBoardSongs([]);
         }
+        // 预加载前若干榜单的前几首，供「排行榜卡片」网格展示（借鉴 Tabos chart 卡片）
+        const topBoards = boardsResult.value.list.slice(0, 6);
+        const cardResults = await Promise.allSettled(
+          topBoards.map(async (board) => {
+            const detail = await getMusicBoardSongs(
+              discoverySource,
+              board.source,
+              board.id,
+              1
+            );
+            return { board, songs: detail.list.slice(0, 5) } as ChartCard;
+          })
+        );
+        setChartCards(
+          cardResults
+            .filter(
+              (r): r is PromiseFulfilledResult<ChartCard> =>
+                r.status === "fulfilled" && r.value.songs.length > 0
+            )
+            .map((r) => r.value)
+        );
       } else {
         setBoards([]);
         setBoardSongs([]);
+        setChartCards([]);
       }
       setHotSearch(hotResult.status === "fulfilled" ? hotResult.value : []);
       if (tagsResult.status === "fulfilled") {
@@ -1216,6 +1349,35 @@ export default function Music() {
     setSourceDialogOpen(false);
   };
 
+  const addNeteaseBuiltin = () => {
+    installSource(
+      normalizeMusicSourceDescriptor({
+        name: "网易云(内置)",
+        kind: "netease-api",
+        neteaseMode: "builtin",
+        description: "前端直连 music.163.com · 免部署",
+      })
+    );
+    setSourceDialogOpen(false);
+  };
+
+  const addNeteaseExternal = async () => {
+    if (!neteaseBaseUrl.trim()) {
+      await appAlert("请输入 NeteaseCloudMusicApi 服务地址", { tone: "warning" });
+      return;
+    }
+    installSource(
+      normalizeMusicSourceDescriptor({
+        name: "网易云(自部署)",
+        kind: "netease-api",
+        neteaseMode: "external",
+        baseUrl: neteaseBaseUrl.trim(),
+      })
+    );
+    setNeteaseBaseUrl("");
+    setSourceDialogOpen(false);
+  };
+
   const handleImport = async () => {
     try {
       const source = await importMusicSourceFromText(importText);
@@ -1262,12 +1424,8 @@ export default function Music() {
 
   const downloadCurrentSong = () => {
     if (!currentSong || !audioUrl) return;
-    const link = document.createElement("a");
-    link.href = audioUrl;
-    link.download = `${safeFilename(currentSong.artist)} - ${safeFilename(currentSong.title)}.mp3`;
-    document.body.appendChild(link);
-    link.click();
-    link.remove();
+    // audioUrl 已是代理/直链；带上平台 Referer 头由 Rust 注入防盗链。
+    void enqueueDownload(currentSong, audioUrl);
   };
 
   const handleAudioTime = (time: number, mediaDuration: number) => {
@@ -1299,10 +1457,164 @@ export default function Music() {
     setCurrentTime(time);
   };
 
+  // 当前歌的歌词偏移（秒）：正值=歌词提前，负值=延后。
+  const currentLyricOffset = currentSong ? lyricOffsets[musicSongKey(currentSong)] ?? 0 : 0;
+  // 歌词专用时间 = 音频时间 + 偏移（onTimeUpdate 只有 ~4Hz，扫光需直读音频元素）。
+  const getLyricTime = useCallback(
+    () => (audioRef.current?.currentTime ?? currentTime) + currentLyricOffset,
+    [currentTime, currentLyricOffset]
+  );
+
+  // 启动时同步桌面歌词窗口是否已开（窗口可能上次没关）。
+  useEffect(() => {
+    void isDesktopLyricOpen().then(setDesktopLyricOn);
+  }, []);
+
+  const toggleDesktopLyric = useCallback(async () => {
+    if (desktopLyricOn) {
+      await closeDesktopLyric();
+      setDesktopLyricOn(false);
+    } else {
+      const ok = await openDesktopLyric();
+      setDesktopLyricOn(!!ok);
+    }
+  }, [desktopLyricOn]);
+
+  // 切行时把整行（含词级时间）推给桌面歌词窗口。
+  useEffect(() => {
+    if (!desktopLyricOn) return;
+    pushDesktopLyricLine(lyricLines[activeLyricIndex], getLyricTime(), isPlaying);
+  }, [desktopLyricOn, activeLyricIndex, lyricLines, isPlaying, getLyricTime]);
+
+  // 周期推时间锚点，桌面窗口据此本地插值扫光（避免每帧 IPC）。
+  useEffect(() => {
+    if (!desktopLyricOn) return;
+    pushDesktopLyricTime(getLyricTime(), isPlaying);
+    const timer = window.setInterval(() => {
+      pushDesktopLyricTime(getLyricTime(), isPlaying);
+    }, 1000);
+    return () => window.clearInterval(timer);
+  }, [desktopLyricOn, isPlaying, getLyricTime]);
+
+  // 桌面窗口 ready → 立即补发当前行；桌面窗口控制条命令 → 驱动播放。
+  useEffect(() => {
+    if (!desktopLyricOn || !isTauri) return;
+    let unReady: (() => void) | undefined;
+    let unCmd: (() => void) | undefined;
+    (async () => {
+      const { listen } = await import("@tauri-apps/api/event");
+      unReady = await listen("desktop-lyric-ready", () => {
+        pushDesktopLyricLine(lyricLines[activeLyricIndex], getLyricTime(), isPlaying);
+        pushDesktopLyricTime(getLyricTime(), isPlaying);
+      });
+      unCmd = await listen<string>("desktop-lyric-command", (event) => {
+        const cmd = event.payload;
+        if (cmd === "toggle") void togglePlay();
+        else if (cmd === "next") void playByQueueOffset(1);
+        else if (cmd === "prev") void playByQueueOffset(-1);
+      });
+    })();
+    return () => {
+      unReady?.();
+      unCmd?.();
+    };
+  }, [
+    desktopLyricOn,
+    activeLyricIndex,
+    lyricLines,
+    isPlaying,
+    getLyricTime,
+    togglePlay,
+    playByQueueOffset,
+  ]);
+
+  // 系统媒体集成（MediaSession）：锁屏/系统媒体浮层/媒体键。
+  useEffect(() => {
+    if (typeof navigator === "undefined" || !("mediaSession" in navigator)) return;
+    const ms = navigator.mediaSession;
+    if (currentSong) {
+      const artwork = currentCover
+        ? [
+            { src: currentCover, sizes: "512x512", type: "image/jpeg" },
+            { src: currentCover, sizes: "256x256", type: "image/jpeg" },
+          ]
+        : undefined;
+      ms.metadata = new MediaMetadata({
+        title: currentSong.title || "未知歌曲",
+        artist: currentSong.artist || "未知歌手",
+        album: currentSong.album || currentSong.sourceName || "",
+        artwork,
+      });
+    } else {
+      ms.metadata = null;
+    }
+    ms.playbackState = isPlaying ? "playing" : currentSong ? "paused" : "none";
+  }, [currentSong, currentCover, isPlaying]);
+
+  // MediaSession 动作处理器（媒体键 / 锁屏按钮）。
+  useEffect(() => {
+    if (typeof navigator === "undefined" || !("mediaSession" in navigator)) return;
+    const ms = navigator.mediaSession;
+    const set = (action: MediaSessionAction, handler: MediaSessionActionHandler | null) => {
+      try {
+        ms.setActionHandler(action, handler);
+      } catch {
+        // 个别浏览器不支持某 action，忽略。
+      }
+    };
+    set("play", () => void togglePlay());
+    set("pause", () => void togglePlay());
+    set("previoustrack", () => void playByQueueOffset(-1));
+    set("nexttrack", () => void playByQueueOffset(1));
+    set("seekto", (details) => {
+      if (typeof details.seekTime === "number" && audioRef.current) {
+        audioRef.current.currentTime = details.seekTime;
+        setCurrentTime(details.seekTime);
+      }
+    });
+    return () => {
+      for (const action of [
+        "play",
+        "pause",
+        "previoustrack",
+        "nexttrack",
+        "seekto",
+      ] as MediaSessionAction[]) {
+        set(action, null);
+      }
+    };
+  }, [togglePlay, playByQueueOffset]);
+
+  // 同步播放进度到 MediaSession（系统浮层进度条）。
+  useEffect(() => {
+    if (typeof navigator === "undefined" || !("mediaSession" in navigator)) return;
+    if (!("setPositionState" in navigator.mediaSession)) return;
+    const dur = duration || currentSong?.durationSec || 0;
+    if (!dur || !Number.isFinite(dur)) return;
+    try {
+      navigator.mediaSession.setPositionState({
+        duration: dur,
+        position: Math.min(currentTime, dur),
+        playbackRate: 1,
+      });
+    } catch {
+      // position > duration 等边界情况会抛，忽略。
+    }
+  }, [currentTime, duration, currentSong]);
+
   const isPlayerRoute = view === "player";
 
   return (
-    <div className="music-page relative h-full overflow-hidden bg-ink text-cream">
+    <div
+      className="music-page relative h-full overflow-hidden bg-ink text-cream"
+      style={
+        {
+          "--music-accent": coverColor ? `rgb(${coverColor.accent})` : "var(--ember)",
+          "--music-accent-rgb": coverColor ? coverColor.accent : "255, 107, 53",
+          "--music-accent-deep": coverColor ? `rgb(${coverColor.deep})` : "#1a0f0a",
+        } as React.CSSProperties
+      }
+    >
       <div
         aria-hidden
         className="pointer-events-none absolute inset-0 opacity-80"
@@ -1340,58 +1652,70 @@ export default function Music() {
         onError={() => setIsBuffering(false)}
       />
 
-      <div className="relative z-10 h-full min-h-0 flex flex-col overflow-hidden">
+      <div className="relative z-10 h-full min-h-0 flex overflow-hidden">
+        {!isPlayerRoute && enabledSources.length > 0 && (
+          <MusicSidebar
+            view={view}
+            libraryTab={libraryTab}
+            playlists={playlists}
+            onView={setView}
+            onLibrary={(tab) => {
+              setLibraryTab(tab);
+              setView("library");
+            }}
+            onOpenPlaylist={() => {
+              setLibraryTab("playlists");
+              setView("library");
+            }}
+            onCreatePlaylist={() => {
+              const id = createPlaylist("新建歌单");
+              updatePlaylist(id, { name: `歌单 ${playlists.length + 1}` });
+              setLibraryTab("playlists");
+              setView("library");
+            }}
+            onOpenSources={() => setSourceDialogOpen(true)}
+          />
+        )}
+
+        <div className="relative z-10 flex-1 min-w-0 h-full flex flex-col overflow-hidden">
         {!isPlayerRoute && (
           <header className="music-topbar shrink-0 px-4 sm:px-6">
             <div className="h-16 flex items-center gap-3">
-              <span className="rec-dot" />
-              <span className="font-display font-extrabold text-sm tracking-tight">
-                DOUY<span style={{ color: "var(--ember)" }}>TV</span>
-              </span>
-              <nav className="ml-3 flex items-center gap-6 min-w-0 overflow-x-auto scrollbar-hide" aria-label="音乐导航">
-                <TextTab active={view === "discover"} onClick={() => setView("discover")}>
-                  发现
-                </TextTab>
-                <TextTab active={view === "songlists" || view === "songlist"} onClick={() => setView("songlists")}>
-                  歌单
-                </TextTab>
-              </nav>
-
-              {/* Search Bar */}
-              <div className="ml-auto flex items-center gap-2 sm:gap-3">
-                <div className="relative">
-                  <div className="search-field-shell music-search-field h-10 w-44 sm:w-64 flex items-center gap-2 px-3">
-                    <IconSearch size={16} className="text-cream-faint shrink-0" />
-                    <input
-                      ref={searchInputRef}
-                      value={keyword}
-                      onChange={(event) => setKeyword(event.target.value)}
-                      onFocus={() => setSearchPanelOpen(true)}
-                      onKeyDown={(event) => {
-                        if (event.key === "Enter") {
-                          void doSearch(1, keyword);
-                        }
+              {/* 搜索栏 */}
+              <div className="relative flex-1 max-w-md">
+                <div className="search-field-shell music-search-field h-10 w-full flex items-center gap-2 px-3">
+                  <IconSearch size={16} className="text-cream-faint shrink-0" />
+                  <input
+                    ref={searchInputRef}
+                    value={keyword}
+                    onChange={(event) => setKeyword(event.target.value)}
+                    onFocus={() => setSearchPanelOpen(true)}
+                    onKeyDown={(event) => {
+                      if (event.key === "Enter") {
+                        void doSearch(1, keyword);
+                      }
+                    }}
+                    placeholder="搜索歌曲、歌手、歌单"
+                    className="search-field-input min-w-0 flex-1 bg-transparent text-sm text-cream placeholder:text-cream-faint"
+                  />
+                  {keyword && (
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setKeyword("");
+                        setResults([]);
+                        setView("discover");
                       }}
-                      placeholder="搜索"
-                      className="search-field-input min-w-0 flex-1 bg-transparent text-sm text-cream placeholder:text-cream-faint"
-                    />
-                    {keyword && (
-                      <button
-                        type="button"
-                        onClick={() => {
-                          setKeyword("");
-                          setResults([]);
-                          setView("discover");
-                        }}
-                        className="text-cream-faint hover:text-cream"
-                        title="清除"
-                      >
-                        <IconClose size={14} />
-                      </button>
-                    )}
-                  </div>
+                      className="text-cream-faint hover:text-cream"
+                      title="清除"
+                    >
+                      <IconClose size={14} />
+                    </button>
+                  )}
                 </div>
+              </div>
 
+              <div className="ml-auto flex items-center gap-2 sm:gap-3">
                 <button
                   type="button"
                   onClick={() => setDrawer("settings")}
@@ -1422,7 +1746,7 @@ export default function Music() {
               onClick={() => setSearchPanelOpen(false)}
             />
             <div
-              className="fixed overflow-y-auto rounded-xl shadow-2xl z-[999] left-4 right-4 sm:left-auto sm:right-6 sm:w-96 max-h-[calc(100vh-6rem)] sm:max-h-[32rem]"
+              className="fixed overflow-y-auto rounded-xl shadow-2xl z-[999] left-4 right-4 sm:right-auto sm:w-96 max-h-[calc(100vh-6rem)] sm:max-h-[32rem]"
               style={{
                 top: "4.5rem",
                 background: "rgba(22,24,29,0.98)",
@@ -1538,7 +1862,10 @@ export default function Music() {
             playMode={playMode}
             queue={queue}
             lyricLines={lyricLines}
-            activeLyricIndex={activeLyricIndex}
+            getAudioTime={getLyricTime}
+            lyricShowTrans={lyricShowTrans}
+            lyricShowRoma={lyricShowRoma}
+            lyricFontScale={lyricFontScale}
             showSpectrum={showSpectrum}
             sleepTimerEndAt={sleepTimerEndAt}
             sleepRemaining={sleepRemaining}
@@ -1561,6 +1888,9 @@ export default function Music() {
             onSleep={(minutes) =>
               setSleepTimerEndAt(minutes > 0 ? Date.now() + minutes * 60 * 1000 : null)
             }
+            desktopLyricOn={desktopLyricOn}
+            onDesktopLyric={() => void toggleDesktopLyric()}
+            desktopLyricAvailable={isTauri}
           />
         ) : (
           <main className="music-scroll flex-1 min-h-0 overflow-y-auto px-4 sm:px-6 pt-3 pb-5">
@@ -1680,6 +2010,8 @@ export default function Music() {
                   selectedBoard={selectedBoard}
                   boardSongs={boardSongs}
                   boardLoading={boardLoading}
+                  chartCards={chartCards}
+                  favorites={favorites}
                   songlists={songlists}
                   onSearch={(q) => {
                     setKeyword(q);
@@ -1742,7 +2074,64 @@ export default function Music() {
                   onClearPlaylist={(id) => clearPlaylist(id)}
                   onRemoveFromPlaylist={removeFromPlaylist}
                   librarySongs={librarySongs}
+                  downloads={downloadItems}
+                  onRemoveDownload={removeDownload}
+                  onClearDownloads={clearDownloads}
                 />
+              ) : view === "recommend" ? (
+                <RecommendView
+                  songs={recommendSongs}
+                  loading={discoveryLoading}
+                  currentSong={currentSong}
+                  isPlaying={isPlaying}
+                  isFavorite={isFavorite}
+                  onPlayAll={() =>
+                    recommendSongs[0] &&
+                    void playSong(recommendSongs[0], recommendSongs)
+                  }
+                  onReload={() => void loadDiscovery()}
+                  onPlay={(song, songs) => void playSong(song, songs)}
+                  onFavorite={toggleFavorite}
+                  onQueue={appendToQueue}
+                  onAddToPlaylist={setAddToPlaylistSong}
+                />
+              ) : view === "toplist" ? (
+                <ToplistView
+                  boards={boards}
+                  chartCards={chartCards}
+                  selectedBoard={selectedBoard}
+                  boardSongs={boardSongs}
+                  boardLoading={boardLoading}
+                  currentSong={currentSong}
+                  isPlaying={isPlaying}
+                  isFavorite={isFavorite}
+                  onBoard={(board) => void loadBoardSongs(board)}
+                  onPlay={(song, songs) => void playSong(song, songs)}
+                  onFavorite={toggleFavorite}
+                  onQueue={appendToQueue}
+                  onAddToPlaylist={setAddToPlaylistSong}
+                />
+              ) : view === "artists" ? (
+                <ArtistsView artists={[]} onOpenArtist={(name) => openArtist(name)} />
+              ) : view === "mv" ? (
+                <MvView
+                  songlists={songlists}
+                  onOpenSonglist={(item) => void openSonglist(item)}
+                />
+              ) : view === "recent" ? (
+                <RecentView
+                  history={history}
+                  currentSong={currentSong}
+                  isPlaying={isPlaying}
+                  isFavorite={isFavorite}
+                  onPlay={(song, songs) => void playSong(song, songs)}
+                  onFavorite={toggleFavorite}
+                  onQueue={appendToQueue}
+                  onAddToPlaylist={setAddToPlaylistSong}
+                  onClear={() => void clearAllHistory()}
+                />
+              ) : view === "local" ? (
+                <LocalView />
               ) : (
                 <SourcesView
                   sources={sources}
@@ -1791,6 +2180,7 @@ export default function Music() {
             onOpenSettings={() => setDrawer("settings")}
           />
         )}
+        </div>
       </div>
 
       {drawer && (
@@ -1799,10 +2189,29 @@ export default function Music() {
           queue={queue}
           currentSong={currentSong}
           lyricLines={lyricLines}
-          activeLyricIndex={activeLyricIndex}
+          getAudioTime={getLyricTime}
+          lyricShowTrans={lyricShowTrans}
+          lyricShowRoma={lyricShowRoma}
+          lyricFontScale={lyricFontScale}
+          lyricOffset={currentLyricOffset}
+          onLyricShowTrans={setLyricShowTrans}
+          onLyricShowRoma={setLyricShowRoma}
+          onLyricFontScale={setLyricFontScale}
+          onLyricOffset={(delta) =>
+            currentSong &&
+            setLyricOffset(musicSongKey(currentSong), currentLyricOffset + delta)
+          }
           quality={quality}
           proxyEnabled={proxyEnabled}
           showSpectrum={showSpectrum}
+          eqEnabled={eqEnabled}
+          eqPreset={eqPreset}
+          eqGains={eqGains}
+          onEqToggle={setEqEnabled}
+          onEqPreset={setEqPreset}
+          onEqGain={setEqGain}
+          desktopLyricOn={desktopLyricOn}
+          onDesktopLyric={() => void toggleDesktopLyric()}
           sleepTimerEndAt={sleepTimerEndAt}
           sleepRemaining={sleepRemaining}
           onClose={() => setDrawer(null)}
@@ -1831,12 +2240,16 @@ export default function Music() {
           importText={importText}
           lxBaseUrl={lxBaseUrl}
           lxToken={lxToken}
+          neteaseBaseUrl={neteaseBaseUrl}
           onImportText={setImportText}
           onLxBaseUrl={setLxBaseUrl}
           onLxToken={setLxToken}
+          onNeteaseBaseUrl={setNeteaseBaseUrl}
           onClose={() => setSourceDialogOpen(false)}
           onImport={() => void handleImport()}
           onAddLx={() => void addLxServer()}
+          onAddNeteaseBuiltin={addNeteaseBuiltin}
+          onAddNeteaseExternal={() => void addNeteaseExternal()}
           onToggle={toggleSource}
           onDelete={(source) => void deleteSource(source)}
           onRename={(source, name) => updateSource(source.id, { name })}

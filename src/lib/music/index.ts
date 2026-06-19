@@ -3,11 +3,14 @@ import { initStreamProxyPort, wrapAudioUrl } from "@/lib/proxy";
 import { searchAggregate, resolveAggregate } from "./aggregate";
 import { searchLxServer, resolveLxServer } from "./lxServer";
 import { searchPlugin, resolvePlugin } from "./pluginAdapter";
+import { searchNeteaseApi, resolveNeteaseApi } from "./neteaseApi";
+import { isMusicPreviewError } from "./playback";
 import type {
   MusicPlayResult,
   MusicQuality,
   MusicSearchResult,
   MusicSourceDescriptor,
+  NeteaseSourceMode,
 } from "./types";
 import { MUSIC_PLATFORMS } from "./types";
 import { asRecord, asString, cleanBaseUrl, stableId, tryParseJson } from "./utils";
@@ -23,8 +26,19 @@ export function normalizeMusicSourceDescriptor(
 ): MusicSourceDescriptor {
   const now = Date.now();
   const kind = input.kind ?? "lx-server";
+  const neteaseMode: NeteaseSourceMode | undefined =
+    kind === "netease-api"
+      ? input.neteaseMode ?? (cleanBaseUrl(input.baseUrl) ? "external" : "builtin")
+      : undefined;
   const name =
-    input.name?.trim() || (kind === "lx-server" ? "LX 音乐源" : "音乐插件");
+    input.name?.trim() ||
+    (kind === "lx-server"
+      ? "LX 音乐源"
+      : kind === "netease-api"
+        ? neteaseMode === "external"
+          ? "网易云(自部署)"
+          : "网易云(内置)"
+        : "音乐插件");
   const id =
     input.id?.trim() ||
     `music-${stableId(`${kind}:${name}:${input.baseUrl ?? input.code ?? now}`)}`;
@@ -37,7 +51,10 @@ export function normalizeMusicSourceDescriptor(
     baseUrl: cleanBaseUrl(input.baseUrl),
     token: input.token?.trim(),
     code: input.code,
-    defaultPlatform: input.defaultPlatform ?? (kind === "lx-server" ? "all" : undefined),
+    neteaseMode,
+    defaultPlatform:
+      input.defaultPlatform ??
+      (kind === "lx-server" ? "all" : kind === "netease-api" ? "wy" : undefined),
     platforms:
       input.platforms && input.platforms.length > 0
         ? input.platforms
@@ -75,6 +92,8 @@ export async function searchMusicSource(
       return searchPlugin(source, keyword, page, limit);
     case "aggregate-http":
       return searchAggregate(source, keyword, page, limit);
+    case "netease-api":
+      return searchNeteaseApi(source, keyword, page, limit);
     default:
       return { list: [], page, limit, hasMore: false };
   }
@@ -124,15 +143,96 @@ export async function resolveMusicSource(
         })
       : source.kind === "plugin-js"
         ? await resolvePlugin(source, song, quality)
-        : await resolveAggregate(source, song, quality);
-  if (source.kind === "lx-server") return result;
+        : source.kind === "netease-api"
+          ? await resolveNeteaseApi(source, song, quality)
+          : await resolveAggregate(source, song, quality);
   if (options.proxy === false) return result;
   await initStreamProxyPort();
+  // 已经是本地稳定流代理 URL（http://127.0.0.1:port/…）的就不再二次包装；
+  // 仅对裸 CDN 直链套 wrapAudioUrl，保证 <audio crossOrigin> + Web Audio 不被跨域污染。
+  if (/^https?:\/\/127\.0\.0\.1[:/]/.test(result.url)) return result;
   return {
     ...result,
     directUrl: result.directUrl ?? result.url,
     url: wrapAudioUrl(result.url, String(song.platform || ""), result.headers),
   };
+}
+
+// 音质降级链：高音质常无版权/超时，按此顺序回退到能放的档。
+const QUALITY_FALLBACK: MusicQuality[] = ["flac24bit", "flac", "320k", "192k", "128k"];
+
+/**
+ * 带音质降级的解析：先试目标音质，失败（真错，非试听）则按 QUALITY_FALLBACK
+ * 依次降级重试。试听片段错误（preview）直接抛出，交由上层跨平台候选逻辑处理。
+ */
+export async function resolveMusicSourceWithFallback(
+  source: MusicSourceDescriptor,
+  song: Parameters<typeof resolveLxServer>[1],
+  quality: MusicQuality,
+  options: { proxy?: boolean } = {}
+): Promise<MusicPlayResult> {
+  const start = QUALITY_FALLBACK.indexOf(quality);
+  const chain = start >= 0 ? QUALITY_FALLBACK.slice(start) : [quality];
+  let lastError: unknown;
+  for (const q of chain) {
+    try {
+      return await resolveMusicSource(source, song, q, options);
+    } catch (error) {
+      // 试听片段不是「音质问题」，降级也没用，直接上抛。
+      if (isMusicPreviewError(error)) throw error;
+      lastError = error;
+    }
+  }
+  throw lastError instanceof Error ? lastError : new Error("获取播放地址失败");
+}
+
+// ── 下一首预取缓存（命中即秒播）──
+interface PrefetchEntry {
+  result: MusicPlayResult;
+  at: number;
+}
+const PREFETCH_TTL = 5 * 60 * 1000;
+const prefetchCache = new Map<string, PrefetchEntry>();
+
+function prefetchKey(sourceId: string, songId: string, quality: string): string {
+  return `${sourceId}:${songId}:${quality}`;
+}
+
+/** 后台预取（失败静默）。重复调用同 key 直接跳过。 */
+export async function prefetchMusicSource(
+  source: MusicSourceDescriptor,
+  song: Parameters<typeof resolveLxServer>[1] & { id: string },
+  quality: MusicQuality,
+  options: { proxy?: boolean } = {}
+): Promise<void> {
+  const key = prefetchKey(source.id, song.id, quality);
+  const hit = prefetchCache.get(key);
+  if (hit && Date.now() - hit.at < PREFETCH_TTL) return;
+  try {
+    const result = await resolveMusicSource(source, song, quality, options);
+    prefetchCache.set(key, { result, at: Date.now() });
+    // 控制缓存体积。
+    if (prefetchCache.size > 16) {
+      const oldest = [...prefetchCache.entries()].sort((a, b) => a[1].at - b[1].at)[0];
+      if (oldest) prefetchCache.delete(oldest[0]);
+    }
+  } catch {
+    // 预取失败无所谓，正式播放时再正常解析。
+  }
+}
+
+/** 取并消费预取结果（命中后移除，避免播放过期 URL）。 */
+export function takePrefetchedSource(
+  sourceId: string,
+  songId: string,
+  quality: string
+): MusicPlayResult | null {
+  const key = prefetchKey(sourceId, songId, quality);
+  const hit = prefetchCache.get(key);
+  if (!hit) return null;
+  prefetchCache.delete(key);
+  if (Date.now() - hit.at >= PREFETCH_TTL) return null;
+  return hit.result;
 }
 
 function sourceNameFromCode(code: string): string {
@@ -149,7 +249,9 @@ function descriptorFromObject(input: Record<string, unknown>): MusicSourceDescri
       ? "plugin-js"
       : type === "aggregate-http" || type === "http"
         ? "aggregate-http"
-        : "lx-server";
+        : type === "netease-api" || type === "netease" || type === "ncm"
+          ? "netease-api"
+          : "lx-server";
   return normalizeMusicSourceDescriptor({
     id: asString(input.id) || asString(input.key),
     name: asString(input.name),
@@ -159,6 +261,7 @@ function descriptorFromObject(input: Record<string, unknown>): MusicSourceDescri
     baseUrl: asString(input.baseUrl) || asString(input.api),
     token: asString(input.token),
     code: asString(input.code) || asString(input.script),
+    neteaseMode: asString(input.neteaseMode) as MusicSourceDescriptor["neteaseMode"],
     defaultPlatform: asString(input.defaultPlatform) as MusicSourceDescriptor["defaultPlatform"],
     headers: asRecord(input.headers) as Record<string, string> | undefined,
     searchUrl: asString(input.searchUrl),
@@ -189,6 +292,17 @@ async function fetchRemoteText(url: string): Promise<string> {
   const res = await scriptFetch(url, { timeout: 15000 });
   if (!res.ok) throw new Error((await res.text()) || `下载失败 ${res.status}`);
   return res.text();
+}
+
+/** 内置网易源（前端直连 music.163.com，开箱即用，免部署）。 */
+export function createBuiltinNeteaseSource(): MusicSourceDescriptor {
+  return normalizeMusicSourceDescriptor({
+    id: "music-netease-builtin",
+    name: "网易云(内置)",
+    kind: "netease-api",
+    neteaseMode: "builtin",
+    description: "前端直连 music.163.com · 免部署",
+  });
 }
 
 export async function importMusicSourceFromText(

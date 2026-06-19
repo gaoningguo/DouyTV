@@ -1,4 +1,11 @@
-export type MusicSourceKind = "lx-server" | "plugin-js" | "aggregate-http";
+export type MusicSourceKind =
+  | "lx-server"
+  | "plugin-js"
+  | "aggregate-http"
+  | "netease-api";
+
+/** 网易源传输模式：builtin=前端直连 music.163.com；external=自部署 NeteaseCloudMusicApi。 */
+export type NeteaseSourceMode = "builtin" | "external";
 
 export type MusicPlatform = "wy" | "tx" | "kw" | "kg" | "mg";
 
@@ -15,6 +22,8 @@ export interface MusicSourceDescriptor {
   baseUrl?: string;
   token?: string;
   code?: string;
+  /** 仅 kind==="netease-api" 用：内置直连 / 外部部署。缺省时按是否有 baseUrl 推断。 */
+  neteaseMode?: NeteaseSourceMode;
   defaultPlatform?: MusicPlatform | "all";
   platforms?: MusicPlatform[];
   headers?: Record<string, string>;
@@ -84,11 +93,17 @@ export interface MusicPlayResult {
   headers?: Record<string, string>;
   lyric?: string;
   tlyric?: string;
+  /** 逐字歌词原文（网易 yrc / QQ qrc 解密后明文） */
+  yrc?: string;
+  /** 罗马音 */
+  romalrc?: string;
 }
 
 export interface MusicLyricResult {
   lyric: string;
   tlyric?: string;
+  yrc?: string;
+  romalrc?: string;
 }
 
 export interface MusicHistoryRecord extends MusicSong {
