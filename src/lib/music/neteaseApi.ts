@@ -314,6 +314,19 @@ export async function getNeteasePersonalized(
     .filter((item): item is MusicSongListSummary => !!item);
 }
 
+/** 解析网易歌单链接/ID(对齐 CyreneMusic playlistImportService.parseNeteaseId)。 */
+export function parseNeteasePlaylistInput(input: string): string | null {
+  const trimmed = input.trim();
+  if (/^\d+$/.test(trimmed)) return trimmed;
+  const q = trimmed.match(/[?&]id=(\d+)/);
+  if (q) return q[1];
+  if (trimmed.includes("music.163.com")) {
+    const m = trimmed.match(/playlist\/(\d+)/);
+    if (m) return m[1];
+  }
+  return null;
+}
+
 /** 歌单内歌曲（点开推荐歌单时载入）。built-in 用 v6 playlist/detail，external 用 /playlist/track/all。 */
 export async function getNeteasePlaylistSongs(
   source: MusicSourceDescriptor,

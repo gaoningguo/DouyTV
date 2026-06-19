@@ -40,6 +40,8 @@ interface PersistedMusicState {
   lyricFontScale?: number;
   lyricOffsets?: Record<string, number>;
   sleepTimerEndAt?: number | null;
+  sleepAfterCurrent?: boolean;
+  playbackRate?: number;
   queue?: MusicSong[];
   currentSong?: MusicSong | null;
   favorites?: MusicSong[];
@@ -66,6 +68,8 @@ interface MusicStore {
   lyricFontScale: number;
   lyricOffsets: Record<string, number>;
   sleepTimerEndAt: number | null;
+  sleepAfterCurrent: boolean;
+  playbackRate: number;
   queue: MusicSong[];
   currentSong: MusicSong | null;
   favorites: MusicSong[];
@@ -91,6 +95,8 @@ interface MusicStore {
   setLyricFontScale: (scale: number) => void;
   setLyricOffset: (songKey: string, offset: number) => void;
   setSleepTimerEndAt: (endAt: number | null) => void;
+  setSleepAfterCurrent: (enabled: boolean) => void;
+  setPlaybackRate: (rate: number) => void;
   setQueue: (songs: MusicSong[], current?: MusicSong) => void;
   appendToQueue: (song: MusicSong) => void;
   removeFromQueue: (songKey: string) => void;
@@ -155,6 +161,8 @@ function persist(state: MusicStore) {
     lyricFontScale: state.lyricFontScale,
     lyricOffsets: state.lyricOffsets,
     sleepTimerEndAt: state.sleepTimerEndAt,
+    sleepAfterCurrent: state.sleepAfterCurrent,
+    playbackRate: state.playbackRate,
     queue: state.queue,
     currentSong: state.currentSong,
     favorites: state.favorites,
@@ -236,6 +244,8 @@ export const useMusicStore = create<MusicStore>((set, get) => ({
   lyricFontScale: 1,
   lyricOffsets: {},
   sleepTimerEndAt: null,
+  sleepAfterCurrent: false,
+  playbackRate: 1,
   queue: [],
   currentSong: null,
   favorites: [],
@@ -281,6 +291,11 @@ export const useMusicStore = create<MusicStore>((set, get) => ({
         typeof stored.sleepTimerEndAt === "number" && stored.sleepTimerEndAt > Date.now()
           ? stored.sleepTimerEndAt
           : null,
+      sleepAfterCurrent: stored.sleepAfterCurrent ?? false,
+      playbackRate:
+        typeof stored.playbackRate === "number"
+          ? Math.min(3, Math.max(0.5, stored.playbackRate))
+          : 1,
       queue: dedupeSongs(stored.queue ?? []).slice(0, QUEUE_LIMIT),
       currentSong: stored.currentSong ?? null,
       favorites: dedupeSongs(stored.favorites ?? []),
@@ -367,6 +382,15 @@ export const useMusicStore = create<MusicStore>((set, get) => ({
   },
   setSleepTimerEndAt: (sleepTimerEndAt) => {
     set({ sleepTimerEndAt });
+    persist(get());
+  },
+  setSleepAfterCurrent: (sleepAfterCurrent) => {
+    // 「播完当前曲」与定时互斥:开启播完即停时清掉倒计时。
+    set({ sleepAfterCurrent, sleepTimerEndAt: sleepAfterCurrent ? null : get().sleepTimerEndAt });
+    persist(get());
+  },
+  setPlaybackRate: (rate) => {
+    set({ playbackRate: Math.min(3, Math.max(0.5, rate)) });
     persist(get());
   },
   setLyricShowTrans: (lyricShowTrans) => {

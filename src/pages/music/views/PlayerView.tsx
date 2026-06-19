@@ -2,7 +2,6 @@ import { useState } from "react";
 import {
   IconBookmark,
   IconChevronDown,
-  IconClock,
   IconDownload,
   IconHeart,
   IconHeartFill,
@@ -50,6 +49,8 @@ export function PlayerView({
   showSpectrum,
   sleepTimerEndAt,
   sleepRemaining,
+  sleepAfterCurrent,
+  playbackRate,
   favorite,
   onBack,
   onTogglePlay,
@@ -67,6 +68,8 @@ export function PlayerView({
   onClearQueue,
   onSpectrum,
   onSleep,
+  onSleepAfterCurrent,
+  onPlaybackRate,
   desktopLyricOn,
   onDesktopLyric,
   desktopLyricAvailable,
@@ -93,6 +96,8 @@ export function PlayerView({
   showSpectrum: boolean;
   sleepTimerEndAt: number | null;
   sleepRemaining: number;
+  sleepAfterCurrent: boolean;
+  playbackRate: number;
   favorite: boolean;
   onBack: () => void;
   onTogglePlay: () => void;
@@ -110,6 +115,8 @@ export function PlayerView({
   onClearQueue: () => void;
   onSpectrum: (enabled: boolean) => void;
   onSleep: (minutes: number) => void;
+  onSleepAfterCurrent: (enabled: boolean) => void;
+  onPlaybackRate: (rate: number) => void;
   desktopLyricOn: boolean;
   onDesktopLyric: () => void;
   desktopLyricAvailable: boolean;
@@ -351,13 +358,43 @@ export function PlayerView({
             >
               <IconStats size={17} />
             </IconButton>
-            <IconButton
-              label={sleepTimerEndAt ? `定时 ${formatDuration(sleepRemaining)}` : "睡眠定时"}
-              active={!!sleepTimerEndAt}
-              onClick={() => onSleep(sleepTimerEndAt ? 0 : 30)}
+            <select
+              value={playbackRate}
+              onChange={(event) => onPlaybackRate(Number(event.target.value))}
+              className="music-obsidian-quality"
+              title="倍速"
             >
-              <IconClock size={17} />
-            </IconButton>
+              {[0.5, 0.75, 1, 1.25, 1.5, 2].map((rate) => (
+                <option key={rate} value={rate}>
+                  {rate}x
+                </option>
+              ))}
+            </select>
+            <select
+              value=""
+              onChange={(event) => {
+                const value = event.target.value;
+                if (value === "current") onSleepAfterCurrent(true);
+                else onSleep(Number(value));
+                event.currentTarget.value = "";
+              }}
+              className="music-obsidian-quality"
+              title="睡眠定时"
+            >
+              <option value="" disabled>
+                {sleepAfterCurrent
+                  ? "播完当前曲"
+                  : sleepTimerEndAt
+                    ? `定时 ${formatDuration(sleepRemaining)}`
+                    : "睡眠定时"}
+              </option>
+              <option value="0">关闭</option>
+              <option value="15">15 分钟</option>
+              <option value="30">30 分钟</option>
+              <option value="60">60 分钟</option>
+              <option value="90">90 分钟</option>
+              <option value="current">播完当前曲</option>
+            </select>
           </div>
         </div>
       </div>

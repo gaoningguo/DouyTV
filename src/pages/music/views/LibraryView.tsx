@@ -28,6 +28,7 @@ export function LibraryView({
   onAddToPlaylist,
   onClearHistory,
   onCreatePlaylist,
+  onImportPlaylist,
   onDeletePlaylist,
   onClearPlaylist,
   onRemoveFromPlaylist,
@@ -49,6 +50,7 @@ export function LibraryView({
   onAddToPlaylist: (song: MusicSong) => void;
   onClearHistory: () => void;
   onCreatePlaylist: () => void;
+  onImportPlaylist: () => void;
   onDeletePlaylist: (id: string) => void;
   onClearPlaylist: (id: string) => void;
   onRemoveFromPlaylist: (id: string, songKey: string) => void;
@@ -172,15 +174,26 @@ export function LibraryView({
           </button>
         )}
         {tab === "playlists" && (
-          <button
-            type="button"
-            onClick={onCreatePlaylist}
-            className="ml-auto pb-4 px-3 py-1.5 rounded-lg inline-flex items-center gap-1.5 text-xs font-semibold tap"
-            style={{ background: "var(--ember)", color: "var(--ink)" }}
-          >
-            <IconPlus size={14} />
-            新建歌单
-          </button>
+          <div className="ml-auto pb-4 flex items-center gap-2">
+            <button
+              type="button"
+              onClick={onImportPlaylist}
+              className="px-3 py-1.5 rounded-lg inline-flex items-center gap-1.5 text-xs font-semibold tap"
+              style={{ background: "var(--ink-2)", border: "1px solid var(--cream-line)", color: "var(--cream-dim)" }}
+            >
+              <IconPlus size={14} />
+              导入
+            </button>
+            <button
+              type="button"
+              onClick={onCreatePlaylist}
+              className="px-3 py-1.5 rounded-lg inline-flex items-center gap-1.5 text-xs font-semibold tap"
+              style={{ background: "var(--ember)", color: "var(--ink)" }}
+            >
+              <IconPlus size={14} />
+              新建歌单
+            </button>
+          </div>
         )}
         {tab === "downloads" && downloads.length > 0 && (
           <button

@@ -25,6 +25,7 @@ import {
   getNeteasePlaylistSongs,
   getNeteaseRadioPrograms,
   importMusicSourceFromText,
+  parseNeteasePlaylistInput,
   isMusicPreviewError,
   musicSongKey,
   normalizeMusicPlatform,
@@ -79,6 +80,7 @@ import { PlayerBar } from "./music/components/PlayerBar";
 import { MusicDrawer } from "./music/components/MusicDrawer";
 import { SourceDialog } from "./music/components/SourceDialog";
 import { MvModal } from "./music/components/MvModal";
+import { ImportPlaylistDialog } from "./music/components/ImportPlaylistDialog";
 import { AddToPlaylistDialog } from "./music/components/AddToPlaylistDialog";
 import { DiscoverView } from "./music/views/DiscoverView";
 import { ToplistView } from "./music/views/ToplistView";
@@ -173,6 +175,8 @@ export default function Music() {
   const [cyreneMode, setCyreneMode] = useState<"omni" | "tunehub" | "lx">("omni");
   const [mvPlay, setMvPlay] = useState<{ url: string; title: string } | null>(null);
   const [neteaseRecommend, setNeteaseRecommend] = useState<MusicSong[]>([]);
+  const [importOpen, setImportOpen] = useState(false);
+  const [importBusy, setImportBusy] = useState(false);
   const [boards, setBoards] = useState<MusicDiscoveryBoard[]>([]);
   const [selectedBoard, setSelectedBoard] = useState<MusicDiscoveryBoard | null>(null);
   const [boardSongs, setBoardSongs] = useState<MusicSong[]>([]);
@@ -240,6 +244,10 @@ export default function Music() {
   const setLyricOffset = useMusicStore((state) => state.setLyricOffset);
   const sleepTimerEndAt = useMusicStore((state) => state.sleepTimerEndAt);
   const setSleepTimerEndAt = useMusicStore((state) => state.setSleepTimerEndAt);
+  const sleepAfterCurrent = useMusicStore((state) => state.sleepAfterCurrent);
+  const setSleepAfterCurrent = useMusicStore((state) => state.setSleepAfterCurrent);
+  const playbackRate = useMusicStore((state) => state.playbackRate);
+  const setPlaybackRate = useMusicStore((state) => state.setPlaybackRate);
   const queue = useMusicStore((state) => state.queue);
   const setQueue = useMusicStore((state) => state.setQueue);
   const appendToQueue = useMusicStore((state) => state.appendToQueue);
@@ -471,6 +479,14 @@ export default function Music() {
   useEffect(() => {
     if (audioRef.current) audioRef.current.volume = volume;
   }, [volume]);
+
+  // 倍速(对齐 SPlayer setRate):playbackRate + preservesPitch 保持音高;切歌后也要复用。
+  useEffect(() => {
+    const audio = audioRef.current;
+    if (!audio) return;
+    audio.playbackRate = playbackRate;
+    audio.preservesPitch = true;
+  }, [playbackRate, audioUrl]);
 
   // 均衡器实时同步：启用时套当前增益，关闭时归零（不拆图，置零等效旁路）。
   useEffect(() => {
@@ -869,6 +885,41 @@ export default function Music() {
       }
     },
     [extrasSource, playSong, setQueue]
+  );
+
+  // 导入网易歌单(对齐 CyreneMusic playlistImportService):解析链接/ID → 拉歌 → 建「我的歌单」。
+  const importPlaylist = useCallback(
+    async (input: string) => {
+      if (!extrasSource) {
+        await appAlert("请先在「音乐源」添加网易源", { tone: "warning" });
+        return;
+      }
+      const id = parseNeteasePlaylistInput(input);
+      if (!id) {
+        await appAlert("无法识别歌单链接或 ID", { tone: "warning" });
+        return;
+      }
+      setImportBusy(true);
+      try {
+        const songs = await getNeteasePlaylistSongs(extrasSource, id, 500);
+        if (songs.length === 0) {
+          await appAlert(
+            "未取到歌单歌曲（内置源受网易反爬限制，建议自部署 NeteaseCloudMusicApi 源）",
+            { tone: "warning" }
+          );
+          return;
+        }
+        const playlistId = createPlaylist(`导入歌单 (${songs.length})`);
+        songs.forEach((song) => addToPlaylist(playlistId, song));
+        setImportOpen(false);
+        await appAlert(`已导入 ${songs.length} 首到新歌单`, { title: "导入成功" });
+      } catch (error) {
+        await appAlert(error instanceof Error ? error.message : "导入失败", { tone: "warning" });
+      } finally {
+        setImportBusy(false);
+      }
+    },
+    [extrasSource, createPlaylist, addToPlaylist]
   );
 
   // queue / 自动续播函数用 ref 暴露给 playSong（避免把 queue 塞进它的依赖导致频繁重建）
@@ -1560,6 +1611,13 @@ export default function Music() {
   };
 
   const handleEnded = async () => {
+    // 睡眠定时「播完当前曲」:本曲结束即停,清掉标记。
+    if (sleepAfterCurrent) {
+      audioRef.current?.pause();
+      setIsPlaying(false);
+      setSleepAfterCurrent(false);
+      return;
+    }
     if (playMode === "single" && audioRef.current) {
       audioRef.current.currentTime = 0;
       await audioRef.current.play().catch(() => setIsPlaying(false));
@@ -1716,12 +1774,12 @@ export default function Music() {
       navigator.mediaSession.setPositionState({
         duration: dur,
         position: Math.min(currentTime, dur),
-        playbackRate: 1,
+        playbackRate: playbackRate || 1,
       });
     } catch {
       // position > duration 等边界情况会抛，忽略。
     }
-  }, [currentTime, duration, currentSong]);
+  }, [currentTime, duration, currentSong, playbackRate]);
 
   const isPlayerRoute = view === "player";
 
@@ -1990,6 +2048,8 @@ export default function Music() {
             showSpectrum={showSpectrum}
             sleepTimerEndAt={sleepTimerEndAt}
             sleepRemaining={sleepRemaining}
+            sleepAfterCurrent={sleepAfterCurrent}
+            playbackRate={playbackRate}
             favorite={!!currentSong && isFavorite(currentSong)}
             onBack={() => navigate(-1)}
             onTogglePlay={() => void togglePlay()}
@@ -2009,6 +2069,8 @@ export default function Music() {
             onSleep={(minutes) =>
               setSleepTimerEndAt(minutes > 0 ? Date.now() + minutes * 60 * 1000 : null)
             }
+            onSleepAfterCurrent={setSleepAfterCurrent}
+            onPlaybackRate={setPlaybackRate}
             desktopLyricOn={desktopLyricOn}
             onDesktopLyric={() => void toggleDesktopLyric()}
             desktopLyricAvailable={isTauri}
@@ -2196,6 +2258,7 @@ export default function Music() {
                     const id = createPlaylist("新建歌单");
                     updatePlaylist(id, { name: `歌单 ${playlists.length + 1}` });
                   }}
+                  onImportPlaylist={() => setImportOpen(true)}
                   onDeletePlaylist={(id) => void deletePlaylist(id)}
                   onClearPlaylist={(id) => clearPlaylist(id)}
                   onRemoveFromPlaylist={removeFromPlaylist}
@@ -2391,6 +2454,14 @@ export default function Music() {
 
       {mvPlay && (
         <MvModal url={mvPlay.url} title={mvPlay.title} onClose={() => setMvPlay(null)} />
+      )}
+
+      {importOpen && (
+        <ImportPlaylistDialog
+          busy={importBusy}
+          onClose={() => setImportOpen(false)}
+          onImport={(input) => void importPlaylist(input)}
+        />
       )}
 
       {addToPlaylistSong && (
