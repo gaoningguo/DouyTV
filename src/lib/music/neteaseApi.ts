@@ -337,3 +337,43 @@ export async function getNeteasePlaylistSongs(
     .map((item) => normalizeNeteaseSong(source, item))
     .filter((item): item is MusicSong => !!item);
 }
+
+/** 歌单搜索（cloudsearch type=1000）。external 可用；built-in 受反爬 -462 限制 → 降级空列表。 */
+export async function searchNeteasePlaylists(
+  source: MusicSourceDescriptor,
+  keyword: string,
+  limit = 20
+): Promise<MusicSongListSummary[]> {
+  try {
+    const url = isExternal(source)
+      ? `${cleanBaseUrl(source.baseUrl)}/cloudsearch?keywords=${encodeURIComponent(
+          keyword
+        )}&type=1000&limit=${limit}`
+      : `${NETEASE_BASE}/api/search/get?s=${encodeURIComponent(
+          keyword
+        )}&type=1000&limit=${limit}`;
+    const record = asRecord(await getJson(url, headersFor(source)));
+    if (asNumber(record?.code) === -462) return [];
+    const result = asRecord(record?.result);
+    const rawList = Array.isArray(result?.playlists) ? result?.playlists : [];
+    return (rawList ?? [])
+      .map((item): MusicSongListSummary | null => {
+        const row = asRecord(item);
+        const id = asString(row?.id);
+        const name = asString(row?.name);
+        if (!id || !name) return null;
+        return {
+          id,
+          name,
+          source: "wy",
+          pic: asString(row?.coverImgUrl) || asString(row?.picUrl),
+          author: asString(asRecord(row?.creator)?.nickname),
+          playCount: asNumber(row?.playCount) ?? undefined,
+          total: asNumber(row?.trackCount) ?? undefined,
+        };
+      })
+      .filter((item): item is MusicSongListSummary => !!item);
+  } catch {
+    return [];
+  }
+}

@@ -1,11 +1,16 @@
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import {
   IconAlbum,
   IconArtist,
   IconClose,
   IconPlay,
 } from "@/components/Icon";
-import { type MusicSong, type MusicSourceDescriptor } from "@/lib/music";
+import {
+  searchNeteasePlaylists,
+  type MusicSong,
+  type MusicSongListSummary,
+  type MusicSourceDescriptor,
+} from "@/lib/music";
 import { wrapImage } from "@/lib/proxy";
 import { mostCommonArtist } from "../utils";
 import { EmptyBlock, FilterChip } from "../components/ui";
@@ -30,6 +35,8 @@ export function SearchView({
   onOpenAlbum,
   onOpenArtist,
   onClose,
+  extrasSource,
+  onOpenPlaylist,
 }: {
   keyword: string;
   activeSourceId: string;
@@ -49,11 +56,30 @@ export function SearchView({
   onOpenAlbum: (album: string, artist?: string) => void;
   onOpenArtist: (artist: string) => void;
   onClose: () => void;
+  extrasSource: MusicSourceDescriptor | null;
+  onOpenPlaylist: (summary: MusicSongListSummary) => void;
 }) {
-  type CategoryType = "all" | "songs" | "artists" | "albums";
+  type CategoryType = "all" | "songs" | "artists" | "albums" | "playlists";
   const [category, setCategory] = useState<CategoryType>("all");
+  const [playlists, setPlaylists] = useState<MusicSongListSummary[]>([]);
   const trimmed = keyword.trim();
   const hasResults = results.length > 0;
+
+  // 网易歌单搜索（仅外部自部署网易源可用；其它源静默无结果）。
+  useEffect(() => {
+    if (!extrasSource || !trimmed) {
+      setPlaylists([]);
+      return;
+    }
+    let cancelled = false;
+    (async () => {
+      const list = await searchNeteasePlaylists(extrasSource, trimmed, 18);
+      if (!cancelled) setPlaylists(list);
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [trimmed, extrasSource]);
 
   const topSong = results[0];
   const topArtist = useMemo(() => mostCommonArtist(results), [results]);
@@ -93,6 +119,7 @@ export function SearchView({
   const showSongs = category === "all" || category === "songs";
   const showArtists = (category === "all" || category === "artists") && artists.length > 0;
   const showAlbums = (category === "all" || category === "albums") && albums.length > 0;
+  const showPlaylists = (category === "all" || category === "playlists") && playlists.length > 0;
   const songList = category === "songs" ? results : results.slice(0, 8);
 
   const CATEGORIES: Array<{ id: CategoryType; label: string }> = [
@@ -100,6 +127,9 @@ export function SearchView({
     { id: "songs", label: "歌曲" },
     { id: "artists", label: "艺人" },
     { id: "albums", label: "专辑" },
+    ...(playlists.length > 0
+      ? [{ id: "playlists" as CategoryType, label: "歌单" }]
+      : []),
   ];
 
   return (
@@ -304,6 +334,48 @@ export function SearchView({
                       {album.name}
                     </h3>
                     <p className="line-clamp-1 text-xs text-cream-faint">{album.artist || "专辑"}</p>
+                  </button>
+                ))}
+              </div>
+            </div>
+          )}
+
+          {/* 歌单（网易外部源） */}
+          {showPlaylists && (
+            <div className="col-span-12">
+              <h2 className="mb-5 font-display text-lg font-bold">歌单</h2>
+              <div className="grid grid-cols-2 gap-6 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-6">
+                {playlists.slice(0, category === "playlists" ? 24 : 6).map((pl) => (
+                  <button
+                    key={pl.id}
+                    type="button"
+                    onClick={() => onOpenPlaylist(pl)}
+                    className="group text-left"
+                    title={pl.name}
+                  >
+                    <div className="music-ob-album-cover">
+                      {pl.pic ? (
+                        <img
+                          src={wrapImage(pl.pic)}
+                          alt=""
+                          className="h-full w-full rounded-lg object-cover transition-transform duration-500 group-hover:scale-105"
+                        />
+                      ) : (
+                        <span className="grid h-full w-full place-items-center rounded-lg bg-ink-3 text-cream-faint">
+                          <IconAlbum size={32} />
+                        </span>
+                      )}
+                      <span className="music-ob-album-play">
+                        <IconPlay size={20} />
+                      </span>
+                    </div>
+                    <h3 className="mt-3 line-clamp-1 font-display text-sm font-semibold text-cream transition-colors group-hover:text-ember">
+                      {pl.name}
+                    </h3>
+                    <p className="line-clamp-1 text-xs text-cream-faint">
+                      {pl.author || "歌单"}
+                      {pl.total ? ` · ${pl.total}首` : ""}
+                    </p>
                   </button>
                 ))}
               </div>

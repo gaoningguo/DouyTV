@@ -2107,6 +2107,8 @@ export default function Music() {
                     setResults([]);
                     setView("discover");
                   }}
+                  extrasSource={extrasSource}
+                  onOpenPlaylist={(summary) => void openNeteasePlaylist(summary)}
                 />
               ) : view === "library" ? (
                 <LibraryView
