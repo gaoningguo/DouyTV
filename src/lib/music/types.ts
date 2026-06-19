@@ -3,7 +3,8 @@ export type MusicSourceKind =
   | "plugin-js"
   | "aggregate-http"
   | "netease-api"
-  | "cyrene-aggregate";
+  | "cyrene-aggregate"
+  | "local";
 
 /** 网易源传输模式：builtin=前端直连 music.163.com；external=自部署 NeteaseCloudMusicApi。 */
 export type NeteaseSourceMode = "builtin" | "external";

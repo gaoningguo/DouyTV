@@ -62,6 +62,10 @@ aes = { version = "0.8", default-features = false }
 cbc = { version = "0.1", default-features = false, features = ["block-padding"] }
 cipher = { version = "0.4", default-features = false, features = ["block-padding"] }
 
+# 本地音乐入库 —— 读 ID3/FLAC/Vorbis 等标签(标题/歌手/专辑/时长/封面/内嵌歌词)。
+# lofty 纯 Rust,无 encoding_rs 依赖。对齐 CyreneMusic local_music.rs。
+lofty = "0.21"
+
 # 桌面端：系统代理检测 + 自动更新；移动端用 cfg(not(any(target_os = "android", target_os = "ios"))) 编译时排除
 [target.'cfg(not(any(target_os = "android", target_os = "ios")))'.dependencies]
 sysproxy = "0.3"

@@ -1,6 +1,7 @@
 import { create } from "zustand";
 import {
   createBuiltinNeteaseSource,
+  createLocalMusicSource,
   musicSongKey,
   normalizeMusicSourceDescriptor,
   type MusicHistoryRecord,
@@ -264,6 +265,10 @@ export const useMusicStore = create<MusicStore>((set, get) => ({
     const seeded = stored.neteaseBuiltinSeeded ?? false;
     if (!seeded && !sources.some((source) => source.kind === "netease-api")) {
       sources = [createBuiltinNeteaseSource(), ...sources];
+    }
+    // 始终确保本地音乐源存在(播放本地曲走 directUrl;曲库由 musicLocal store 提供)。
+    if (!sources.some((source) => source.id === "music-local")) {
+      sources = [...sources, createLocalMusicSource()];
     }
     set({
       sources,

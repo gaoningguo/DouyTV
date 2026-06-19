@@ -20,6 +20,7 @@ export * from "./types";
 export * from "./discovery";
 export * from "./playback";
 export * from "./neteaseApi";
+export * from "./localMusic";
 
 const DEFAULT_LIMIT = 30;
 
@@ -42,7 +43,9 @@ export function normalizeMusicSourceDescriptor(
           : "网易云(内置)"
         : kind === "cyrene-aggregate"
           ? "Cyrene 聚合源"
-          : "音乐插件");
+          : kind === "local"
+            ? "本地音乐"
+            : "音乐插件");
   const id =
     input.id?.trim() ||
     `music-${stableId(`${kind}:${name}:${input.baseUrl ?? input.code ?? now}`)}`;
@@ -102,6 +105,9 @@ export async function searchMusicSource(
       return searchNeteaseApi(source, keyword, page, limit);
     case "cyrene-aggregate":
       return searchCyrene(source, keyword, page, limit);
+    case "local":
+      // 本地音乐不按关键词搜索;曲库由 LocalView/musicLocal store 直接提供。
+      return { list: [], page, limit, hasMore: false };
     default:
       return { list: [], page, limit, hasMore: false };
   }
@@ -143,6 +149,12 @@ export async function resolveMusicSource(
   quality: MusicQuality,
   options: { proxy?: boolean } = {}
 ): Promise<MusicPlayResult> {
+  if (source.kind === "local") {
+    // 本地文件:directUrl 已是 convertFileSrc 后的 asset URL,直接播放,不走代理。
+    const raw = (song.raw && typeof song.raw === "object" ? song.raw : {}) as { lyric?: string };
+    const url = song.directUrl || song.id;
+    return { url, directUrl: url, quality, lyric: raw.lyric || "" };
+  }
   if (source.kind === "lx-server") await initStreamProxyPort();
   const result =
     source.kind === "lx-server"
@@ -316,6 +328,16 @@ export function createBuiltinNeteaseSource(): MusicSourceDescriptor {
     kind: "netease-api",
     neteaseMode: "builtin",
     description: "前端直连 music.163.com · 免部署",
+  });
+}
+
+/** 本地音乐源(占位:曲库由 musicLocal store 提供,播放走 directUrl asset)。 */
+export function createLocalMusicSource(): MusicSourceDescriptor {
+  return normalizeMusicSourceDescriptor({
+    id: "music-local",
+    name: "本地音乐",
+    kind: "local",
+    description: "本机音频文件",
   });
 }
 

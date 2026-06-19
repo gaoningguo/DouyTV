@@ -314,6 +314,114 @@ fn scan_local_videos(dir: String, max_depth: Option<u32>) -> Result<Vec<LocalVid
     Ok(out)
 }
 
+// ── 本地音乐入库(对齐 CyreneMusic local_music.rs:lofty 读标签)──
+
+const AUDIO_EXTENSIONS: &[&str] = &["mp3", "flac", "wav", "ogg", "m4a", "aac", "wma", "opus"];
+
+#[derive(Serialize, Clone)]
+#[serde(rename_all = "camelCase")]
+pub struct LocalTrackMeta {
+    pub file_path: String,
+    pub name: String,
+    pub artists: String,
+    pub album: String,
+    pub duration: f64,
+    pub cover_data_url: Option<String>,
+    pub lyric: Option<String>,
+}
+
+fn extract_audio_metadata(path: &Path) -> Option<LocalTrackMeta> {
+    use base64::Engine;
+    use lofty::prelude::*;
+    use lofty::probe::Probe;
+
+    let tagged_file = Probe::open(path).ok()?.read().ok()?;
+    let duration = tagged_file.properties().duration().as_secs_f64();
+    let tag = tagged_file.primary_tag().or_else(|| tagged_file.first_tag());
+
+    let (title, artists, album, lyric, cover_data_url) = if let Some(tag) = tag {
+        let title = tag.title().map(|s| s.to_string()).unwrap_or_default();
+        let artist = tag.artist().map(|s| s.to_string()).unwrap_or_default();
+        let album = tag.album().map(|s| s.to_string()).unwrap_or_default();
+        let lyric = tag.get_string(&ItemKey::Lyrics).map(|s| s.to_string());
+        let cover = tag.pictures().first().map(|pic| {
+            let mime = match pic.mime_type() {
+                Some(lofty::picture::MimeType::Png) => "image/png",
+                Some(lofty::picture::MimeType::Bmp) => "image/bmp",
+                _ => "image/jpeg",
+            };
+            let b64 = base64::engine::general_purpose::STANDARD.encode(pic.data());
+            format!("data:{};base64,{}", mime, b64)
+        });
+        (title, artist, album, lyric, cover)
+    } else {
+        (String::new(), String::new(), String::new(), None, None)
+    };
+
+    let name = if title.is_empty() {
+        path.file_stem().and_then(|s| s.to_str()).unwrap_or("Unknown").to_string()
+    } else {
+        title
+    };
+
+    Some(LocalTrackMeta {
+        file_path: path.to_string_lossy().to_string(),
+        name,
+        artists: if artists.is_empty() { "未知歌手".to_string() } else { artists },
+        album: if album.is_empty() { "未知专辑".to_string() } else { album },
+        duration,
+        cover_data_url,
+        lyric,
+    })
+}
+
+fn visit_audio(dir: &Path, out: &mut Vec<LocalTrackMeta>, max_depth: u32, depth: u32) -> std::io::Result<()> {
+    if depth > max_depth {
+        return Ok(());
+    }
+    for entry in std::fs::read_dir(dir)? {
+        let Ok(entry) = entry else { continue };
+        let path = entry.path();
+        if path.is_dir() {
+            if let Some(name) = path.file_name().and_then(|s| s.to_str()) {
+                if name.starts_with('.') {
+                    continue;
+                }
+            }
+            let _ = visit_audio(&path, out, max_depth, depth + 1);
+        } else if let Some(ext) = path.extension().and_then(|e| e.to_str()) {
+            if AUDIO_EXTENSIONS.contains(&ext.to_lowercase().as_str()) {
+                if let Some(meta) = extract_audio_metadata(&path) {
+                    out.push(meta);
+                }
+            }
+        }
+    }
+    Ok(())
+}
+
+#[tauri::command]
+fn scan_music_folder(dir: String, max_depth: Option<u32>) -> Result<Vec<LocalTrackMeta>, String> {
+    let path = PathBuf::from(&dir);
+    if !path.is_dir() {
+        return Err(format!("path is not a directory: {dir}"));
+    }
+    let mut out = Vec::new();
+    visit_audio(&path, &mut out, max_depth.unwrap_or(6), 0).map_err(|e| e.to_string())?;
+    Ok(out)
+}
+
+/// 读取同名 .lrc 歌词(对齐 CyreneMusic read_lrc_file)。
+#[tauri::command]
+fn read_lrc_file(audio_path: String) -> Result<Option<String>, String> {
+    let lrc = Path::new(&audio_path).with_extension("lrc");
+    if lrc.exists() {
+        std::fs::read_to_string(&lrc).map(Some).map_err(|e| e.to_string())
+    } else {
+        Ok(None)
+    }
+}
+
 #[derive(Debug, Deserialize)]
 pub struct VodDownloadRequest {
     pub task_id: String,
@@ -2944,6 +3052,8 @@ pub fn run() {
             script_http,
             script_http_h2,
             scan_local_videos,
+            scan_music_folder,
+            read_lrc_file,
             vod_download_media,
             music_download,
             vod_set_download_paused,

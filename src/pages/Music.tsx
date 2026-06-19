@@ -2322,7 +2322,15 @@ export default function Music() {
                   onClear={() => void clearAllHistory()}
                 />
               ) : view === "local" ? (
-                <LocalView />
+                <LocalView
+                  currentSong={currentSong}
+                  isPlaying={isPlaying}
+                  isFavorite={isFavorite}
+                  onPlay={(song, songs) => void playSong(song, songs)}
+                  onFavorite={toggleFavorite}
+                  onQueue={appendToQueue}
+                  onAddToPlaylist={setAddToPlaylistSong}
+                />
               ) : (
                 <SourcesView
                   sources={sources}

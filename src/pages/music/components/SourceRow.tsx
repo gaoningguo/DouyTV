@@ -8,6 +8,7 @@ const KIND_LABELS: Record<MusicSourceDescriptor["kind"], string> = {
   "aggregate-http": "聚合源",
   "netease-api": "网易云",
   "cyrene-aggregate": "Cyrene 聚合",
+  local: "本地音乐",
 };
 
 function sourceTypeLabel(source: MusicSourceDescriptor): string {
