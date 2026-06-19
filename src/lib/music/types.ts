@@ -2,10 +2,14 @@ export type MusicSourceKind =
   | "lx-server"
   | "plugin-js"
   | "aggregate-http"
-  | "netease-api";
+  | "netease-api"
+  | "cyrene-aggregate";
 
 /** 网易源传输模式：builtin=前端直连 music.163.com；external=自部署 NeteaseCloudMusicApi。 */
 export type NeteaseSourceMode = "builtin" | "external";
+
+/** CyreneMusic 聚合源的播放解析模式（对应其 audioSourceService 的 AudioSourceType）。 */
+export type CyrenePlayMode = "omni" | "tunehub" | "lx";
 
 export type MusicPlatform = "wy" | "tx" | "kw" | "kg" | "mg";
 
@@ -24,6 +28,10 @@ export interface MusicSourceDescriptor {
   code?: string;
   /** 仅 kind==="netease-api" 用：内置直连 / 外部部署。缺省时按是否有 baseUrl 推断。 */
   neteaseMode?: NeteaseSourceMode;
+  /** 仅 kind==="cyrene-aggregate" 用：播放解析模式（默认 omni）。 */
+  cyreneMode?: CyrenePlayMode;
+  /** 仅 kind==="cyrene-aggregate" 用：播放解析后端（TuneHub/LX 常与搜索后端不同）。缺省用 baseUrl。 */
+  playBaseUrl?: string;
   defaultPlatform?: MusicPlatform | "all";
   platforms?: MusicPlatform[];
   headers?: Record<string, string>;

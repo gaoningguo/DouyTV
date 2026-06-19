@@ -163,6 +163,8 @@ export default function Music() {
   const [lxBaseUrl, setLxBaseUrl] = useState("http://35.208.239.12:9527/");
   const [lxToken, setLxToken] = useState("");
   const [neteaseBaseUrl, setNeteaseBaseUrl] = useState("");
+  const [cyreneBaseUrl, setCyreneBaseUrl] = useState("https://music.nekofun.top");
+  const [cyreneMode, setCyreneMode] = useState<"omni" | "tunehub" | "lx">("omni");
   const [boards, setBoards] = useState<MusicDiscoveryBoard[]>([]);
   const [selectedBoard, setSelectedBoard] = useState<MusicDiscoveryBoard | null>(null);
   const [boardSongs, setBoardSongs] = useState<MusicSong[]>([]);
@@ -1378,6 +1380,22 @@ export default function Music() {
     setSourceDialogOpen(false);
   };
 
+  const addCyrene = async () => {
+    if (!cyreneBaseUrl.trim()) {
+      await appAlert("请输入 Cyrene 聚合后端地址", { tone: "warning" });
+      return;
+    }
+    installSource(
+      normalizeMusicSourceDescriptor({
+        name: "Cyrene 聚合源",
+        kind: "cyrene-aggregate",
+        baseUrl: cyreneBaseUrl.trim(),
+        cyreneMode,
+      })
+    );
+    setSourceDialogOpen(false);
+  };
+
   const handleImport = async () => {
     try {
       const source = await importMusicSourceFromText(importText);
@@ -2245,11 +2263,16 @@ export default function Music() {
           onLxBaseUrl={setLxBaseUrl}
           onLxToken={setLxToken}
           onNeteaseBaseUrl={setNeteaseBaseUrl}
+          cyreneBaseUrl={cyreneBaseUrl}
+          cyreneMode={cyreneMode}
+          onCyreneBaseUrl={setCyreneBaseUrl}
+          onCyreneMode={setCyreneMode}
           onClose={() => setSourceDialogOpen(false)}
           onImport={() => void handleImport()}
           onAddLx={() => void addLxServer()}
           onAddNeteaseBuiltin={addNeteaseBuiltin}
           onAddNeteaseExternal={() => void addNeteaseExternal()}
+          onAddCyrene={() => void addCyrene()}
           onToggle={toggleSource}
           onDelete={(source) => void deleteSource(source)}
           onRename={(source, name) => updateSource(source.id, { name })}

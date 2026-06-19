@@ -13,11 +13,16 @@ export function SourceDialog({
   onLxBaseUrl,
   onLxToken,
   onNeteaseBaseUrl,
+  cyreneBaseUrl,
+  cyreneMode,
+  onCyreneBaseUrl,
+  onCyreneMode,
   onClose,
   onImport,
   onAddLx,
   onAddNeteaseBuiltin,
   onAddNeteaseExternal,
+  onAddCyrene,
   onToggle,
   onDelete,
   onRename,
@@ -31,11 +36,16 @@ export function SourceDialog({
   onLxBaseUrl: (value: string) => void;
   onLxToken: (value: string) => void;
   onNeteaseBaseUrl: (value: string) => void;
+  cyreneBaseUrl: string;
+  cyreneMode: "omni" | "tunehub" | "lx";
+  onCyreneBaseUrl: (value: string) => void;
+  onCyreneMode: (value: "omni" | "tunehub" | "lx") => void;
   onClose: () => void;
   onImport: () => void;
   onAddLx: () => void;
   onAddNeteaseBuiltin: () => void;
   onAddNeteaseExternal: () => void;
+  onAddCyrene: () => void;
   onToggle: (id: string) => void;
   onDelete: (source: MusicSourceDescriptor) => void;
   onRename: (source: MusicSourceDescriptor, name: string) => void;
@@ -74,6 +84,19 @@ export function SourceDialog({
               <input value={lxToken} onChange={(event) => onLxToken(event.target.value)} placeholder="Token（可选）" className="h-10 rounded-lg px-3 bg-ink text-sm outline-none text-cream" style={{ border: "1px solid var(--cream-line)" }} />
               <button type="button" onClick={onAddLx} className="h-10 px-4 rounded-lg text-xs font-display font-bold tap" style={{ background: "var(--ember)", color: "var(--ink)" }}>添加</button>
             </div>
+          </section>
+          <section>
+            <h3 className="text-sm font-display font-bold mb-2">Cyrene 聚合源</h3>
+            <div className="grid md:grid-cols-[1fr_140px_auto] gap-2">
+              <input value={cyreneBaseUrl} onChange={(event) => onCyreneBaseUrl(event.target.value)} placeholder="聚合后端地址（如 https://music.nekofun.top）" className="h-10 rounded-lg px-3 bg-ink text-sm outline-none text-cream" style={{ border: "1px solid var(--cream-line)" }} />
+              <select value={cyreneMode} onChange={(event) => onCyreneMode(event.target.value as "omni" | "tunehub" | "lx")} className="h-10 rounded-lg px-2 bg-ink text-sm outline-none text-cream" style={{ border: "1px solid var(--cream-line)" }}>
+                <option value="omni">OmniParse</option>
+                <option value="tunehub">TuneHub</option>
+                <option value="lx">LX 直链</option>
+              </select>
+              <button type="button" onClick={onAddCyrene} className="h-10 px-4 rounded-lg text-xs font-display font-bold tap" style={{ background: "var(--vhs)", color: "var(--ink)" }}>添加</button>
+            </div>
+            <p className="mt-1 text-xs text-cream-faint">多平台搜索(网易/QQ/酷我/酷狗)；播放解析按所选模式。公共实例常禁播放，建议填自有后端。</p>
           </section>
           <section>
             <h3 className="text-sm font-display font-bold mb-2">导入插件 / 聚合源</h3>

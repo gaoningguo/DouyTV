@@ -7,12 +7,16 @@ const KIND_LABELS: Record<MusicSourceDescriptor["kind"], string> = {
   "plugin-js": "JS 插件",
   "aggregate-http": "聚合源",
   "netease-api": "网易云",
+  "cyrene-aggregate": "Cyrene 聚合",
 };
 
 function sourceTypeLabel(source: MusicSourceDescriptor): string {
   const base = KIND_LABELS[source.kind] ?? source.kind;
   if (source.kind === "netease-api") {
     return `${base} · ${source.neteaseMode === "external" ? "自部署" : "内置"}`;
+  }
+  if (source.kind === "cyrene-aggregate") {
+    return `${base} · ${source.cyreneMode ?? "omni"}`;
   }
   return base;
 }

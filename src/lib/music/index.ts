@@ -4,6 +4,7 @@ import { searchAggregate, resolveAggregate } from "./aggregate";
 import { searchLxServer, resolveLxServer } from "./lxServer";
 import { searchPlugin, resolvePlugin } from "./pluginAdapter";
 import { searchNeteaseApi, resolveNeteaseApi } from "./neteaseApi";
+import { searchCyrene, resolveCyrene } from "./cyreneApi";
 import { isMusicPreviewError } from "./playback";
 import type {
   MusicPlayResult,
@@ -38,7 +39,9 @@ export function normalizeMusicSourceDescriptor(
         ? neteaseMode === "external"
           ? "网易云(自部署)"
           : "网易云(内置)"
-        : "音乐插件");
+        : kind === "cyrene-aggregate"
+          ? "Cyrene 聚合源"
+          : "音乐插件");
   const id =
     input.id?.trim() ||
     `music-${stableId(`${kind}:${name}:${input.baseUrl ?? input.code ?? now}`)}`;
@@ -52,6 +55,8 @@ export function normalizeMusicSourceDescriptor(
     token: input.token?.trim(),
     code: input.code,
     neteaseMode,
+    cyreneMode: kind === "cyrene-aggregate" ? input.cyreneMode ?? "omni" : undefined,
+    playBaseUrl: cleanBaseUrl(input.playBaseUrl) || undefined,
     defaultPlatform:
       input.defaultPlatform ??
       (kind === "lx-server" ? "all" : kind === "netease-api" ? "wy" : undefined),
@@ -94,6 +99,8 @@ export async function searchMusicSource(
       return searchAggregate(source, keyword, page, limit);
     case "netease-api":
       return searchNeteaseApi(source, keyword, page, limit);
+    case "cyrene-aggregate":
+      return searchCyrene(source, keyword, page, limit);
     default:
       return { list: [], page, limit, hasMore: false };
   }
@@ -145,7 +152,9 @@ export async function resolveMusicSource(
         ? await resolvePlugin(source, song, quality)
         : source.kind === "netease-api"
           ? await resolveNeteaseApi(source, song, quality)
-          : await resolveAggregate(source, song, quality);
+          : source.kind === "cyrene-aggregate"
+            ? await resolveCyrene(source, song, quality)
+            : await resolveAggregate(source, song, quality);
   if (options.proxy === false) return result;
   await initStreamProxyPort();
   // 已经是本地稳定流代理 URL（http://127.0.0.1:port/…）的就不再二次包装；
@@ -251,7 +260,9 @@ function descriptorFromObject(input: Record<string, unknown>): MusicSourceDescri
         ? "aggregate-http"
         : type === "netease-api" || type === "netease" || type === "ncm"
           ? "netease-api"
-          : "lx-server";
+          : type === "cyrene-aggregate" || type === "cyrene" || type === "nekofun"
+            ? "cyrene-aggregate"
+            : "lx-server";
   return normalizeMusicSourceDescriptor({
     id: asString(input.id) || asString(input.key),
     name: asString(input.name),
@@ -262,6 +273,8 @@ function descriptorFromObject(input: Record<string, unknown>): MusicSourceDescri
     token: asString(input.token),
     code: asString(input.code) || asString(input.script),
     neteaseMode: asString(input.neteaseMode) as MusicSourceDescriptor["neteaseMode"],
+    cyreneMode: asString(input.cyreneMode) as MusicSourceDescriptor["cyreneMode"],
+    playBaseUrl: asString(input.playBaseUrl),
     defaultPlatform: asString(input.defaultPlatform) as MusicSourceDescriptor["defaultPlatform"],
     headers: asRecord(input.headers) as Record<string, string> | undefined,
     searchUrl: asString(input.searchUrl),
