@@ -9,6 +9,7 @@ export type MusicView =
   | "search"
   | "library"
   | "recent"
+  | "stats"
   | "local"
   | "sources"
   | "player"

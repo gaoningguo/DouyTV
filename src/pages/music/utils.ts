@@ -115,6 +115,8 @@ export function deriveView(pathname: string): MusicView {
   if (pathname.startsWith("/music/artists")) return "artists";
   if (pathname.startsWith("/music/artist")) return "artist";
   if (pathname.startsWith("/music/mv")) return "mv";
+  if (pathname.startsWith("/music/radio")) return "radio";
+  if (pathname.startsWith("/music/stats")) return "stats";
   if (pathname.startsWith("/music/album")) return "album";
   return "discover";
 }

@@ -86,6 +86,7 @@ import { DiscoverView } from "./music/views/DiscoverView";
 import { ToplistView } from "./music/views/ToplistView";
 import { RecommendView } from "./music/views/RecommendView";
 import { RecentView, MvView, RadioView, ArtistsView } from "./music/views/BrowseViews";
+import { StatsView } from "./music/views/StatsView";
 import { LocalView } from "./music/views/shared";
 import { SonglistsView } from "./music/views/SonglistsView";
 import { SearchView } from "./music/views/SearchView";
@@ -2323,6 +2324,17 @@ export default function Music() {
                 />
               ) : view === "local" ? (
                 <LocalView
+                  currentSong={currentSong}
+                  isPlaying={isPlaying}
+                  isFavorite={isFavorite}
+                  onPlay={(song, songs) => void playSong(song, songs)}
+                  onFavorite={toggleFavorite}
+                  onQueue={appendToQueue}
+                  onAddToPlaylist={setAddToPlaylistSong}
+                />
+              ) : view === "stats" ? (
+                <StatsView
+                  history={history}
                   currentSong={currentSong}
                   isPlaying={isPlaying}
                   isFavorite={isFavorite}

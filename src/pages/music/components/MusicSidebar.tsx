@@ -12,6 +12,7 @@ import {
   IconLocal,
   IconPlus,
   IconSettings,
+  IconStats,
   IconWave,
 } from "@/components/Icon";
 import { type MusicUserPlaylist } from "@/stores/music";
@@ -145,6 +146,12 @@ export function MusicSidebar({
             label="最近播放"
             active={view === "recent"}
             onClick={() => onView("recent")}
+          />
+          <SidebarItem
+            icon={<IconStats size={16} />}
+            label="听歌足迹"
+            active={view === "stats"}
+            onClick={() => onView("stats")}
           />
           <SidebarItem
             icon={<IconList size={16} />}
