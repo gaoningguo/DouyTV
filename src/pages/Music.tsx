@@ -20,7 +20,9 @@ import {
   getMusicBoards,
   getMusicHotSearch,
   getMusicSonglistDetail,
+  getNeteaseMvUrl,
   getNeteasePlaylistSongs,
+  getNeteaseRadioPrograms,
   importMusicSourceFromText,
   isMusicPreviewError,
   musicSongKey,
@@ -41,6 +43,7 @@ import {
   type MusicSongListSummary,
   type MusicSongListTag,
   type MusicSourceDescriptor,
+  type NeteaseMv,
 } from "@/lib/music";
 import { wrapImage, isTauri } from "@/lib/proxy";
 import { getCoverColor } from "@/lib/music/coverColor";
@@ -74,11 +77,12 @@ import { MusicSidebar } from "./music/components/MusicSidebar";
 import { PlayerBar } from "./music/components/PlayerBar";
 import { MusicDrawer } from "./music/components/MusicDrawer";
 import { SourceDialog } from "./music/components/SourceDialog";
+import { MvModal } from "./music/components/MvModal";
 import { AddToPlaylistDialog } from "./music/components/AddToPlaylistDialog";
 import { DiscoverView } from "./music/views/DiscoverView";
 import { ToplistView } from "./music/views/ToplistView";
 import { RecommendView } from "./music/views/RecommendView";
-import { RecentView, MvView, ArtistsView } from "./music/views/BrowseViews";
+import { RecentView, MvView, RadioView, ArtistsView } from "./music/views/BrowseViews";
 import { LocalView } from "./music/views/shared";
 import { SonglistsView } from "./music/views/SonglistsView";
 import { SearchView } from "./music/views/SearchView";
@@ -166,6 +170,7 @@ export default function Music() {
   const [neteaseBaseUrl, setNeteaseBaseUrl] = useState("");
   const [cyreneBaseUrl, setCyreneBaseUrl] = useState("https://music.nekofun.top");
   const [cyreneMode, setCyreneMode] = useState<"omni" | "tunehub" | "lx">("omni");
+  const [mvPlay, setMvPlay] = useState<{ url: string; title: string } | null>(null);
   const [boards, setBoards] = useState<MusicDiscoveryBoard[]>([]);
   const [selectedBoard, setSelectedBoard] = useState<MusicDiscoveryBoard | null>(null);
   const [boardSongs, setBoardSongs] = useState<MusicSong[]>([]);
@@ -796,6 +801,47 @@ export default function Music() {
         await playSong(songs[0], songs);
       } catch (error) {
         await appAlert(error instanceof Error ? error.message : "载入歌单失败", {
+          tone: "warning",
+        });
+      }
+    },
+    [extrasSource, playSong, setQueue]
+  );
+
+  // 播放 MV(对齐 SPlayer:/mv/url 取地址,视频弹层播放,暂停当前音频)。
+  const playMv = useCallback(
+    async (mv: NeteaseMv) => {
+      if (!extrasSource) return;
+      try {
+        const url = await getNeteaseMvUrl(extrasSource, mv.id);
+        audioRef.current?.pause();
+        setMvPlay({ url, title: mv.name });
+      } catch (error) {
+        await appAlert(error instanceof Error ? error.message : "MV 播放失败", {
+          tone: "warning",
+        });
+      }
+    },
+    [extrasSource]
+  );
+
+  // 打开电台:载入全部节目(对齐 SPlayer radioAllProgram)入队从首集播放。
+  const openRadio = useCallback(
+    async (radio: MusicSongListSummary) => {
+      if (!extrasSource) return;
+      try {
+        const programs = await getNeteaseRadioPrograms(extrasSource, radio.id, 100);
+        if (programs.length === 0) {
+          await appAlert(
+            "载入电台节目需自部署 NeteaseCloudMusicApi 源（内置源受网易反爬限制）",
+            { tone: "warning" }
+          );
+          return;
+        }
+        setQueue(programs, programs[0]);
+        await playSong(programs[0], programs);
+      } catch (error) {
+        await appAlert(error instanceof Error ? error.message : "载入电台失败", {
           tone: "warning",
         });
       }
@@ -2172,10 +2218,9 @@ export default function Music() {
               ) : view === "artists" ? (
                 <ArtistsView artists={[]} onOpenArtist={(name) => openArtist(name)} />
               ) : view === "mv" ? (
-                <MvView
-                  songlists={songlists}
-                  onOpenSonglist={(item) => void openSonglist(item)}
-                />
+                <MvView source={extrasSource} onPlay={(mv) => void playMv(mv)} />
+              ) : view === "radio" ? (
+                <RadioView source={extrasSource} onOpenRadio={(radio) => void openRadio(radio)} />
               ) : view === "recent" ? (
                 <RecentView
                   history={history}
@@ -2317,6 +2362,10 @@ export default function Music() {
           onDelete={(source) => void deleteSource(source)}
           onRename={(source, name) => updateSource(source.id, { name })}
         />
+      )}
+
+      {mvPlay && (
+        <MvModal url={mvPlay.url} title={mvPlay.title} onClose={() => setMvPlay(null)} />
       )}
 
       {addToPlaylistSong && (

@@ -377,3 +377,143 @@ export async function searchNeteasePlaylists(
     return [];
   }
 }
+
+// ── MV / 视频(端点对齐 SPlayer src/api/video.ts、rec.ts)──
+
+export interface NeteaseMv {
+  id: string;
+  name: string;
+  cover?: string;
+  artist?: string;
+  playCount?: number;
+  durationSec?: number;
+}
+
+function pickMvArtist(item: Record<string, unknown>): string {
+  if (Array.isArray(item.artists)) {
+    return item.artists
+      .map((a) => asString(asRecord(a)?.name))
+      .filter(Boolean)
+      .join(" / ");
+  }
+  return asString(item.artistName) || "";
+}
+
+/** MV 列表:个性化推荐(/personalized/mv,内置匿名可列)。 */
+export async function getNeteaseMvList(source: MusicSourceDescriptor): Promise<NeteaseMv[]> {
+  const url = isExternal(source)
+    ? `${cleanBaseUrl(source.baseUrl)}/personalized/mv`
+    : `${NETEASE_BASE}/api/personalized/mv`;
+  const record = asRecord(await getJson(url, headersFor(source)));
+  const rawList = Array.isArray(record?.result) ? record?.result : [];
+  return (rawList ?? [])
+    .map((item): NeteaseMv | null => {
+      const row = asRecord(item);
+      const id = asString(row?.id);
+      const name = asString(row?.name);
+      if (!id || !name) return null;
+      const durationMs = asNumber(row?.duration);
+      return {
+        id,
+        name,
+        cover: asString(row?.picUrl) || asString(row?.cover),
+        artist: row ? pickMvArtist(row) : "",
+        playCount: asNumber(row?.playCount) ?? undefined,
+        durationSec: durationMs ? Math.round(durationMs / 1000) : undefined,
+      };
+    })
+    .filter((item): item is NeteaseMv => !!item);
+}
+
+/** MV 播放地址(/mv/url?id=&r=,对齐 SPlayer videoUrl)。built-in 受反爬限制可能失败。 */
+export async function getNeteaseMvUrl(
+  source: MusicSourceDescriptor,
+  id: string,
+  r = 1080
+): Promise<string> {
+  const url = isExternal(source)
+    ? `${cleanBaseUrl(source.baseUrl)}/mv/url?id=${encodeURIComponent(id)}&r=${r}`
+    : `${NETEASE_BASE}/api/mv/url?id=${encodeURIComponent(id)}&r=${r}`;
+  const record = asRecord(await getJson(url, headersFor(source)));
+  const data = asRecord(record?.data);
+  const playUrl = asString(data?.url);
+  if (!playUrl) throw new Error("MV 地址不可用(内置源受网易反爬限制,建议自部署源)");
+  return playUrl;
+}
+
+// ── 电台 / 播客(端点对齐 SPlayer src/api/radio.ts;节目按 formatSongsList 取 mainTrackId)──
+
+/** 电台推荐(/dj/recommend)。external 可用;built-in 受限降级。 */
+export async function getNeteaseRadioRecommend(
+  source: MusicSourceDescriptor
+): Promise<MusicSongListSummary[]> {
+  try {
+    const url = isExternal(source)
+      ? `${cleanBaseUrl(source.baseUrl)}/dj/recommend`
+      : `${NETEASE_BASE}/api/djradio/recommend`;
+    const record = asRecord(await getJson(url, headersFor(source)));
+    if (asNumber(record?.code) === -462) return [];
+    const rawList = Array.isArray(record?.djRadios)
+      ? record?.djRadios
+      : Array.isArray(record?.data)
+        ? record?.data
+        : [];
+    return (rawList ?? [])
+      .map((item): MusicSongListSummary | null => {
+        const row = asRecord(item);
+        const id = asString(row?.id);
+        const name = asString(row?.name);
+        if (!id || !name) return null;
+        return {
+          id,
+          name,
+          source: "wy",
+          pic: asString(row?.picUrl),
+          author: asString(asRecord(row?.dj)?.nickname),
+          desc: asString(row?.rcmdtext) || asString(row?.desc),
+          total: asNumber(row?.programCount) ?? undefined,
+        };
+      })
+      .filter((item): item is MusicSongListSummary => !!item);
+  } catch {
+    return [];
+  }
+}
+
+/** 电台全部节目(/dj/program?rid=) → 可播放歌曲(id 取 mainTrackId/mainSong.id,对齐 SPlayer formatSongsList)。 */
+export async function getNeteaseRadioPrograms(
+  source: MusicSourceDescriptor,
+  rid: string,
+  limit = 100
+): Promise<MusicSong[]> {
+  const url = isExternal(source)
+    ? `${cleanBaseUrl(source.baseUrl)}/dj/program?rid=${encodeURIComponent(rid)}&limit=${limit}`
+    : `${NETEASE_BASE}/api/dj/program?rid=${encodeURIComponent(rid)}&limit=${limit}`;
+  const record = asRecord(await getJson(url, headersFor(source)));
+  if (asNumber(record?.code) === -462) return [];
+  const programs = Array.isArray(record?.programs) ? record?.programs : [];
+  return (programs ?? [])
+    .map((item): MusicSong | null => {
+      const row = asRecord(item);
+      if (!row) return null;
+      // 播放 id：mainTrackId / mainSong.id（对齐 SPlayer：radio 类型用 dj.id 取 song/url）。
+      const playId =
+        asString(row.mainTrackId) || asString(asRecord(row.mainSong)?.id) || asString(row.id);
+      const name = asString(row.name);
+      if (!playId || !name) return null;
+      const durationMs = asNumber(row.duration);
+      return {
+        id: playId,
+        sourceId: source.id,
+        sourceName: source.name,
+        title: name,
+        artist: asString(asRecord(row.dj)?.brand) || asString(asRecord(row.dj)?.nickname) || "播客",
+        cover: asString(row.coverUrl) || asString(asRecord(row.mainSong)?.picUrl),
+        durationSec: durationMs ? Math.round(durationMs / 1000) : undefined,
+        platform: "wy",
+        songmid: playId,
+        raw: row,
+      };
+    })
+    .filter((item): item is MusicSong => !!item);
+}

@@ -5,6 +5,7 @@ export type MusicView =
   | "songlists"
   | "artists"
   | "mv"
+  | "radio"
   | "search"
   | "library"
   | "recent"

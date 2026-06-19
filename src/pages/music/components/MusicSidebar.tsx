@@ -123,6 +123,12 @@ export function MusicSidebar({
             active={view === "mv"}
             onClick={() => onView("mv")}
           />
+          <SidebarItem
+            icon={<IconWave size={16} />}
+            label="电台播客"
+            active={view === "radio"}
+            onClick={() => onView("radio")}
+          />
         </div>
 
         <div className="music-sidebar-label">我的</div>

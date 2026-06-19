@@ -1,9 +1,17 @@
-import { useState } from "react";
-import { IconAlbum, IconArtist, IconFilm } from "@/components/Icon";
-import { musicSongKey, type MusicSong, type MusicSongListSummary } from "@/lib/music";
+import { useEffect, useState } from "react";
+import { IconAlbum, IconArtist, IconFilm, IconWave } from "@/components/Icon";
+import {
+  getNeteaseMvList,
+  getNeteaseRadioRecommend,
+  musicSongKey,
+  type MusicSong,
+  type MusicSongListSummary,
+  type MusicSourceDescriptor,
+  type NeteaseMv,
+} from "@/lib/music";
+import { wrapImage } from "@/lib/proxy";
 import { SongList } from "../components/SongList";
 import { VideoCard } from "../components/VinylHero";
-import { aggregateMusicLabel, aggregatePlaylistMeta } from "../utils";
 import { PageHeader, PlaceholderState } from "./shared";
 
 /** 最近播放页 —— 借鉴 Tabos FreeMusicRecent：历史列表。 */
@@ -60,33 +68,69 @@ export function RecentView({
   );
 }
 
-/** MV 广场 —— LX 无 MV 数据，用歌单封面占位为 16:9 视频卡（点击进歌单）。 */
+/** MV 广场 —— 对齐 SPlayer:个性化 MV 列表(/personalized/mv),点击经 /mv/url 播放视频。 */
 export function MvView({
-  songlists,
-  onOpenSonglist,
+  source,
+  onPlay,
 }: {
-  songlists: MusicSongListSummary[];
-  onOpenSonglist: (item: MusicSongListSummary) => void;
+  source: MusicSourceDescriptor | null;
+  onPlay: (mv: NeteaseMv) => void;
 }) {
-  const cards = songlists.slice(0, 24);
+  const [mvs, setMvs] = useState<NeteaseMv[]>([]);
+  const [loading, setLoading] = useState(false);
+
+  useEffect(() => {
+    if (!source) {
+      setMvs([]);
+      return;
+    }
+    let cancelled = false;
+    setLoading(true);
+    (async () => {
+      try {
+        const list = await getNeteaseMvList(source);
+        if (!cancelled) setMvs(list);
+      } catch {
+        if (!cancelled) setMvs([]);
+      } finally {
+        if (!cancelled) setLoading(false);
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [source?.id]);
+
   return (
     <div className="music-page-wrap space-y-6">
       <PageHeader title="MV 广场" subtitle="官方 MV、现场、翻唱与舞蹈视频" />
-      {cards.length === 0 ? (
+      {!source ? (
         <PlaceholderState
           icon={<IconFilm size={40} />}
-          title="MV 广场即将到来"
-          desc="后端接入 MV 数据源后，这里将展示官方 MV、现场、翻唱与舞蹈视频。"
+          title="需要网易源"
+          desc="在「音乐源」添加网易内置源即可浏览 MV。播放 MV 建议使用自部署 NeteaseCloudMusicApi 源（内置源受网易反爬限制）。"
+        />
+      ) : loading ? (
+        <div className="music-mv-grid">
+          {Array.from({ length: 8 }).map((_, i) => (
+            <div key={i} className="aspect-video rounded-xl skeleton-shimmer" />
+          ))}
+        </div>
+      ) : mvs.length === 0 ? (
+        <PlaceholderState
+          icon={<IconFilm size={40} />}
+          title="暂无 MV"
+          desc="没有取到 MV 数据。"
         />
       ) : (
         <div className="music-mv-grid">
-          {cards.map((item) => (
+          {mvs.map((mv) => (
             <VideoCard
-              key={`${item.source}:${item.id}`}
-              cover={item.pic}
-              title={aggregateMusicLabel(item.name, "推荐歌单")}
-              subtitle={aggregatePlaylistMeta(item)}
-              onClick={() => onOpenSonglist(item)}
+              key={mv.id}
+              cover={mv.cover}
+              title={mv.name}
+              subtitle={mv.artist || "MV"}
+              onClick={() => onPlay(mv)}
             />
           ))}
         </div>
@@ -165,6 +209,92 @@ export function ArtistsView({
                 )}
               </span>
               <span className="music-artist-card-name line-clamp-1">{artist.name}</span>
+            </button>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
+/** 电台/播客 —— 对齐 SPlayer:/dj/recommend 列表,点击载入全部节目(/dj/program)入队播放。 */
+export function RadioView({
+  source,
+  onOpenRadio,
+}: {
+  source: MusicSourceDescriptor | null;
+  onOpenRadio: (radio: MusicSongListSummary) => void;
+}) {
+  const [radios, setRadios] = useState<MusicSongListSummary[]>([]);
+  const [loading, setLoading] = useState(false);
+
+  useEffect(() => {
+    if (!source) {
+      setRadios([]);
+      return;
+    }
+    let cancelled = false;
+    setLoading(true);
+    (async () => {
+      const list = await getNeteaseRadioRecommend(source);
+      if (!cancelled) {
+        setRadios(list);
+        setLoading(false);
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [source?.id]);
+
+  return (
+    <div className="music-page-wrap space-y-6">
+      <PageHeader title="电台播客" subtitle="网易云电台推荐" />
+      {!source ? (
+        <PlaceholderState
+          icon={<IconWave size={40} />}
+          title="需要网易源"
+          desc="在「音乐源」添加网易源即可浏览电台。播放节目建议使用自部署 NeteaseCloudMusicApi 源（内置源受网易反爬限制）。"
+        />
+      ) : loading ? (
+        <div className="music-recommend-grid">
+          {Array.from({ length: 8 }).map((_, i) => (
+            <div key={i} className="aspect-square rounded-xl skeleton-shimmer" />
+          ))}
+        </div>
+      ) : radios.length === 0 ? (
+        <PlaceholderState
+          icon={<IconWave size={40} />}
+          title="暂无电台"
+          desc="没有取到电台数据（内置源可能受反爬限制，建议自部署 NeteaseCloudMusicApi 源）。"
+        />
+      ) : (
+        <div className="music-recommend-grid">
+          {radios.map((radio) => (
+            <button
+              key={radio.id}
+              type="button"
+              className="music-recommend-card tap"
+              onClick={() => onOpenRadio(radio)}
+              title={radio.name}
+            >
+              <div className="music-ob-album-cover">
+                {radio.pic ? (
+                  <img
+                    src={wrapImage(radio.pic)}
+                    alt=""
+                    className="h-full w-full rounded-lg object-cover"
+                  />
+                ) : (
+                  <span className="grid h-full w-full place-items-center rounded-lg bg-ink-3 text-cream-faint">
+                    <IconWave size={28} />
+                  </span>
+                )}
+              </div>
+              <span className="music-recommend-name">{radio.name}</span>
+              {radio.author && (
+                <span className="line-clamp-1 text-xs text-cream-faint">{radio.author}</span>
+              )}
             </button>
           ))}
         </div>
