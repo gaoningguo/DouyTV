@@ -15,6 +15,7 @@ import type {
   MusicQuality,
   MusicSearchResult,
   MusicSong,
+  MusicSongListSummary,
   MusicSourceDescriptor,
 } from "./types";
 import { asNumber, asRecord, asString, cleanBaseUrl, unwrapArray } from "./utils";
@@ -208,4 +209,131 @@ export async function resolveNeteaseApi(
     yrc: lyric.yrc,
     romalrc: lyric.romalrc,
   };
+}
+
+// ───────────────────────── 富页面数据（批2）─────────────────────────
+// 仅网易源可用；built-in 直连 music.163.com，external 走 NeteaseCloudMusicApi。
+// 评论/推荐歌单匿名可用；相似歌曲 built-in 被反爬挡(code -462)→ 降级空列表，external 正常。
+
+export interface NeteaseComment {
+  id: string;
+  nickname: string;
+  avatar?: string;
+  content: string;
+  liked: number;
+  timeText?: string;
+  hot: boolean;
+}
+
+function normalizeComment(input: unknown, hot: boolean): NeteaseComment | null {
+  const item = asRecord(input);
+  if (!item) return null;
+  const content = asString(item.content);
+  if (!content) return null;
+  const user = asRecord(item.user);
+  return {
+    id: asString(item.commentId) || asString(item.time) || content.slice(0, 12),
+    nickname: asString(user?.nickname) || "网易云用户",
+    avatar: asString(user?.avatarUrl),
+    content,
+    liked: asNumber(item.likedCount) ?? 0,
+    timeText: asString(item.timeStr) || undefined,
+    hot,
+  };
+}
+
+/** 歌曲评论（热评 + 最新）。 */
+export async function getNeteaseComments(
+  source: MusicSourceDescriptor,
+  songId: string,
+  limit = 20
+): Promise<NeteaseComment[]> {
+  const url = isExternal(source)
+    ? `${cleanBaseUrl(source.baseUrl)}/comment/music?id=${encodeURIComponent(songId)}&limit=${limit}`
+    : `${NETEASE_BASE}/api/v1/resource/comments/R_SO_4_${encodeURIComponent(
+        songId
+      )}?limit=${limit}&offset=0`;
+  const record = asRecord(await getJson(url, headersFor(source)));
+  const hot = (Array.isArray(record?.hotComments) ? record?.hotComments : [])
+    .map((item) => normalizeComment(item, true))
+    .filter((item): item is NeteaseComment => !!item);
+  const latest = (Array.isArray(record?.comments) ? record?.comments : [])
+    .map((item) => normalizeComment(item, false))
+    .filter((item): item is NeteaseComment => !!item);
+  // 去重(热评常与最新重叠)，热评优先。
+  const seen = new Set(hot.map((c) => c.id));
+  return [...hot, ...latest.filter((c) => !seen.has(c.id))];
+}
+
+/** 相似歌曲。built-in 反爬挡返回空，external 正常。 */
+export async function getNeteaseSimiSongs(
+  source: MusicSourceDescriptor,
+  songId: string
+): Promise<MusicSong[]> {
+  try {
+    const url = isExternal(source)
+      ? `${cleanBaseUrl(source.baseUrl)}/simi/song?id=${encodeURIComponent(songId)}`
+      : `${NETEASE_BASE}/api/v1/discovery/simiSong?songid=${encodeURIComponent(
+          songId
+        )}&limit=30&offset=0`;
+    const record = asRecord(await getJson(url, headersFor(source)));
+    if (asNumber(record?.code) === -462) return []; // 反爬验证，built-in 拿不到
+    const rawList = Array.isArray(record?.songs) ? record?.songs : [];
+    return (rawList ?? [])
+      .map((item) => normalizeNeteaseSong(source, item))
+      .filter((item): item is MusicSong => !!item);
+  } catch {
+    return [];
+  }
+}
+
+/** 推荐歌单（首页个性化推荐，匿名可用）。 */
+export async function getNeteasePersonalized(
+  source: MusicSourceDescriptor,
+  limit = 12
+): Promise<MusicSongListSummary[]> {
+  const url = isExternal(source)
+    ? `${cleanBaseUrl(source.baseUrl)}/personalized?limit=${limit}`
+    : `${NETEASE_BASE}/api/personalized/playlist?limit=${limit}`;
+  const record = asRecord(await getJson(url, headersFor(source)));
+  const rawList = Array.isArray(record?.result) ? record?.result : [];
+  return (rawList ?? [])
+    .map((item): MusicSongListSummary | null => {
+      const row = asRecord(item);
+      const id = asString(row?.id);
+      const name = asString(row?.name);
+      if (!id || !name) return null;
+      return {
+        id,
+        name,
+        source: "wy",
+        pic: asString(row?.picUrl),
+        playCount: asNumber(row?.playCount) ?? undefined,
+      };
+    })
+    .filter((item): item is MusicSongListSummary => !!item);
+}
+
+/** 歌单内歌曲（点开推荐歌单时载入）。built-in 用 v6 playlist/detail，external 用 /playlist/track/all。 */
+export async function getNeteasePlaylistSongs(
+  source: MusicSourceDescriptor,
+  playlistId: string,
+  limit = 50
+): Promise<MusicSong[]> {
+  const url = isExternal(source)
+    ? `${cleanBaseUrl(source.baseUrl)}/playlist/track/all?id=${encodeURIComponent(
+        playlistId
+      )}&limit=${limit}`
+    : `${NETEASE_BASE}/api/v6/playlist/detail?id=${encodeURIComponent(playlistId)}&n=${limit}`;
+  const record = asRecord(await getJson(url, headersFor(source)));
+  // external /playlist/track/all → {songs:[]}；built-in v6 → {playlist:{tracks:[]}}
+  const rawList = Array.isArray(record?.songs)
+    ? record?.songs
+    : Array.isArray(asRecord(record?.playlist)?.tracks)
+      ? asRecord(record?.playlist)?.tracks
+      : [];
+  return ((rawList as unknown[]) ?? [])
+    .slice(0, limit)
+    .map((item) => normalizeNeteaseSong(source, item))
+    .filter((item): item is MusicSong => !!item);
 }

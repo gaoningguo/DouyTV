@@ -27,6 +27,8 @@ import { CoverArt, IconButton } from "../components/ui";
 import { SongList } from "../components/SongList";
 import { LyricStage } from "../components/LyricStage";
 import { Spectrum } from "../components/Spectrum";
+import { SongExtrasPanel } from "../components/SongExtrasPanel";
+import type { MusicSongListSummary, MusicSourceDescriptor } from "@/lib/music";
 
 export function PlayerView({
   currentSong,
@@ -68,6 +70,9 @@ export function PlayerView({
   desktopLyricOn,
   onDesktopLyric,
   desktopLyricAvailable,
+  extrasSource,
+  onPlaySong,
+  onOpenPlaylist,
 }: {
   currentSong: MusicSong | null;
   currentCover?: string;
@@ -108,8 +113,11 @@ export function PlayerView({
   desktopLyricOn: boolean;
   onDesktopLyric: () => void;
   desktopLyricAvailable: boolean;
+  extrasSource: MusicSourceDescriptor | null;
+  onPlaySong: (song: MusicSong) => void;
+  onOpenPlaylist: (summary: MusicSongListSummary) => void;
 }) {
-  const [panel, setPanel] = useState<"lyrics" | "queue">("lyrics");
+  const [panel, setPanel] = useState<"lyrics" | "queue" | "extras">("lyrics");
   const safeDuration = duration > 0 && Number.isFinite(duration) ? duration : 0;
   const progressValue = Math.min(currentTime, safeDuration || 1);
 
@@ -204,6 +212,13 @@ export function PlayerView({
               >
                 队列 {queue.length > 0 ? queue.length : ""}
               </button>
+              <button
+                type="button"
+                onClick={() => setPanel("extras")}
+                className={panel === "extras" ? "is-active" : undefined}
+              >
+                更多
+              </button>
               {panel === "queue" && queue.length > 0 && (
                 <button
                   type="button"
@@ -224,7 +239,7 @@ export function PlayerView({
                 showRoma={lyricShowRoma}
                 fontScale={lyricFontScale}
               />
-            ) : (
+            ) : panel === "queue" ? (
               <div className="music-now-queue">
                 <SongList
                   songs={queue}
@@ -242,6 +257,13 @@ export function PlayerView({
                   hideQueue
                 />
               </div>
+            ) : (
+              <SongExtrasPanel
+                song={currentSong}
+                source={extrasSource}
+                onPlaySong={onPlaySong}
+                onOpenPlaylist={onOpenPlaylist}
+              />
             )}
           </div>
         </div>

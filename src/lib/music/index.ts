@@ -19,6 +19,7 @@ import { asRecord, asString, cleanBaseUrl, stableId, tryParseJson } from "./util
 export * from "./types";
 export * from "./discovery";
 export * from "./playback";
+export * from "./neteaseApi";
 
 const DEFAULT_LIMIT = 30;
 

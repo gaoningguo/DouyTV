@@ -20,6 +20,7 @@ import {
   getMusicBoards,
   getMusicHotSearch,
   getMusicSonglistDetail,
+  getNeteasePlaylistSongs,
   importMusicSourceFromText,
   isMusicPreviewError,
   musicSongKey,
@@ -510,6 +511,16 @@ export default function Music() {
     return enabledSources.find((source) => source.kind === "lx-server");
   }, [activeSource, enabledSources]);
 
+  // 富页面(评论/相似/推荐)数据源：优先自部署网易源(反爬能力强)，否则内置网易源。
+  const extrasSource = useMemo(() => {
+    const netease = enabledSources.filter((source) => source.kind === "netease-api");
+    return (
+      netease.find((source) => source.neteaseMode === "external") ??
+      netease[0] ??
+      null
+    );
+  }, [enabledSources]);
+
   const lyricLines = useMemo(
     () => parseLyric({ lyric: lyricText, tlyric: tlyricText, yrc: yrcText, romalrc: romaText }),
     [lyricText, tlyricText, yrcText, romaText]
@@ -766,6 +777,30 @@ export default function Music() {
       await playSong(queue[nextIndex], queue, autoChain);
     },
     [currentSong, playMode, playSong, queue]
+  );
+
+  // 打开网易推荐歌单：载入歌曲入队并从首曲播放（内置源受反爬限制时降级提示）。
+  const openNeteasePlaylist = useCallback(
+    async (summary: MusicSongListSummary) => {
+      if (!extrasSource) return;
+      try {
+        const songs = await getNeteasePlaylistSongs(extrasSource, summary.id, 50);
+        if (songs.length === 0) {
+          await appAlert(
+            "载入歌单需自部署 NeteaseCloudMusicApi 源（内置源受网易反爬限制）",
+            { tone: "warning" }
+          );
+          return;
+        }
+        setQueue(songs, songs[0]);
+        await playSong(songs[0], songs);
+      } catch (error) {
+        await appAlert(error instanceof Error ? error.message : "载入歌单失败", {
+          tone: "warning",
+        });
+      }
+    },
+    [extrasSource, playSong, setQueue]
   );
 
   // queue / 自动续播函数用 ref 暴露给 playSong（避免把 queue 塞进它的依赖导致频繁重建）
@@ -1909,6 +1944,9 @@ export default function Music() {
             desktopLyricOn={desktopLyricOn}
             onDesktopLyric={() => void toggleDesktopLyric()}
             desktopLyricAvailable={isTauri}
+            extrasSource={extrasSource}
+            onPlaySong={(song) => void playSong(song, [song])}
+            onOpenPlaylist={(summary) => void openNeteasePlaylist(summary)}
           />
         ) : (
           <main className="music-scroll flex-1 min-h-0 overflow-y-auto px-4 sm:px-6 pt-3 pb-5">
