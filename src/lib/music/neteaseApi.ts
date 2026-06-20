@@ -328,11 +328,50 @@ export async function getNeteasePersonalized(
         id,
         name,
         source: "wy",
+        sourceId: source.id,
         pic: asString(row?.picUrl),
         playCount: asNumber(row?.playCount) ?? undefined,
       };
     })
     .filter((item): item is MusicSongListSummary => !!item);
+}
+
+/**
+ * 网易排行榜列表（/toplist → 榜单歌单数组）。匿名可用(返回歌单形态,id 即歌单 id)。
+ * 复用 MusicDiscoveryBoard 承载;详情走 getNeteasePlaylistSongs(榜单本质是歌单)。
+ */
+export async function getNeteaseToplists(
+  source: MusicSourceDescriptor
+): Promise<MusicSongListSummary[]> {
+  try {
+    const url = isExternal(source)
+      ? `${cleanBaseUrl(source.baseUrl)}/toplist`
+      : `${NETEASE_BASE}/api/toplist`;
+    const record = asRecord(await getJson(url, headersFor(source)));
+    if (asNumber(record?.code) === -462) return [];
+    const rawList = Array.isArray(record?.list) ? record?.list : [];
+    return ((rawList as unknown[]) ?? [])
+      .map((item): MusicSongListSummary | null => {
+        const row = asRecord(item);
+        const id = asString(row?.id);
+        const name = asString(row?.name);
+        if (!id || !name) return null;
+        return {
+          id,
+          name,
+          source: "wy",
+          sourceId: source.id,
+          pic: asString(row?.coverImgUrl) || asString(row?.picUrl),
+          desc: asString(row?.description) || asString(row?.updateFrequency),
+          playCount: asNumber(row?.playCount) ?? undefined,
+          total: asNumber(row?.trackCount) ?? undefined,
+          updateFrequency: asString(row?.updateFrequency) || undefined,
+        };
+      })
+      .filter((item): item is MusicSongListSummary => !!item);
+  } catch {
+    return [];
+  }
 }
 
 /** 解析网易歌单链接/ID(对齐 CyreneMusic playlistImportService.parseNeteaseId)。 */

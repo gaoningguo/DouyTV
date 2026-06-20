@@ -13,12 +13,12 @@ import {
   IconSettings,
 } from "@/components/Icon";
 import {
-  getAllMusicSonglistTags,
-  getAllMusicSonglists,
-  getMusicBoardSongs,
-  getMusicBoards,
-  getMusicHotSearch,
-  getMusicSonglistDetail,
+  getMusicBoardsAggregated,
+  getBoardSongsRouted,
+  getSonglistsAggregated,
+  getSonglistTagsAggregated,
+  getSonglistDetailRouted,
+  getHotSearchAggregated,
   getNeteaseAlbum,
   getNeteaseArtist,
   getNeteaseArtistAlbums,
@@ -33,7 +33,6 @@ import {
   resolveNeteaseArtistId,
   isMusicPreviewError,
   musicSongKey,
-  normalizeMusicPlatform,
   resolveMusicSource,
   resolveMusicSourceWithFallback,
   prefetchMusicSource,
@@ -379,6 +378,16 @@ export default function Music() {
     if (activeSource?.enabled && activeSource.kind === "lx-server") return activeSource;
     return enabledSources.find((source) => source.kind === "lx-server");
   }, [activeSource, enabledSources]);
+
+  // 发现类页面是聚合的:只要有任一「发现能力源」(LX 或网易)就出数据。
+  const discoveryCapableSource = useMemo(
+    () =>
+      discoverySource ??
+      enabledSources.find(
+        (source) => source.kind === "lx-server" || source.kind === "netease-api"
+      ),
+    [discoverySource, enabledSources]
+  );
 
   // 富页面(评论/相似/推荐)数据源：优先自部署网易源(反爬能力强)，否则内置网易源。
   const extrasSource = useMemo(() => {
@@ -927,17 +936,12 @@ export default function Music() {
 
   const loadBoardSongs = useCallback(
     async (board: MusicDiscoveryBoard) => {
-      if (!discoverySource) return;
+      if (enabledSources.length === 0) return;
       setBoardLoading(true);
       try {
-        const data = await getMusicBoardSongs(
-          discoverySource,
-          board.source,
-          board.id,
-          1
-        );
+        const list = await getBoardSongsRouted(enabledSources, board, 1);
         setSelectedBoard(board);
-        setBoardSongs(data.list);
+        setBoardSongs(list);
       } catch (loadError) {
         setBoardSongs([]);
         await appAlert(
@@ -948,7 +952,7 @@ export default function Music() {
         setBoardLoading(false);
       }
     },
-    [discoverySource]
+    [enabledSources]
   );
 
   const loadSonglists = useCallback(
@@ -956,23 +960,18 @@ export default function Music() {
       tagId = selectedTag,
       sortId = selectedSort
     ) => {
-      if (!discoverySource) return;
+      if (enabledSources.length === 0) return;
       setSonglistLoading(true);
       try {
-        const data = await getAllMusicSonglists(
-          discoverySource,
-          tagId,
-          sortId,
-          1
-        );
-        setSonglists(data.list);
+        const list = await getSonglistsAggregated(enabledSources, tagId, sortId, 1);
+        setSonglists(list);
       } catch {
         setSonglists([]);
       } finally {
         setSonglistLoading(false);
       }
     },
-    [discoverySource, selectedSort, selectedTag]
+    [enabledSources, selectedSort, selectedTag]
   );
 
   const searchSonglists = useCallback(
@@ -982,36 +981,31 @@ export default function Music() {
         setSonglistSearchResults(null);
         return;
       }
-      if (!discoverySource) {
+      if (enabledSources.length === 0) {
         setSonglistSearchResults([]);
         return;
       }
       setSonglistSearching(true);
       try {
-        const data = await getAllMusicSonglists(
-          discoverySource,
-          selectedTag,
-          selectedSort,
-          1
-        );
+        const list = await getSonglistsAggregated(enabledSources, selectedTag, selectedSort, 1);
         const needle = q.toLowerCase();
-        const list = data.list.filter((item) => {
+        const filtered = list.filter((item) => {
           const name = (item.name || "").toLowerCase();
           const author = (item.author || "").toLowerCase();
           return name.includes(needle) || author.includes(needle);
         });
-        setSonglistSearchResults(list);
+        setSonglistSearchResults(filtered);
       } catch {
         setSonglistSearchResults([]);
       } finally {
         setSonglistSearching(false);
       }
     },
-    [discoverySource, selectedSort, selectedTag]
+    [enabledSources, selectedSort, selectedTag]
   );
 
   const loadDiscovery = useCallback(async () => {
-    if (!discoverySource) {
+    if (enabledSources.length === 0) {
       setBoards([]);
       setBoardSongs([]);
       setChartCards([]);
@@ -1021,40 +1015,30 @@ export default function Music() {
     }
     setDiscoveryLoading(true);
     try {
+      // 聚合所有启用源:LX 出多平台榜单/歌单/热搜,网易出排行榜/推荐歌单/热搜。
       const [boardsResult, hotResult, tagsResult, songlistsResult] =
         await Promise.allSettled([
-          getMusicBoards(discoverySource, "kw"),
-          getMusicHotSearch(discoverySource, "mg"),
-          getAllMusicSonglistTags(discoverySource),
-          getAllMusicSonglists(discoverySource, selectedTag, selectedSort, 1),
+          getMusicBoardsAggregated(enabledSources),
+          getHotSearchAggregated(enabledSources),
+          getSonglistTagsAggregated(enabledSources),
+          getSonglistsAggregated(enabledSources, selectedTag, selectedSort, 1),
         ]);
 
       if (boardsResult.status === "fulfilled") {
-        setBoards(boardsResult.value.list);
-        const first = boardsResult.value.list[0] ?? null;
+        setBoards(boardsResult.value);
+        const first = boardsResult.value[0] ?? null;
         setSelectedBoard(first);
         if (first) {
-          const songs = await getMusicBoardSongs(
-            discoverySource,
-            first.source,
-            first.id,
-            1
-          );
-          setBoardSongs(songs.list);
+          setBoardSongs(await getBoardSongsRouted(enabledSources, first, 1));
         } else {
           setBoardSongs([]);
         }
-        // 预加载前若干榜单的前几首，供「排行榜卡片」网格展示（借鉴 Tabos chart 卡片）
-        const topBoards = boardsResult.value.list.slice(0, 6);
+        // 预加载前若干榜单的前几首，供「排行榜卡片」网格展示。
+        const topBoards = boardsResult.value.slice(0, 6);
         const cardResults = await Promise.allSettled(
           topBoards.map(async (board) => {
-            const detail = await getMusicBoardSongs(
-              discoverySource,
-              board.source,
-              board.id,
-              1
-            );
-            return { board, songs: detail.list.slice(0, 5) } as ChartCard;
+            const songs = await getBoardSongsRouted(enabledSources, board, 1);
+            return { board, songs: songs.slice(0, 5) } as ChartCard;
           })
         );
         setChartCards(
@@ -1079,12 +1063,12 @@ export default function Music() {
         setSongSorts([]);
       }
       setSonglists(
-        songlistsResult.status === "fulfilled" ? songlistsResult.value.list : []
+        songlistsResult.status === "fulfilled" ? songlistsResult.value : []
       );
     } finally {
       setDiscoveryLoading(false);
     }
-  }, [discoverySource, selectedSort, selectedTag]);
+  }, [enabledSources, selectedSort, selectedTag]);
 
   useEffect(() => {
     void loadDiscovery();
@@ -1132,7 +1116,7 @@ export default function Music() {
     if (!openedSonglist || openedSonglist.id !== summary.id) {
       setOpenedSonglist(summary);
     }
-    if (!discoverySource) return;
+    if (enabledSources.length === 0) return;
     let cancelled = false;
     setSonglistDetailSongs([]);
     setRelatedWorks([]);
@@ -1140,16 +1124,11 @@ export default function Music() {
     setSonglistDetailLoading(true);
     (async () => {
       try {
-        const platform = normalizeMusicPlatform(songlistParams.source) || "wy";
-        const detail = await getMusicSonglistDetail(
-          discoverySource,
-          platform,
-          songlistParams.id,
-          1
-        );
-        if (!cancelled) setSonglistDetailSongs(detail.list);
+        // 按 summary.sourceId 路由回原源取详情(聚合后歌单可能来自 LX 或网易)。
+        const songs = await getSonglistDetailRouted(enabledSources, summary, 1);
+        if (!cancelled) setSonglistDetailSongs(songs);
         // 「更多作品」：取歌单中出现最多的歌手，按歌手名再搜一遍作为相关作品。
-        const topArtist = mostCommonArtist(detail.list);
+        const topArtist = mostCommonArtist(songs);
         if (topArtist && !cancelled) {
           setRelatedArtist(topArtist);
           try {
@@ -1158,7 +1137,7 @@ export default function Music() {
                 ? null
                 : await searchMusicSources(enabledSources, topArtist, 1, 12);
             if (!cancelled && related) {
-              const detailKeys = new Set(detail.list.map((song) => musicSongKey(song)));
+              const detailKeys = new Set(songs.map((song) => musicSongKey(song)));
               setRelatedWorks(
                 dedupeSearchSongs(related.list).filter(
                   (song) => !detailKeys.has(musicSongKey(song))
@@ -1185,7 +1164,7 @@ export default function Music() {
       cancelled = true;
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [songlistParams?.source, songlistParams?.id, discoverySource]);
+  }, [songlistParams?.source, songlistParams?.id, enabledSources.length]);
 
   const openAlbum = useCallback(
     (album: string, artist?: string, id?: string) => {
@@ -2098,7 +2077,7 @@ export default function Music() {
                 />
               ) : view === "songlists" ? (
                 <SonglistsView
-                  source={discoverySource}
+                  source={discoveryCapableSource}
                   loading={songlistLoading}
                   songlists={songlists}
                   tags={songTags}
@@ -2122,7 +2101,7 @@ export default function Music() {
                 />
               ) : view === "discover" ? (
                 <DiscoverView
-                  source={discoverySource}
+                  source={discoveryCapableSource}
                   loading={discoveryLoading}
                   currentSong={currentSong}
                   currentCover={currentCover}

@@ -132,6 +132,8 @@ export interface MusicDiscoveryBoard {
   name: string;
   source: MusicPlatform;
   cover?: string;
+  /** 产出该榜单的音乐源 id（聚合后用于把详情请求路由回原源）。 */
+  sourceId?: string;
 }
 
 export interface MusicHotSearchItem {
@@ -151,6 +153,8 @@ export interface MusicSongListSummary {
   playCount?: string | number;
   total?: string | number;
   updateFrequency?: string;
+  /** 产出该歌单的音乐源 id（聚合后用于把详情请求路由回原源）。 */
+  sourceId?: string;
 }
 
 export interface MusicSongListTag {
