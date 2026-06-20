@@ -144,14 +144,14 @@ export function MusicSidebar({
           <SidebarItem
             icon={<IconHistoryClock size={16} />}
             label="最近播放"
-            active={view === "recent"}
-            onClick={() => onView("recent")}
+            active={inLibrary && libraryTab === "history"}
+            onClick={() => onLibrary("history")}
           />
           <SidebarItem
             icon={<IconStats size={16} />}
             label="听歌足迹"
-            active={view === "stats"}
-            onClick={() => onView("stats")}
+            active={inLibrary && libraryTab === "stats"}
+            onClick={() => onLibrary("stats")}
           />
           <SidebarItem
             icon={<IconList size={16} />}

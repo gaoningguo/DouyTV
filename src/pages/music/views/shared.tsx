@@ -1,5 +1,5 @@
 import { useEffect, useState, type ReactNode } from "react";
-import { IconAlbum, IconArtist, IconFilm, IconLocal, IconPlus, IconTrash } from "@/components/Icon";
+import { IconLocal, IconPlus, IconTrash } from "@/components/Icon";
 import { type MusicSong } from "@/lib/music";
 import { useMusicLocalStore } from "@/stores/musicLocal";
 import { SongList } from "../components/SongList";
@@ -25,7 +25,7 @@ export function PageHeader({
   );
 }
 
-/** 无数据页面的占位空状态（等后端扩展后接入真实数据）。 */
+/** 受限/降级提示空状态（如需自部署网易源、当前分类无数据）。 */
 export function PlaceholderState({
   icon,
   title,
@@ -40,7 +40,6 @@ export function PlaceholderState({
       <span className="music-placeholder-icon">{icon}</span>
       <h2 className="font-display text-lg font-bold text-cream">{title}</h2>
       <p className="mt-2 max-w-md text-sm text-cream-dim">{desc}</p>
-      <span className="music-placeholder-badge">敬请期待</span>
     </section>
   );
 }
@@ -138,27 +137,3 @@ export function LocalView({
     </div>
   );
 }
-
-/** MV 广场（LX 无 MV 数据，用歌单封面占位为 16:9 视频卡）。 */
-export function MvPlaceholder() {
-  return (
-    <PlaceholderState
-      icon={<IconFilm size={40} />}
-      title="MV 广场即将到来"
-      desc="后端接入 MV 数据源后，这里将展示官方 MV、现场、翻唱与舞蹈视频。"
-    />
-  );
-}
-
-/** 歌手页空态。 */
-export function ArtistsEmpty() {
-  return (
-    <PlaceholderState
-      icon={<IconArtist size={40} />}
-      title="按分类浏览歌手"
-      desc="选择上方分类与首字母筛选歌手。后端接入歌手榜数据后，这里会展示歌手头像墙。"
-    />
-  );
-}
-
-export { IconAlbum };

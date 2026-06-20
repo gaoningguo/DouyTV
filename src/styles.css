@@ -3661,16 +3661,6 @@ textarea:focus-visible {
   color: var(--ember);
   background: var(--ember-soft);
 }
-.music-placeholder-badge {
-  margin-top: 18px;
-  padding: 4px 14px;
-  border-radius: 999px;
-  font-family: var(--font-mono, monospace);
-  font-size: 11px;
-  letter-spacing: 0.1em;
-  color: var(--cream-faint);
-  border: 1px solid var(--cream-line);
-}
 
 /* ============ 排行榜页（官方榜 + 全部榜单封面网格）============ */
 .music-toplist-official-grid {

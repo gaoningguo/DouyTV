@@ -104,7 +104,6 @@ export function safeFilename(value: string) {
 export function deriveView(pathname: string): MusicView {
   if (pathname.startsWith("/music/search")) return "search";
   if (pathname.startsWith("/music/library")) return "library";
-  if (pathname.startsWith("/music/recent")) return "recent";
   if (pathname.startsWith("/music/local")) return "local";
   if (pathname.startsWith("/music/sources")) return "sources";
   if (pathname.startsWith("/music/player")) return "player";
@@ -116,7 +115,6 @@ export function deriveView(pathname: string): MusicView {
   if (pathname.startsWith("/music/artist")) return "artist";
   if (pathname.startsWith("/music/mv")) return "mv";
   if (pathname.startsWith("/music/radio")) return "radio";
-  if (pathname.startsWith("/music/stats")) return "stats";
   if (pathname.startsWith("/music/album")) return "album";
   return "discover";
 }

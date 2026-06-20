@@ -8,7 +8,6 @@ import {
 import { useLocation, useNavigate } from "react-router-dom";
 import { appAlert, appConfirm } from "@/components/AppDialog";
 import {
-  IconArtist,
   IconClose,
   IconSearch,
   IconSettings,
@@ -92,8 +91,7 @@ import { AddToPlaylistDialog } from "./music/components/AddToPlaylistDialog";
 import { DiscoverView } from "./music/views/DiscoverView";
 import { ToplistView } from "./music/views/ToplistView";
 import { RecommendView } from "./music/views/RecommendView";
-import { RecentView, MvView, RadioView, ArtistsView } from "./music/views/BrowseViews";
-import { StatsView } from "./music/views/StatsView";
+import { MvView, RadioView, ArtistsView } from "./music/views/BrowseViews";
 import { LocalView } from "./music/views/shared";
 import { SonglistsView } from "./music/views/SonglistsView";
 import { SearchView } from "./music/views/SearchView";
@@ -1928,19 +1926,11 @@ export default function Music() {
                 <button
                   type="button"
                   onClick={() => setDrawer("settings")}
-                  className="music-icon-pill hidden sm:flex"
+                  className="music-icon-pill"
                   title="设置"
                 >
                   <IconSettings size={16} />
-                </button>
-                <button
-                  type="button"
-                  onClick={() => setView("library")}
-                  className="music-icon-pill"
-                  title="我的音乐"
-                >
-                  <IconArtist size={16} />
-                  <span className="hidden sm:inline">我的</span>
+                  <span className="hidden sm:inline">设置</span>
                 </button>
               </div>
             </div>
@@ -2282,6 +2272,7 @@ export default function Music() {
                   history={history}
                   playlists={playlists}
                   currentSong={currentSong}
+                  isPlaying={isPlaying}
                   isFavorite={isFavorite}
                   onPlay={(song, songs) => void playSong(song, songs)}
                   onFavorite={toggleFavorite}
@@ -2343,31 +2334,8 @@ export default function Music() {
                 <MvView source={extrasSource} onPlay={(mv) => void playMv(mv)} />
               ) : view === "radio" ? (
                 <RadioView source={extrasSource} onOpenRadio={(radio) => void openRadio(radio)} />
-              ) : view === "recent" ? (
-                <RecentView
-                  history={history}
-                  currentSong={currentSong}
-                  isPlaying={isPlaying}
-                  isFavorite={isFavorite}
-                  onPlay={(song, songs) => void playSong(song, songs)}
-                  onFavorite={toggleFavorite}
-                  onQueue={appendToQueue}
-                  onAddToPlaylist={setAddToPlaylistSong}
-                  onClear={() => void clearAllHistory()}
-                />
               ) : view === "local" ? (
                 <LocalView
-                  currentSong={currentSong}
-                  isPlaying={isPlaying}
-                  isFavorite={isFavorite}
-                  onPlay={(song, songs) => void playSong(song, songs)}
-                  onFavorite={toggleFavorite}
-                  onQueue={appendToQueue}
-                  onAddToPlaylist={setAddToPlaylistSong}
-                />
-              ) : view === "stats" ? (
-                <StatsView
-                  history={history}
                   currentSong={currentSong}
                   isPlaying={isPlaying}
                   isFavorite={isFavorite}

@@ -8,8 +8,6 @@ export type MusicView =
   | "radio"
   | "search"
   | "library"
-  | "recent"
-  | "stats"
   | "local"
   | "sources"
   | "player"
@@ -17,7 +15,7 @@ export type MusicView =
   | "album"
   | "artist";
 
-export type LibraryTab = "favorites" | "history" | "playlists" | "downloads";
+export type LibraryTab = "favorites" | "history" | "playlists" | "downloads" | "stats";
 
 /** 发现页排行榜卡片：一个榜单 + 它的前几首歌（借鉴 Tabos discover-chart-card）。 */
 export interface ChartCard {

@@ -6,71 +6,14 @@ import {
   isNeteaseAntiBotError,
   getNeteaseMvList,
   getNeteaseRadioRecommend,
-  musicSongKey,
-  type MusicSong,
   type MusicSongListSummary,
   type MusicSourceDescriptor,
   type NeteaseArtist,
   type NeteaseMv,
 } from "@/lib/music";
 import { wrapImage } from "@/lib/proxy";
-import { SongList } from "../components/SongList";
 import { VideoCard } from "../components/VinylHero";
 import { PageHeader, PlaceholderState } from "./shared";
-
-/** 最近播放页 —— 借鉴 Tabos FreeMusicRecent：历史列表。 */
-export function RecentView({
-  history,
-  currentSong,
-  isPlaying,
-  isFavorite,
-  onPlay,
-  onFavorite,
-  onQueue,
-  onAddToPlaylist,
-  onClear,
-}: {
-  history: MusicSong[];
-  currentSong: MusicSong | null;
-  isPlaying: boolean;
-  isFavorite: (song: MusicSong) => boolean;
-  onPlay: (song: MusicSong, songs: MusicSong[]) => void;
-  onFavorite: (song: MusicSong) => void;
-  onQueue: (song: MusicSong) => void;
-  onAddToPlaylist: (song: MusicSong) => void;
-  onClear: () => void;
-}) {
-  return (
-    <div className="music-page-wrap space-y-6">
-      <PageHeader
-        title="最近播放"
-        subtitle={`共 ${history.length} 首`}
-        action={
-          history.length > 0 ? (
-            <button
-              type="button"
-              onClick={onClear}
-              className="music-ob-ghost-btn !h-9 !px-4 !text-xs"
-            >
-              清空记录
-            </button>
-          ) : undefined
-        }
-      />
-      <SongList
-        songs={history}
-        activeSong={currentSong}
-        activePlaying={isPlaying}
-        emptyText="还没有播放记录"
-        isFavorite={isFavorite}
-        onPlay={(song) => onPlay(song, history)}
-        onFavorite={onFavorite}
-        onQueue={onQueue}
-        onAddToPlaylist={onAddToPlaylist}
-      />
-    </div>
-  );
-}
 
 /** MV 广场 —— 对齐 SPlayer:个性化 MV 列表(/personalized/mv),点击经 /mv/url 播放视频。 */
 export function MvView({
@@ -376,6 +319,3 @@ export function RadioView({
   );
 }
 
-export function isRecentActive(currentSong: MusicSong | null, song: MusicSong) {
-  return !!currentSong && musicSongKey(currentSong) === musicSongKey(song);
-}

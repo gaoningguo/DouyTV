@@ -6,13 +6,14 @@ import {
   IconPlay,
   IconPlus,
 } from "@/components/Icon";
-import { formatDuration, musicSongKey, type MusicSong } from "@/lib/music";
+import { formatDuration, musicSongKey, type MusicHistoryRecord, type MusicSong } from "@/lib/music";
 import { wrapImage } from "@/lib/proxy";
 import { type MusicUserPlaylist } from "@/stores/music";
 import { type LibraryTab } from "../types";
 import { type MusicDownloadItem } from "@/stores/musicDownload";
 import { EmptyBlock, IconButton } from "../components/ui";
 import { PlaylistPanel } from "../components/PlaylistPanel";
+import { StatsView } from "./StatsView";
 
 export function LibraryView({
   tab,
@@ -21,6 +22,7 @@ export function LibraryView({
   history,
   playlists,
   currentSong,
+  isPlaying,
   isFavorite,
   onPlay,
   onFavorite,
@@ -40,9 +42,10 @@ export function LibraryView({
   tab: LibraryTab;
   onTab: (tab: LibraryTab) => void;
   favorites: MusicSong[];
-  history: MusicSong[];
+  history: MusicHistoryRecord[];
   playlists: MusicUserPlaylist[];
   currentSong: MusicSong | null;
+  isPlaying: boolean;
   isFavorite: (song: MusicSong) => boolean;
   onPlay: (song: MusicSong, songs: MusicSong[]) => void;
   onFavorite: (song: MusicSong) => void;
@@ -164,6 +167,18 @@ export function LibraryView({
         >
           下载内容 {downloads.length > 0 ? downloads.length : ""}
         </button>
+        <button
+          type="button"
+          onClick={() => onTab("stats")}
+          className="pb-4 font-medium whitespace-nowrap transition-colors"
+          style={{
+            color: tab === "stats" ? "var(--ember)" : "var(--cream-dim)",
+            borderBottom: tab === "stats" ? "2px solid var(--ember)" : "2px solid transparent",
+            fontWeight: tab === "stats" ? "bold" : "medium",
+          }}
+        >
+          听歌足迹
+        </button>
         {tab === "history" && history.length > 0 && (
           <button
             type="button"
@@ -263,6 +278,19 @@ export function LibraryView({
             ))
           )}
         </section>
+      )}
+
+      {tab === "stats" && (
+        <StatsView
+          history={history}
+          currentSong={currentSong}
+          isPlaying={isPlaying}
+          isFavorite={isFavorite}
+          onPlay={onPlay}
+          onFavorite={onFavorite}
+          onQueue={onQueue}
+          onAddToPlaylist={onAddToPlaylist}
+        />
       )}
 
       {tab === "playlists" && (
