@@ -19,6 +19,7 @@ export function SourceDialog({
   onCyreneMode,
   onClose,
   onImport,
+  onImportFile,
   onAddLx,
   onAddNeteaseBuiltin,
   onAddNeteaseExternal,
@@ -42,6 +43,7 @@ export function SourceDialog({
   onCyreneMode: (value: "omni" | "tunehub" | "lx") => void;
   onClose: () => void;
   onImport: () => void;
+  onImportFile: (file: File) => void;
   onAddLx: () => void;
   onAddNeteaseBuiltin: () => void;
   onAddNeteaseExternal: () => void;
@@ -99,17 +101,33 @@ export function SourceDialog({
             <p className="mt-1 text-xs text-cream-faint">多平台搜索(网易/QQ/酷我/酷狗)；播放解析按所选模式。公共实例常禁播放，建议填自有后端。</p>
           </section>
           <section>
-            <h3 className="text-sm font-display font-bold mb-2">导入插件 / 聚合源</h3>
+            <h3 className="text-sm font-display font-bold mb-2">洛雪音源 / 插件导入</h3>
+            <div className="flex flex-wrap items-center gap-2 mb-2">
+              <label className="h-9 px-4 rounded-lg text-xs font-display font-bold tap cursor-pointer inline-flex items-center" style={{ background: "var(--ink-2)", border: "1px solid var(--cream-line)", color: "var(--cream-dim)" }}>
+                导入 .js 脚本文件
+                <input
+                  type="file"
+                  accept=".js,.mjs,.txt,application/javascript,text/plain"
+                  className="hidden"
+                  onChange={(event) => {
+                    const file = event.target.files?.[0];
+                    if (file) onImportFile(file);
+                    event.target.value = "";
+                  }}
+                />
+              </label>
+              <span className="text-xs text-cream-faint">洛雪自定义源(.js):自动解析头部信息 + 直链模板,免执行沙箱。</span>
+            </div>
             <textarea
               value={importText}
               onChange={(event) => onImportText(event.target.value)}
-              placeholder="粘贴 lx-music-source / MusicFree 插件源码、JS URL、LX Server URL，或 aggregate-http JSON 配置"
+              placeholder="粘贴洛雪音源 .js 脚本源码、脚本直链 URL、MusicFree 插件源码、LX Server URL,或 aggregate-http JSON 配置"
               className="w-full h-32 rounded-lg p-3 bg-ink text-sm text-cream outline-none resize-none"
               style={{ border: "1px solid var(--cream-line)" }}
             />
             <div className="mt-2 flex items-center gap-2">
               <p className="text-xs text-cream-faint flex-1">
-                当前优先兼容 LX API Server；JS/MusicFree/聚合源保留统一导入入口。
+                洛雪音源脚本/链接会被识别为 LX 直链解析源(搜索复用多平台关键词);MusicFree 插件按 JS 执行。
               </p>
               <button type="button" onClick={onImport} className="h-9 px-4 rounded-lg text-xs font-display font-bold tap" style={{ background: "var(--vhs)", color: "var(--ink)" }}>导入</button>
             </div>

@@ -5,6 +5,7 @@ import { searchLxServer, resolveLxServer } from "./lxServer";
 import { searchPlugin, resolvePlugin } from "./pluginAdapter";
 import { searchNeteaseApi, resolveNeteaseApi } from "./neteaseApi";
 import { searchCyrene, resolveCyrene } from "./cyreneApi";
+import { parseLxScript, looksLikeLxSource, type LxSourceParsed } from "./lxSource";
 import { isMusicPreviewError } from "./playback";
 import type {
   MusicPlayResult,
@@ -21,6 +22,7 @@ export * from "./discovery";
 export * from "./playback";
 export * from "./neteaseApi";
 export * from "./localMusic";
+export * from "./lxSource";
 
 const DEFAULT_LIMIT = 30;
 
@@ -61,6 +63,7 @@ export function normalizeMusicSourceDescriptor(
     neteaseMode,
     cyreneMode: kind === "cyrene-aggregate" ? input.cyreneMode ?? "omni" : undefined,
     playBaseUrl: cleanBaseUrl(input.playBaseUrl) || undefined,
+    urlPathTemplate: input.urlPathTemplate,
     defaultPlatform:
       input.defaultPlatform ??
       (kind === "lx-server" ? "all" : kind === "netease-api" ? "wy" : undefined),
@@ -288,6 +291,7 @@ function descriptorFromObject(input: Record<string, unknown>): MusicSourceDescri
     neteaseMode: asString(input.neteaseMode) as MusicSourceDescriptor["neteaseMode"],
     cyreneMode: asString(input.cyreneMode) as MusicSourceDescriptor["cyreneMode"],
     playBaseUrl: asString(input.playBaseUrl),
+    urlPathTemplate: asString(input.urlPathTemplate),
     defaultPlatform: asString(input.defaultPlatform) as MusicSourceDescriptor["defaultPlatform"],
     headers: asRecord(input.headers) as Record<string, string> | undefined,
     searchUrl: asString(input.searchUrl),
@@ -341,6 +345,25 @@ export function createLocalMusicSource(): MusicSourceDescriptor {
   });
 }
 
+/** 把解析出的 LX 音源脚本元数据 → cyrene-aggregate(lx 模式)描述符。
+ * 洛雪自定义源本质是「{apiUrl}{urlPathTemplate}」直链解析后端,搜索复用多平台关键词。 */
+export function createLxSourceDescriptor(parsed: LxSourceParsed): MusicSourceDescriptor {
+  return normalizeMusicSourceDescriptor({
+    name: parsed.name || "洛雪音源",
+    kind: "cyrene-aggregate",
+    cyreneMode: "lx",
+    baseUrl: parsed.apiUrl,
+    playBaseUrl: parsed.apiUrl,
+    urlPathTemplate: parsed.urlPathTemplate,
+    token: parsed.apiKey || undefined,
+    description: [parsed.version && `v${parsed.version}`, parsed.author]
+      .filter(Boolean)
+      .join(" · ") || "洛雪自定义音源",
+    defaultPlatform: "all",
+    platforms: MUSIC_PLATFORMS.map((item) => item.id),
+  });
+}
+
 export async function importMusicSourceFromText(
   rawInput: string
 ): Promise<MusicSourceDescriptor> {
@@ -353,6 +376,11 @@ export async function importMusicSourceFromText(
   if (/^https?:\/\//i.test(input)) {
     if (/\.(js|mjs)(\?|#|$)/i.test(input)) {
       const code = await fetchRemoteText(input);
+      // 先按 LX 音源脚本解析(头部元数据 + apiUrl + 直链模板);抽不到 apiUrl 再当 MusicFree 插件。
+      if (looksLikeLxSource(code)) {
+        const lx = parseLxScript(code);
+        if (lx) return createLxSourceDescriptor(lx);
+      }
       return normalizeMusicSourceDescriptor({
         name: sourceNameFromCode(code),
         kind: "plugin-js",
@@ -375,6 +403,11 @@ export async function importMusicSourceFromText(
     });
   }
 
+  // 粘贴的源码:先试 LX 音源脚本解析,失败再当 MusicFree 插件。
+  if (looksLikeLxSource(input)) {
+    const lx = parseLxScript(input);
+    if (lx) return createLxSourceDescriptor(lx);
+  }
   return normalizeMusicSourceDescriptor({
     name: sourceNameFromCode(input),
     kind: "plugin-js",

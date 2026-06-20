@@ -1537,6 +1537,22 @@ export default function Music() {
     }
   };
 
+  // 导入本地 .js 脚本文件(洛雪音源/插件):读文本后走同一识别管线。
+  const handleImportFile = async (file: File) => {
+    try {
+      const text = await file.text();
+      const source = await importMusicSourceFromText(text);
+      installSource(source);
+      setSourceDialogOpen(false);
+      await appAlert(`已导入：${source.name}`, { title: "音乐源" });
+    } catch (importError) {
+      await appAlert(
+        importError instanceof Error ? importError.message : "脚本解析失败,请确认是有效的洛雪音源或插件脚本",
+        { title: "导入失败", tone: "warning" }
+      );
+    }
+  };
+
   const deleteSource = async (source: MusicSourceDescriptor) => {
     const ok = await appConfirm(`删除音乐源「${source.name}」？`, {
       tone: "danger",
@@ -2463,6 +2479,7 @@ export default function Music() {
           onCyreneMode={setCyreneMode}
           onClose={() => setSourceDialogOpen(false)}
           onImport={() => void handleImport()}
+          onImportFile={(file) => void handleImportFile(file)}
           onAddLx={() => void addLxServer()}
           onAddNeteaseBuiltin={addNeteaseBuiltin}
           onAddNeteaseExternal={() => void addNeteaseExternal()}

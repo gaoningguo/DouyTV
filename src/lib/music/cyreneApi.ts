@@ -224,7 +224,14 @@ export async function resolveCyrene(
   } else if (mode === "lx") {
     const code = LX_SOURCE_CODE[platform];
     if (!code) throw new Error(`LX 不支持平台 ${platform}`);
-    url = `${base}/url/${code}/${encodeURIComponent(song.id)}/${quality}`;
+    // 优先用导入脚本里解析出的 urlPathTemplate（含 {source}/{songId}/{quality} 占位），
+    // 否则回退默认 /url/{source}/{songId}/{quality}（对齐 CyreneMusic buildLxMusicUrl）。
+    const template = source.urlPathTemplate || "/url/{source}/{songId}/{quality}";
+    const path = template
+      .replace("{source}", code)
+      .replace("{songId}", encodeURIComponent(song.id))
+      .replace("{quality}", String(quality));
+    url = `${base}${path.startsWith("/") ? "" : "/"}${path}`;
   } else {
     url = buildOmniUrl(base, platform, song.id, omniQuality(quality));
   }

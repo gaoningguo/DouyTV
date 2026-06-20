@@ -33,6 +33,8 @@ export interface MusicSourceDescriptor {
   cyreneMode?: CyrenePlayMode;
   /** 仅 kind==="cyrene-aggregate" 用：播放解析后端（TuneHub/LX 常与搜索后端不同）。缺省用 baseUrl。 */
   playBaseUrl?: string;
+  /** LX 直链模板（cyreneMode==="lx" 用，含 {source}/{songId}/{quality} 占位）。缺省 /url/{source}/{songId}/{quality}。 */
+  urlPathTemplate?: string;
   defaultPlatform?: MusicPlatform | "all";
   platforms?: MusicPlatform[];
   headers?: Record<string, string>;
