@@ -23,6 +23,7 @@ export * from "./playback";
 export * from "./neteaseApi";
 export * from "./localMusic";
 export * from "./lxSource";
+export * from "./cyreneConfig";
 
 const DEFAULT_LIMIT = 30;
 

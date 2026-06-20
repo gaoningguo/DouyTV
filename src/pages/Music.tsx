@@ -28,14 +28,12 @@ import {
   getNeteasePlaylistSongs,
   getNeteaseRadioPrograms,
   getNeteaseSimiSongs,
-  importMusicSourceFromText,
   isNeteaseAntiBotError,
   parseNeteasePlaylistInput,
   resolveNeteaseArtistId,
   isMusicPreviewError,
   musicSongKey,
   normalizeMusicPlatform,
-  normalizeMusicSourceDescriptor,
   resolveMusicSource,
   resolveMusicSourceWithFallback,
   prefetchMusicSource,
@@ -176,12 +174,6 @@ export default function Music() {
   const [yrcText, setYrcText] = useState("");
   const [romaText, setRomaText] = useState("");
   const [sourceDialogOpen, setSourceDialogOpen] = useState(false);
-  const [importText, setImportText] = useState("");
-  const [lxBaseUrl, setLxBaseUrl] = useState("http://35.208.239.12:9527/");
-  const [lxToken, setLxToken] = useState("");
-  const [neteaseBaseUrl, setNeteaseBaseUrl] = useState("");
-  const [cyreneBaseUrl, setCyreneBaseUrl] = useState("https://music.nekofun.top");
-  const [cyreneMode, setCyreneMode] = useState<"omni" | "tunehub" | "lx">("omni");
   const [mvPlay, setMvPlay] = useState<{ url: string; title: string } | null>(null);
   const [neteaseRecommend, setNeteaseRecommend] = useState<MusicSong[]>([]);
   const [importOpen, setImportOpen] = useState(false);
@@ -1458,101 +1450,6 @@ export default function Music() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [artistParams?.name, artistParams?.id, extrasSource, enabledSources.length]);
 
-  const addLxServer = async () => {
-    if (!lxBaseUrl.trim()) {
-      await appAlert("请输入 LX Music API Server 地址", { tone: "warning" });
-      return;
-    }
-    installSource(
-      normalizeMusicSourceDescriptor({
-        name: "LX Music API Server",
-        kind: "lx-server",
-        baseUrl: lxBaseUrl.trim(),
-        token: lxToken.trim(),
-        defaultPlatform: "all",
-      })
-    );
-    setLxBaseUrl("");
-    setLxToken("");
-    setSourceDialogOpen(false);
-  };
-
-  const addNeteaseBuiltin = () => {
-    installSource(
-      normalizeMusicSourceDescriptor({
-        name: "网易云(内置)",
-        kind: "netease-api",
-        neteaseMode: "builtin",
-        description: "前端直连 music.163.com · 免部署",
-      })
-    );
-    setSourceDialogOpen(false);
-  };
-
-  const addNeteaseExternal = async () => {
-    if (!neteaseBaseUrl.trim()) {
-      await appAlert("请输入 NeteaseCloudMusicApi 服务地址", { tone: "warning" });
-      return;
-    }
-    installSource(
-      normalizeMusicSourceDescriptor({
-        name: "网易云(自部署)",
-        kind: "netease-api",
-        neteaseMode: "external",
-        baseUrl: neteaseBaseUrl.trim(),
-      })
-    );
-    setNeteaseBaseUrl("");
-    setSourceDialogOpen(false);
-  };
-
-  const addCyrene = async () => {
-    if (!cyreneBaseUrl.trim()) {
-      await appAlert("请输入 Cyrene 聚合后端地址", { tone: "warning" });
-      return;
-    }
-    installSource(
-      normalizeMusicSourceDescriptor({
-        name: "Cyrene 聚合源",
-        kind: "cyrene-aggregate",
-        baseUrl: cyreneBaseUrl.trim(),
-        cyreneMode,
-      })
-    );
-    setSourceDialogOpen(false);
-  };
-
-  const handleImport = async () => {
-    try {
-      const source = await importMusicSourceFromText(importText);
-      installSource(source);
-      setImportText("");
-      setSourceDialogOpen(false);
-      await appAlert(`已导入：${source.name}`, { title: "音乐源" });
-    } catch (importError) {
-      await appAlert(
-        importError instanceof Error ? importError.message : "导入失败",
-        { title: "导入失败", tone: "warning" }
-      );
-    }
-  };
-
-  // 导入本地 .js 脚本文件(洛雪音源/插件):读文本后走同一识别管线。
-  const handleImportFile = async (file: File) => {
-    try {
-      const text = await file.text();
-      const source = await importMusicSourceFromText(text);
-      installSource(source);
-      setSourceDialogOpen(false);
-      await appAlert(`已导入：${source.name}`, { title: "音乐源" });
-    } catch (importError) {
-      await appAlert(
-        importError instanceof Error ? importError.message : "脚本解析失败,请确认是有效的洛雪音源或插件脚本",
-        { title: "导入失败", tone: "warning" }
-      );
-    }
-  };
-
   const deleteSource = async (source: MusicSourceDescriptor) => {
     const ok = await appConfirm(`删除音乐源「${source.name}」？`, {
       tone: "danger",
@@ -2465,25 +2362,8 @@ export default function Music() {
       {sourceDialogOpen && (
         <SourceDialog
           sources={sources}
-          importText={importText}
-          lxBaseUrl={lxBaseUrl}
-          lxToken={lxToken}
-          neteaseBaseUrl={neteaseBaseUrl}
-          onImportText={setImportText}
-          onLxBaseUrl={setLxBaseUrl}
-          onLxToken={setLxToken}
-          onNeteaseBaseUrl={setNeteaseBaseUrl}
-          cyreneBaseUrl={cyreneBaseUrl}
-          cyreneMode={cyreneMode}
-          onCyreneBaseUrl={setCyreneBaseUrl}
-          onCyreneMode={setCyreneMode}
           onClose={() => setSourceDialogOpen(false)}
-          onImport={() => void handleImport()}
-          onImportFile={(file) => void handleImportFile(file)}
-          onAddLx={() => void addLxServer()}
-          onAddNeteaseBuiltin={addNeteaseBuiltin}
-          onAddNeteaseExternal={() => void addNeteaseExternal()}
-          onAddCyrene={() => void addCyrene()}
+          onInstall={(source) => installSource(source)}
           onToggle={toggleSource}
           onDelete={(source) => void deleteSource(source)}
           onRename={(source, name) => updateSource(source.id, { name })}
