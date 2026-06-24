@@ -328,6 +328,26 @@ pub struct LocalTrackMeta {
     pub duration: f64,
     pub cover_data_url: Option<String>,
     pub lyric: Option<String>,
+    /// 文件最后修改时间(Unix 毫秒),用于增量扫描比对。
+    pub mtime: i64,
+}
+
+/// 轻量文件条目:只含路径 + mtime,不解析标签(用于增量扫描的 diff 阶段)。
+#[derive(Serialize, Clone)]
+#[serde(rename_all = "camelCase")]
+pub struct LocalFileEntry {
+    pub file_path: String,
+    pub mtime: i64,
+}
+
+/// 读取文件最后修改时间(Unix 毫秒),失败返回 0。
+fn file_mtime_ms(path: &Path) -> i64 {
+    std::fs::metadata(path)
+        .and_then(|m| m.modified())
+        .ok()
+        .and_then(|t| t.duration_since(std::time::UNIX_EPOCH).ok())
+        .map(|d| d.as_millis() as i64)
+        .unwrap_or(0)
 }
 
 fn extract_audio_metadata(path: &Path) -> Option<LocalTrackMeta> {
@@ -372,6 +392,7 @@ fn extract_audio_metadata(path: &Path) -> Option<LocalTrackMeta> {
         duration,
         cover_data_url,
         lyric,
+        mtime: file_mtime_ms(path),
     })
 }
 
@@ -408,6 +429,58 @@ fn scan_music_folder(dir: String, max_depth: Option<u32>) -> Result<Vec<LocalTra
     }
     let mut out = Vec::new();
     visit_audio(&path, &mut out, max_depth.unwrap_or(6), 0).map_err(|e| e.to_string())?;
+    Ok(out)
+}
+
+/// 只遍历目录收集音频文件路径 + mtime(不读标签),用于增量扫描的快速 diff。
+fn visit_audio_files(dir: &Path, out: &mut Vec<LocalFileEntry>, max_depth: u32, depth: u32) -> std::io::Result<()> {
+    if depth > max_depth {
+        return Ok(());
+    }
+    for entry in std::fs::read_dir(dir)? {
+        let Ok(entry) = entry else { continue };
+        let path = entry.path();
+        if path.is_dir() {
+            if let Some(name) = path.file_name().and_then(|s| s.to_str()) {
+                if name.starts_with('.') {
+                    continue;
+                }
+            }
+            let _ = visit_audio_files(&path, out, max_depth, depth + 1);
+        } else if let Some(ext) = path.extension().and_then(|e| e.to_str()) {
+            if AUDIO_EXTENSIONS.contains(&ext.to_lowercase().as_str()) {
+                out.push(LocalFileEntry {
+                    file_path: path.to_string_lossy().to_string(),
+                    mtime: file_mtime_ms(&path),
+                });
+            }
+        }
+    }
+    Ok(())
+}
+
+/// 列出目录下所有音频文件的路径 + mtime(不解析标签,很快)。前端拿来跟缓存 diff。
+#[tauri::command]
+fn list_music_files(dir: String, max_depth: Option<u32>) -> Result<Vec<LocalFileEntry>, String> {
+    let path = PathBuf::from(&dir);
+    if !path.is_dir() {
+        return Err(format!("path is not a directory: {dir}"));
+    }
+    let mut out = Vec::new();
+    visit_audio_files(&path, &mut out, max_depth.unwrap_or(6), 0).map_err(|e| e.to_string())?;
+    Ok(out)
+}
+
+/// 解析指定的若干音频文件(增量扫描:只解析新增/变更的文件)。读不出标签的文件跳过。
+#[tauri::command]
+fn extract_music_metadata(paths: Vec<String>) -> Result<Vec<LocalTrackMeta>, String> {
+    let mut out = Vec::with_capacity(paths.len());
+    for p in &paths {
+        let path = Path::new(p);
+        if let Some(meta) = extract_audio_metadata(path) {
+            out.push(meta);
+        }
+    }
     Ok(out)
 }
 
@@ -2744,6 +2817,26 @@ pub fn run() {
             sql: "ALTER TABLE history ADD COLUMN episodes_watched TEXT NOT NULL DEFAULT '[]';",
             kind: MigrationKind::Up,
         },
+        Migration {
+            version: 3,
+            description: "create local_tracks table for music library cache",
+            sql: "
+                CREATE TABLE IF NOT EXISTS local_tracks (
+                    file_path TEXT PRIMARY KEY,
+                    folder TEXT NOT NULL,
+                    name TEXT NOT NULL,
+                    artists TEXT NOT NULL,
+                    album TEXT NOT NULL,
+                    duration REAL NOT NULL DEFAULT 0,
+                    cover_data_url TEXT,
+                    lyric TEXT,
+                    mtime INTEGER NOT NULL DEFAULT 0,
+                    scanned_at INTEGER NOT NULL
+                );
+                CREATE INDEX IF NOT EXISTS idx_local_tracks_folder ON local_tracks(folder);
+            ",
+            kind: MigrationKind::Up,
+        },
     ];
 
     tauri::Builder::default()
@@ -3053,6 +3146,8 @@ pub fn run() {
             script_http_h2,
             scan_local_videos,
             scan_music_folder,
+            list_music_files,
+            extract_music_metadata,
             read_lrc_file,
             vod_download_media,
             music_download,

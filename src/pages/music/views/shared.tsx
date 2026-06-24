@@ -67,8 +67,8 @@ export function LocalView({
   const [path, setPath] = useState("");
 
   useEffect(() => {
-    hydrate();
-    void rescan();
+    // 先 hydrate(从 SQLite 秒读缓存曲目),完成后再后台增量补扫。
+    void hydrate().then(() => rescan());
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 

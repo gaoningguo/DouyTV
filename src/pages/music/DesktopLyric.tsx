@@ -1,4 +1,4 @@
-import { useEffect, useLayoutEffect, useRef, useState } from "react";
+import { useEffect, useLayoutEffect, useRef, useState, type CSSProperties } from "react";
 import {
   IconClose,
   IconLock,
@@ -37,12 +37,21 @@ interface DesktopLyricPayload {
   playing?: boolean;
 }
 
+interface DesktopLyricStyle {
+  fontSize: number;
+  color: string;
+  strokeColor: string;
+}
+
+const DEFAULT_STYLE: DesktopLyricStyle = { fontSize: 30, color: "#FF6B35", strokeColor: "#0E0F11" };
+
 export function DesktopLyric() {
   const rootRef = useRef<HTMLDivElement>(null);
   const fillRef = useRef<HTMLSpanElement>(null);
   const [line, setLine] = useState<DesktopLyricPayload>({});
   const [hovered, setHovered] = useState(false);
   const [locked, setLocked] = useState(false);
+  const [style, setStyle] = useState<DesktopLyricStyle>(DEFAULT_STYLE);
   const [, setTick] = useState(0);
 
   const anchorRef = useRef<{ time: number; at: number; playing: boolean }>({
@@ -81,6 +90,7 @@ export function DesktopLyric() {
   // 2) 监听主窗口推送 + mount 时请求全量同步。
   useEffect(() => {
     let unlisten: (() => void) | undefined;
+    let unlistenStyle: (() => void) | undefined;
     let disposed = false;
     (async () => {
       try {
@@ -97,6 +107,14 @@ export function DesktopLyric() {
             setLine(p);
           }
         });
+        unlistenStyle = await listen<Partial<DesktopLyricStyle>>("desktop-lyric-style", (event) => {
+          const s = event.payload || {};
+          setStyle((prev) => ({
+            fontSize: typeof s.fontSize === "number" ? s.fontSize : prev.fontSize,
+            color: typeof s.color === "string" ? s.color : prev.color,
+            strokeColor: typeof s.strokeColor === "string" ? s.strokeColor : prev.strokeColor,
+          }));
+        });
         if (!disposed) await emit("desktop-lyric-ready", {});
       } catch {
         // 非 Tauri 环境忽略。
@@ -105,6 +123,7 @@ export function DesktopLyric() {
     return () => {
       disposed = true;
       unlisten?.();
+      unlistenStyle?.();
     };
   }, []);
 
@@ -167,10 +186,17 @@ export function DesktopLyric() {
   const text = line.text || "♪ DouyTV Music ♪";
   const playing = anchorRef.current.playing;
 
+  const rootStyle = {
+    "--dl-font-size": `${style.fontSize}px`,
+    "--dl-color": style.color,
+    "--dl-stroke": style.strokeColor,
+  } as CSSProperties;
+
   return (
     <div
       ref={rootRef}
       className="desktop-lyric-root"
+      style={rootStyle}
       onMouseEnter={() => setHovered(true)}
       onMouseLeave={() => setHovered(false)}
     >

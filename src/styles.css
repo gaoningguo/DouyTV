@@ -2323,22 +2323,22 @@ code {
   pointer-events: none;
   font-family: "Bricolage Grotesque", "PingFang SC", system-ui, sans-serif;
   font-weight: 800;
-  font-size: clamp(24px, 7vh, 48px);
+  font-size: var(--dl-font-size, clamp(24px, 7vh, 48px));
   line-height: 1.2;
   white-space: nowrap;
 }
 .desktop-lyric-base {
   color: rgba(255, 255, 255, 0.34);
-  -webkit-text-stroke: 1px rgba(0, 0, 0, 0.55);
+  -webkit-text-stroke: 1px var(--dl-stroke, rgba(0, 0, 0, 0.55));
   paint-order: stroke fill;
 }
 .desktop-lyric-fill {
   position: absolute;
   inset: 0;
-  color: #ffd9a8;
-  -webkit-text-stroke: 1px rgba(0, 0, 0, 0.55);
+  color: var(--dl-color, #ffd9a8);
+  -webkit-text-stroke: 1px var(--dl-stroke, rgba(0, 0, 0, 0.55));
   paint-order: stroke fill;
-  text-shadow: 0 0 18px rgba(255, 107, 53, 0.7);
+  text-shadow: 0 0 18px var(--dl-glow, rgba(255, 107, 53, 0.7));
   clip-path: inset(0 100% 0 0);
   will-change: clip-path;
 }

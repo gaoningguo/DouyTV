@@ -3,8 +3,14 @@ import { initStreamProxyPort, wrapAudioUrl } from "@/lib/proxy";
 import { searchAggregate, resolveAggregate } from "./aggregate";
 import { searchLxServer, resolveLxServer } from "./lxServer";
 import { searchPlugin, resolvePlugin } from "./pluginAdapter";
-import { searchNeteaseApi, resolveNeteaseApi } from "./neteaseApi";
+import {
+  searchNeteaseApi,
+  resolveNeteaseApi,
+  isExternalNetease,
+  resolveNeteaseUnblockMatch,
+} from "./neteaseApi";
 import { searchCyrene, resolveCyrene } from "./cyreneApi";
+import { unblockMatch, type UnblockSource } from "./unblock";
 import { parseLxScript, looksLikeLxSource, type LxSourceParsed } from "./lxSource";
 import { isMusicPreviewError } from "./playback";
 import type {
@@ -23,7 +29,9 @@ export * from "./discoveryAggregate";
 export * from "./playback";
 export * from "./neteaseApi";
 export * from "./localMusic";
+export * from "./localMusicDb";
 export * from "./lxSource";
+export * from "./lxRuntime";
 export * from "./cyreneConfig";
 
 const DEFAULT_LIMIT = 30;
@@ -66,6 +74,10 @@ export function normalizeMusicSourceDescriptor(
     cyreneMode: kind === "cyrene-aggregate" ? input.cyreneMode ?? "omni" : undefined,
     playBaseUrl: cleanBaseUrl(input.playBaseUrl) || undefined,
     urlPathTemplate: input.urlPathTemplate,
+    lxMode:
+      kind === "cyrene-aggregate" && (input.cyreneMode ?? "omni") === "lx"
+        ? input.lxMode ?? "template"
+        : undefined,
     defaultPlatform:
       input.defaultPlatform ??
       (kind === "lx-server" ? "all" : kind === "netease-api" ? "wy" : undefined),
@@ -148,11 +160,58 @@ export async function searchMusicSources(
   };
 }
 
+/**
+ * 灰曲解灰上下文（由 UI 层从 music store 透传）。规则：
+ *  - 有启用的外部网易云 API 源时，优先用其服务端 /song/url/match；
+ *  - 否则（内置源/无外部源）走移植版 UNM（unblockMatch）。
+ */
+export interface UnblockContext {
+  enabled: boolean;
+  sources: UnblockSource[];
+  /** 所有启用的源（用于挑外部网易 API）。 */
+  allSources: MusicSourceDescriptor[];
+}
+
+interface ResolveOptions {
+  proxy?: boolean;
+  unblock?: UnblockContext;
+}
+
+/** 网易灰曲兜底解灰：返回直链字符串；不可用返回 undefined。 */
+async function resolveNeteaseGray(
+  song: Parameters<typeof resolveLxServer>[1],
+  ctx: UnblockContext
+): Promise<string | undefined> {
+  if (!ctx.enabled) return undefined;
+  const neteaseId = String(song.id);
+  const sources = ctx.sources.map((s) => String(s));
+  // 1) 优先外部网易云 API 的服务端解灰
+  const external = ctx.allSources.find((s) => s.enabled && isExternalNetease(s));
+  if (external) {
+    const url = await resolveNeteaseUnblockMatch(external, neteaseId, sources);
+    if (url) return url;
+  }
+  // 2) 回退移植版 UNM
+  if (ctx.sources.length > 0) {
+    const result = await unblockMatch(
+      {
+        neteaseId,
+        name: song.title,
+        artist: song.artist,
+        durationMs: song.durationSec ? song.durationSec * 1000 : undefined,
+      },
+      ctx.sources
+    );
+    if (result) return result.url;
+  }
+  return undefined;
+}
+
 export async function resolveMusicSource(
   source: MusicSourceDescriptor,
   song: Parameters<typeof resolveLxServer>[1],
   quality: MusicQuality,
-  options: { proxy?: boolean } = {}
+  options: ResolveOptions = {}
 ): Promise<MusicPlayResult> {
   if (source.kind === "local") {
     // 本地文件:directUrl 已是 convertFileSrc 后的 asset URL,直接播放,不走代理。
@@ -161,18 +220,30 @@ export async function resolveMusicSource(
     return { url, directUrl: url, quality, lyric: raw.lyric || "" };
   }
   if (source.kind === "lx-server") await initStreamProxyPort();
-  const result =
-    source.kind === "lx-server"
-      ? await resolveLxServer(source, song, quality, {
-          stableStream: options.proxy !== false,
-        })
-      : source.kind === "plugin-js"
-        ? await resolvePlugin(source, song, quality)
-        : source.kind === "netease-api"
-          ? await resolveNeteaseApi(source, song, quality)
+  let result: MusicPlayResult;
+  if (source.kind === "netease-api") {
+    // 网易源:匿名直链拿不到(灰曲/VIP)时,按规则解灰兜底。
+    try {
+      result = await resolveNeteaseApi(source, song, quality);
+    } catch (error) {
+      const grayUrl = options.unblock
+        ? await resolveNeteaseGray(song, options.unblock)
+        : undefined;
+      if (!grayUrl) throw error;
+      result = { url: grayUrl, directUrl: grayUrl, quality };
+    }
+  } else {
+    result =
+      source.kind === "lx-server"
+        ? await resolveLxServer(source, song, quality, {
+            stableStream: options.proxy !== false,
+          })
+        : source.kind === "plugin-js"
+          ? await resolvePlugin(source, song, quality)
           : source.kind === "cyrene-aggregate"
             ? await resolveCyrene(source, song, quality)
             : await resolveAggregate(source, song, quality);
+  }
   if (options.proxy === false) return result;
   await initStreamProxyPort();
   // 已经是本地稳定流代理 URL（http://127.0.0.1:port/…）的就不再二次包装；
@@ -196,7 +267,7 @@ export async function resolveMusicSourceWithFallback(
   source: MusicSourceDescriptor,
   song: Parameters<typeof resolveLxServer>[1],
   quality: MusicQuality,
-  options: { proxy?: boolean } = {}
+  options: ResolveOptions = {}
 ): Promise<MusicPlayResult> {
   const start = QUALITY_FALLBACK.indexOf(quality);
   const chain = start >= 0 ? QUALITY_FALLBACK.slice(start) : [quality];
@@ -230,7 +301,7 @@ export async function prefetchMusicSource(
   source: MusicSourceDescriptor,
   song: Parameters<typeof resolveLxServer>[1] & { id: string },
   quality: MusicQuality,
-  options: { proxy?: boolean } = {}
+  options: ResolveOptions = {}
 ): Promise<void> {
   const key = prefetchKey(source.id, song.id, quality);
   const hit = prefetchCache.get(key);
@@ -294,6 +365,7 @@ function descriptorFromObject(input: Record<string, unknown>): MusicSourceDescri
     cyreneMode: asString(input.cyreneMode) as MusicSourceDescriptor["cyreneMode"],
     playBaseUrl: asString(input.playBaseUrl),
     urlPathTemplate: asString(input.urlPathTemplate),
+    lxMode: asString(input.lxMode) as MusicSourceDescriptor["lxMode"],
     defaultPlatform: asString(input.defaultPlatform) as MusicSourceDescriptor["defaultPlatform"],
     headers: asRecord(input.headers) as Record<string, string> | undefined,
     searchUrl: asString(input.searchUrl),
@@ -348,17 +420,20 @@ export function createLocalMusicSource(): MusicSourceDescriptor {
 }
 
 /** 把解析出的 LX 音源脚本元数据 → cyrene-aggregate(lx 模式)描述符。
- * 洛雪自定义源本质是「{apiUrl}{urlPathTemplate}」直链解析后端,搜索复用多平台关键词。 */
+ * template 模式走「{apiUrl}{urlPathTemplate}」直链;runtime 模式留源码执行算签名取链。 */
 export function createLxSourceDescriptor(parsed: LxSourceParsed): MusicSourceDescriptor {
+  const runtime = parsed.mode === "runtime";
   return normalizeMusicSourceDescriptor({
     name: parsed.name || "洛雪音源",
     kind: "cyrene-aggregate",
     cyreneMode: "lx",
-    baseUrl: parsed.apiUrl,
-    playBaseUrl: parsed.apiUrl,
+    lxMode: parsed.mode,
+    baseUrl: parsed.apiUrl || undefined,
+    playBaseUrl: parsed.apiUrl || undefined,
     urlPathTemplate: parsed.urlPathTemplate,
+    code: runtime ? parsed.code : undefined,
     token: parsed.apiKey || undefined,
-    description: [parsed.version && `v${parsed.version}`, parsed.author]
+    description: [parsed.version && `v${parsed.version}`, parsed.author, runtime && "执行模式"]
       .filter(Boolean)
       .join(" · ") || "洛雪自定义音源",
     defaultPlatform: "all",

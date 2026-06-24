@@ -12,6 +12,11 @@ import {
   type MusicQuality,
   type MusicSourceDescriptor,
 } from "@/lib/music";
+import {
+  UNBLOCK_SOURCES,
+  UNBLOCK_SOURCE_LABELS,
+  type UnblockSource,
+} from "@/lib/music/unblock";
 import { useMusicStore } from "@/stores/music";
 import { SettingsSubPageLayout } from "./Layout";
 
@@ -32,6 +37,8 @@ export default function SettingsMusicSourcesHub() {
   const quality = useMusicStore((s) => s.quality);
   const proxyEnabled = useMusicStore((s) => s.proxyEnabled);
   const showSpectrum = useMusicStore((s) => s.showSpectrum);
+  const unblockEnabled = useMusicStore((s) => s.unblockEnabled);
+  const unblockSources = useMusicStore((s) => s.unblockSources);
   const favorites = useMusicStore((s) => s.favorites);
   const history = useMusicStore((s) => s.history);
   const playlists = useMusicStore((s) => s.playlists);
@@ -39,6 +46,8 @@ export default function SettingsMusicSourcesHub() {
   const setQuality = useMusicStore((s) => s.setQuality);
   const setProxyEnabled = useMusicStore((s) => s.setProxyEnabled);
   const setShowSpectrum = useMusicStore((s) => s.setShowSpectrum);
+  const setUnblockEnabled = useMusicStore((s) => s.setUnblockEnabled);
+  const setUnblockSources = useMusicStore((s) => s.setUnblockSources);
   const installSource = useMusicStore((s) => s.installSource);
   const toggleSource = useMusicStore((s) => s.toggleSource);
   const updateSource = useMusicStore((s) => s.updateSource);
@@ -100,9 +109,13 @@ export default function SettingsMusicSourcesHub() {
           quality={quality}
           proxyEnabled={proxyEnabled}
           showSpectrum={showSpectrum}
+          unblockEnabled={unblockEnabled}
+          unblockSources={unblockSources}
           onQuality={setQuality}
           onProxy={setProxyEnabled}
           onSpectrum={setShowSpectrum}
+          onUnblockEnabled={setUnblockEnabled}
+          onUnblockSources={setUnblockSources}
         />
       )}
       {tab === "library" && (
@@ -274,17 +287,32 @@ function PlayerTab({
   quality,
   proxyEnabled,
   showSpectrum,
+  unblockEnabled,
+  unblockSources,
   onQuality,
   onProxy,
   onSpectrum,
+  onUnblockEnabled,
+  onUnblockSources,
 }: {
   quality: MusicQuality;
   proxyEnabled: boolean;
   showSpectrum: boolean;
+  unblockEnabled: boolean;
+  unblockSources: UnblockSource[];
   onQuality: (quality: MusicQuality) => void;
   onProxy: (enabled: boolean) => void;
   onSpectrum: (enabled: boolean) => void;
+  onUnblockEnabled: (enabled: boolean) => void;
+  onUnblockSources: (sources: UnblockSource[]) => void;
 }) {
+  const toggleUnblockSource = (src: UnblockSource) => {
+    onUnblockSources(
+      unblockSources.includes(src)
+        ? unblockSources.filter((s) => s !== src)
+        : [...unblockSources, src]
+    );
+  };
   return (
     <div className="space-y-4">
       <section className="rounded-lg p-3" style={{ background: "var(--ink-2)", border: "1px solid var(--cream-line)" }}>
@@ -324,6 +352,44 @@ function PlayerTab({
         checked={showSpectrum}
         onChange={onSpectrum}
       />
+
+      <SettingSwitch
+        title="灰曲解灰"
+        desc="网易云版权/VIP 灰曲无法播放时，自动从其它平台匹配同名歌曲补链。已启用外部网易云 API 时优先用其服务端解灰，否则用内置移植源。"
+        checked={unblockEnabled}
+        onChange={onUnblockEnabled}
+      />
+      {unblockEnabled && (
+        <section
+          className="rounded-lg p-3"
+          style={{ background: "var(--ink-2)", border: "1px solid var(--cream-line)" }}
+        >
+          <h2 className="font-display text-sm font-bold mb-1">解灰音源</h2>
+          <p className="text-xs text-cream-faint mb-2">
+            勾选用于补链的平台，按勾选顺序优先匹配。
+          </p>
+          <div className="grid grid-cols-3 gap-2">
+            {UNBLOCK_SOURCES.map((src) => {
+              const active = unblockSources.includes(src);
+              return (
+                <button
+                  key={src}
+                  type="button"
+                  onClick={() => toggleUnblockSource(src)}
+                  className="rounded-lg py-2 text-xs font-display font-semibold tap"
+                  style={{
+                    background: active ? "var(--ember-soft)" : "var(--ink-3)",
+                    border: `1px solid ${active ? "var(--ember)" : "var(--cream-line)"}`,
+                    color: active ? "var(--ember)" : "var(--cream-dim)",
+                  }}
+                >
+                  {UNBLOCK_SOURCE_LABELS[src]}
+                </button>
+              );
+            })}
+          </div>
+        </section>
+      )}
     </div>
   );
 }

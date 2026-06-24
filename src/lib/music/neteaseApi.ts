@@ -175,7 +175,7 @@ function normalizeLyricPayload(payload: unknown): MusicLyricResult {
   };
 }
 
-async function fetchNeteaseLyric(
+export async function fetchNeteaseLyric(
   source: MusicSourceDescriptor,
   id: string
 ): Promise<MusicLyricResult> {
@@ -188,6 +188,77 @@ async function fetchNeteaseLyric(
     return normalizeLyricPayload(await getJson(url, headersFor(source)));
   } catch {
     return { lyric: "" };
+  }
+}
+
+/** 归一化歌名/歌手用于跨源匹配（去括号注释/空白/大小写）。 */
+function normalizeMatchText(value?: string): string {
+  return (value || "")
+    .toLowerCase()
+    .replace(/[（(\[【].*?[）)\]】]/g, "")
+    .replace(/[^\p{L}\p{N}]+/gu, "")
+    .trim();
+}
+
+/**
+ * 跨源歌词兜底：用网易源搜「歌名 歌手」，匹配到同名同歌手的网易歌后取其歌词。
+ * 给非网易源（LX/聚合）返回空歌词或纯 LRC 的歌补逐字 + 翻译。匹配不到返回空。
+ */
+export async function fetchNeteaseLyricByMatch(
+  source: MusicSourceDescriptor,
+  title: string,
+  artist?: string
+): Promise<MusicLyricResult> {
+  const wantTitle = normalizeMatchText(title);
+  if (!wantTitle) return { lyric: "" };
+  const wantArtist = normalizeMatchText(artist);
+  try {
+    const keyword = artist ? `${title} ${artist}` : title;
+    const result = await searchNeteaseApi(source, keyword, 1, 10);
+    const match =
+      result.list.find((item) => {
+        const t = normalizeMatchText(item.title);
+        const a = normalizeMatchText(item.artist);
+        return t === wantTitle && (!wantArtist || a.includes(wantArtist) || wantArtist.includes(a));
+      }) || result.list.find((item) => normalizeMatchText(item.title) === wantTitle);
+    if (!match) return { lyric: "" };
+    return await fetchNeteaseLyric(source, match.id);
+  } catch {
+    return { lyric: "" };
+  }
+}
+
+/** 该网易源是否为「外部自部署实例」（具备 /song/url/match 解灰接口）。 */
+export function isExternalNetease(source: MusicSourceDescriptor): boolean {
+  return source.kind === "netease-api" && isExternal(source);
+}
+
+/**
+ * 调外部 NeteaseCloudMusicApi(enhanced) 的服务端解灰接口 /song/url/match。
+ * 返回直链字符串；不可用返回 undefined。sources 为逗号分隔的 UNM 音源代号。
+ */
+export async function resolveNeteaseUnblockMatch(
+  source: MusicSourceDescriptor,
+  neteaseId: string,
+  sources?: string[]
+): Promise<string | undefined> {
+  if (!isExternalNetease(source) || !neteaseId) return undefined;
+  const base = cleanBaseUrl(source.baseUrl);
+  if (!base) return undefined;
+  const sourceParam = sources && sources.length > 0 ? `&source=${sources.join(",")}` : "";
+  try {
+    const payload = await getJson(
+      `${base}/song/url/match?id=${encodeURIComponent(neteaseId)}${sourceParam}`,
+      headersFor(source)
+    );
+    const record = asRecord(payload);
+    if (asNumber(record?.code) !== 200) return undefined;
+    // data 可能是 url 字符串，或 {url} 对象。
+    const data = record?.data;
+    const url = typeof data === "string" ? data : asString(asRecord(data)?.url);
+    return url || asString(record?.proxyUrl) || undefined;
+  } catch {
+    return undefined;
   }
 }
 

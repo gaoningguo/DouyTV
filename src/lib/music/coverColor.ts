@@ -1,8 +1,10 @@
 /**
  * 封面取色：从图片缩采样提取一个适合做主题强调色的主色。
  *
- * 策略：把封面画到一个小 canvas（缩到 ~24px）逐像素统计，过滤过暗/过亮/低饱和，
- * 量化分桶取出现最多的桶，再做一次亮度/饱和度归一，得到鲜明但不刺眼的强调色。
+ * 策略：把封面画到一个小 canvas（缩到 ~32px）逐像素统计，过滤过暗/过亮/低饱和，
+ * 按细色相桶（15°）累计「population × 饱和度」权重，取分最高的桶并融合左右相邻桶
+ * （降低繁杂封面上小撮高饱和噪点带偏的概率，思路借鉴 Material Score 但不引依赖），
+ * 再做一次亮度/饱和度归一，得到鲜明但不刺眼的强调色。
  *
  * 注意：跨域封面必须先走代理（wrapImage 已代理到 127.0.0.1），且 img.crossOrigin
  * 设 "anonymous"，否则 canvas 会被污染、getImageData 抛 SecurityError。
@@ -57,8 +59,10 @@ function hslToRgb(h: number, s: number, l: number): [number, number, number] {
   ];
 }
 
+const HUE_BUCKETS = 24; // 每 15° 一桶，比 30° 更细，减少撞色
+
 function extractFromImage(img: HTMLImageElement): CoverColor | null {
-  const size = 24;
+  const size = 32;
   const canvas = document.createElement("canvas");
   canvas.width = size;
   canvas.height = size;
@@ -73,8 +77,11 @@ function extractFromImage(img: HTMLImageElement): CoverColor | null {
     return null;
   }
 
-  // 按色相分桶（每 30 度一桶），累计加权（饱和度 * 适中亮度权重）。
-  const buckets = new Map<number, { count: number; r: number; g: number; b: number }>();
+  // 按色相分桶（每 15 度一桶）。每桶分别累计：
+  //  - pop：像素计数（衡量该色覆盖面积，抗高饱和小噪点）
+  //  - weight/r/g/b：饱和度×适中亮度的加权和与加权颜色
+  type Bucket = { pop: number; weight: number; r: number; g: number; b: number };
+  const buckets = new Map<number, Bucket>();
   for (let i = 0; i < data.length; i += 4) {
     const r = data[i];
     const g = data[i + 1];
@@ -84,25 +91,47 @@ function extractFromImage(img: HTMLImageElement): CoverColor | null {
     const [h, s, l] = rgbToHsl(r, g, b);
     if (l < 0.12 || l > 0.92) continue; // 过暗/过亮跳过
     if (s < 0.18) continue; // 太灰跳过
-    const key = Math.round(h / 30);
+    const key = Math.round(h / (360 / HUE_BUCKETS)) % HUE_BUCKETS;
     const weight = s * (1 - Math.abs(l - 0.5));
-    const bucket = buckets.get(key) ?? { count: 0, r: 0, g: 0, b: 0 };
-    bucket.count += weight;
+    const bucket = buckets.get(key) ?? { pop: 0, weight: 0, r: 0, g: 0, b: 0 };
+    bucket.pop += 1;
+    bucket.weight += weight;
     bucket.r += r * weight;
     bucket.g += g * weight;
     bucket.b += b * weight;
     buckets.set(key, bucket);
   }
 
-  let best: { count: number; r: number; g: number; b: number } | null = null;
-  for (const bucket of buckets.values()) {
-    if (!best || bucket.count > best.count) best = bucket;
-  }
-  if (!best || best.count === 0) return null;
+  if (buckets.size === 0) return null;
 
-  const r = best.r / best.count;
-  const g = best.g / best.count;
-  const b = best.b / best.count;
+  // 融合相邻桶（左右各 1 桶，环形）后再打分，避免主色被切在两桶边界上而落选。
+  // 分数 = 融合 population × 融合饱和权重（借鉴 Material Score：兼顾面积与鲜艳度）。
+  let bestKey = -1;
+  let bestScore = -1;
+  for (const key of buckets.keys()) {
+    let pop = 0;
+    let weight = 0;
+    for (let d = -1; d <= 1; d += 1) {
+      const adj = buckets.get((key + d + HUE_BUCKETS) % HUE_BUCKETS);
+      if (adj) {
+        pop += adj.pop;
+        weight += adj.weight;
+      }
+    }
+    const score = pop * weight;
+    if (score > bestScore) {
+      bestScore = score;
+      bestKey = key;
+    }
+  }
+  if (bestKey < 0) return null;
+
+  // 用中心桶的加权颜色作为代表色（相邻桶仅用于打分，不混入颜色，避免被邻桶拉灰）。
+  const best = buckets.get(bestKey)!;
+  if (best.weight === 0) return null;
+  const r = best.r / best.weight;
+  const g = best.g / best.weight;
+  const b = best.b / best.weight;
   let [h, s, l] = rgbToHsl(r, g, b);
   // 归一到鲜明但不刺眼：饱和度抬到 0.55~0.85，亮度收到 0.5~0.62。
   s = Math.min(0.85, Math.max(0.55, s));

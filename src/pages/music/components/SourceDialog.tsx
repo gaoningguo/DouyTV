@@ -175,7 +175,11 @@ export function SourceDialog({
       setPending(descriptor);
       setPreview({
         name: parsed.name,
-        detail: [parsed.version && `v${parsed.version}`, parsed.author, parsed.apiUrl]
+        detail: [
+          parsed.version && `v${parsed.version}`,
+          parsed.author,
+          parsed.mode === "runtime" ? "执行模式(脚本算签名取链)" : parsed.apiUrl,
+        ]
           .filter(Boolean)
           .join(" · "),
       });
@@ -224,7 +228,7 @@ export function SourceDialog({
         // .js 洛雪音源脚本
         const parsed = parseLxScript(await file.text());
         if (!parsed) {
-          setError("脚本解析失败,请确认是有效的洛雪音源脚本(需含 apiUrl)");
+          setError("脚本解析失败,请确认是有效的洛雪音源脚本");
           return;
         }
         setAddType("lx");
@@ -232,7 +236,11 @@ export function SourceDialog({
         setPending(descriptor);
         setPreview({
           name: parsed.name,
-          detail: [parsed.version && `v${parsed.version}`, parsed.author, parsed.apiUrl]
+          detail: [
+            parsed.version && `v${parsed.version}`,
+            parsed.author,
+            parsed.mode === "runtime" ? "执行模式(脚本算签名取链)" : parsed.apiUrl,
+          ]
             .filter(Boolean)
             .join(" · "),
         });

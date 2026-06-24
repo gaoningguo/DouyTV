@@ -1,10 +1,11 @@
 /**
- * LX 音源(洛雪自定义源)脚本解析器 —— 照搬 CyreneMusic lxMusicSourceService 的做法:
- * **不执行**脚本(洛雪脚本跑在 globalThis.lx 沙箱里,直接 new Function 跑会失败),
- * 而是解析头部 JSDoc 元数据 + 正则抽 apiUrl / urlPathTemplate,把它当「模板化 HTTP 源」用。
- * 播放时按 {apiUrl}{urlPathTemplate}(含 {source}/{songId}/{quality} 占位)直链解析。
+ * LX 音源(洛雪自定义源)脚本解析器。两种处理路径:
+ *  - template 模式:抽到静态 apiUrl + urlPathTemplate → 当「模板化 HTTP 直链源」用(轻量、安全)。
+ *  - runtime 模式:抽不到 apiUrl 但脚本注册了 lx.on('request') → 标记需运行时执行
+ *    (见 lxRuntime.ts,真跑脚本算签名取链),把完整源码留在 code 字段。
  */
 import { scriptFetch } from "@/source-script/fetch";
+import { canRunLxScript } from "./lxRuntime";
 
 export interface LxSourceParsed {
   name: string;
@@ -15,6 +16,10 @@ export interface LxSourceParsed {
   apiUrl: string;
   apiKey: string;
   urlPathTemplate: string;
+  /** template=静态直链模板;runtime=需执行脚本。 */
+  mode: "template" | "runtime";
+  /** runtime 模式下保留完整脚本源码,供 lxRuntime 执行。 */
+  code?: string;
 }
 
 const DEFAULT_URL_TEMPLATE = "/url/{source}/{songId}/{quality}";
@@ -138,9 +143,35 @@ export function parseLxScript(scriptContent: string): LxSourceParsed | null {
         /\/url\/\{?[a-zA-Z]+\}?\/\{?[a-zA-Z]+\}?\/\{?[a-zA-Z]+\}?/,
       ]) || DEFAULT_URL_TEMPLATE;
 
-    // 没有可用 apiUrl 的脚本无法当模板化 HTTP 源用(可能是纯沙箱脚本)。
-    if (!apiUrl) return null;
-    return { name, version, author, description, homepage, apiUrl, apiKey, urlPathTemplate };
+    // 没有静态 apiUrl 的脚本:若注册了 lx.on('request') 则当 runtime 模式(执行脚本取链)。
+    if (!apiUrl) {
+      if (canRunLxScript(scriptContent)) {
+        return {
+          name,
+          version,
+          author,
+          description,
+          homepage,
+          apiUrl: "",
+          apiKey,
+          urlPathTemplate,
+          mode: "runtime",
+          code: scriptContent,
+        };
+      }
+      return null;
+    }
+    return {
+      name,
+      version,
+      author,
+      description,
+      homepage,
+      apiUrl,
+      apiKey,
+      urlPathTemplate,
+      mode: "template",
+    };
   } catch {
     return null;
   }

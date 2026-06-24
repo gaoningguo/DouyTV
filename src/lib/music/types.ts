@@ -35,6 +35,8 @@ export interface MusicSourceDescriptor {
   playBaseUrl?: string;
   /** LX 直链模板（cyreneMode==="lx" 用，含 {source}/{songId}/{quality} 占位）。缺省 /url/{source}/{songId}/{quality}。 */
   urlPathTemplate?: string;
+  /** LX 源解析模式：template=静态直链模板（默认）；runtime=执行脚本算签名取链（cyreneMode==="lx" 用）。 */
+  lxMode?: "template" | "runtime";
   defaultPlatform?: MusicPlatform | "all";
   platforms?: MusicPlatform[];
   headers?: Record<string, string>;

@@ -10,9 +10,34 @@ import {
   type MusicSong,
   type MusicSourceDescriptor,
 } from "@/lib/music";
+import { UNBLOCK_SOURCES, type UnblockSource } from "@/lib/music/unblock";
 
 export interface MusicUserPlaylistSong extends MusicSong {
   addedAt: number;
+}
+
+/** 桌面歌词外观（对齐 CyreneMusic：字号 / 主色 / 描边色）。 */
+export interface DesktopLyricStyle {
+  fontSize: number;
+  color: string;
+  strokeColor: string;
+}
+
+export const DEFAULT_DESKTOP_LYRIC_STYLE: DesktopLyricStyle = {
+  fontSize: 30,
+  color: "#FF6B35",
+  strokeColor: "#0E0F11",
+};
+
+function normalizeDesktopLyricStyle(input?: Partial<DesktopLyricStyle>): DesktopLyricStyle {
+  if (!input || typeof input !== "object") return { ...DEFAULT_DESKTOP_LYRIC_STYLE };
+  const size = typeof input.fontSize === "number" ? input.fontSize : DEFAULT_DESKTOP_LYRIC_STYLE.fontSize;
+  return {
+    fontSize: Math.min(80, Math.max(18, size)),
+    color: typeof input.color === "string" ? input.color : DEFAULT_DESKTOP_LYRIC_STYLE.color,
+    strokeColor:
+      typeof input.strokeColor === "string" ? input.strokeColor : DEFAULT_DESKTOP_LYRIC_STYLE.strokeColor,
+  };
 }
 
 export interface MusicUserPlaylist {
@@ -36,13 +61,16 @@ interface PersistedMusicState {
   eqEnabled?: boolean;
   eqPreset?: string;
   eqGains?: number[];
+  replayGainEnabled?: boolean;
   lyricShowTrans?: boolean;
   lyricShowRoma?: boolean;
   lyricFontScale?: number;
   lyricOffsets?: Record<string, number>;
+  desktopLyricStyle?: DesktopLyricStyle;
   sleepTimerEndAt?: number | null;
   sleepAfterCurrent?: boolean;
   playbackRate?: number;
+  crossfadeSec?: number;
   queue?: MusicSong[];
   currentSong?: MusicSong | null;
   favorites?: MusicSong[];
@@ -50,6 +78,10 @@ interface PersistedMusicState {
   playlists?: MusicUserPlaylist[];
   /** 是否已注入过内置网易源（只注一次，尊重用户删除）。 */
   neteaseBuiltinSeeded?: boolean;
+  /** 灰曲解灰总开关。 */
+  unblockEnabled?: boolean;
+  /** 启用的解灰音源（移植自 UNM 的可前端化 provider）。 */
+  unblockSources?: string[];
 }
 
 interface MusicStore {
@@ -60,17 +92,22 @@ interface MusicStore {
   playMode: MusicPlayMode;
   volume: number;
   proxyEnabled: boolean;
+  unblockEnabled: boolean;
+  unblockSources: UnblockSource[];
   showSpectrum: boolean;
   eqEnabled: boolean;
   eqPreset: string;
   eqGains: number[];
+  replayGainEnabled: boolean;
   lyricShowTrans: boolean;
   lyricShowRoma: boolean;
   lyricFontScale: number;
   lyricOffsets: Record<string, number>;
+  desktopLyricStyle: DesktopLyricStyle;
   sleepTimerEndAt: number | null;
   sleepAfterCurrent: boolean;
   playbackRate: number;
+  crossfadeSec: number;
   queue: MusicSong[];
   currentSong: MusicSong | null;
   favorites: MusicSong[];
@@ -88,16 +125,21 @@ interface MusicStore {
   setVolume: (volume: number) => void;
   setProxyEnabled: (enabled: boolean) => void;
   setShowSpectrum: (enabled: boolean) => void;
+  setUnblockEnabled: (enabled: boolean) => void;
+  setUnblockSources: (sources: UnblockSource[]) => void;
   setEqEnabled: (enabled: boolean) => void;
   setEqPreset: (preset: string, gains: number[]) => void;
   setEqGain: (index: number, gain: number) => void;
+  setReplayGainEnabled: (enabled: boolean) => void;
   setLyricShowTrans: (show: boolean) => void;
   setLyricShowRoma: (show: boolean) => void;
   setLyricFontScale: (scale: number) => void;
   setLyricOffset: (songKey: string, offset: number) => void;
+  setDesktopLyricStyle: (patch: Partial<DesktopLyricStyle>) => void;
   setSleepTimerEndAt: (endAt: number | null) => void;
   setSleepAfterCurrent: (enabled: boolean) => void;
   setPlaybackRate: (rate: number) => void;
+  setCrossfadeSec: (sec: number) => void;
   setQueue: (songs: MusicSong[], current?: MusicSong) => void;
   appendToQueue: (song: MusicSong) => void;
   removeFromQueue: (songKey: string) => void;
@@ -136,6 +178,14 @@ function normalizeEqGains(input?: number[]): number[] {
   return base;
 }
 
+function normalizeUnblockSources(input?: string[]): UnblockSource[] {
+  if (!Array.isArray(input)) return [...UNBLOCK_SOURCES];
+  const valid = input.filter((s): s is UnblockSource =>
+    (UNBLOCK_SOURCES as string[]).includes(s)
+  );
+  return valid.length > 0 ? valid : [...UNBLOCK_SOURCES];
+}
+
 function loadState(): PersistedMusicState {
   try {
     const raw = localStorage.getItem(STORAGE_KEY);
@@ -159,19 +209,24 @@ function persist(state: MusicStore) {
     eqEnabled: state.eqEnabled,
     eqPreset: state.eqPreset,
     eqGains: state.eqGains,
+    replayGainEnabled: state.replayGainEnabled,
     lyricShowTrans: state.lyricShowTrans,
     lyricShowRoma: state.lyricShowRoma,
     lyricFontScale: state.lyricFontScale,
     lyricOffsets: state.lyricOffsets,
+    desktopLyricStyle: state.desktopLyricStyle,
     sleepTimerEndAt: state.sleepTimerEndAt,
     sleepAfterCurrent: state.sleepAfterCurrent,
     playbackRate: state.playbackRate,
+    crossfadeSec: state.crossfadeSec,
     queue: state.queue,
     currentSong: state.currentSong,
     favorites: state.favorites,
     history: state.history,
     playlists: state.playlists,
     neteaseBuiltinSeeded: state.neteaseBuiltinSeeded,
+    unblockEnabled: state.unblockEnabled,
+    unblockSources: state.unblockSources,
   };
   try {
     localStorage.setItem(STORAGE_KEY, JSON.stringify(payload));
@@ -242,19 +297,24 @@ export const useMusicStore = create<MusicStore>((set, get) => ({
   eqEnabled: false,
   eqPreset: "flat",
   eqGains: normalizeEqGains(),
+  replayGainEnabled: false,
   lyricShowTrans: true,
   lyricShowRoma: true,
   lyricFontScale: 1,
   lyricOffsets: {},
+  desktopLyricStyle: { ...DEFAULT_DESKTOP_LYRIC_STYLE },
   sleepTimerEndAt: null,
   sleepAfterCurrent: false,
   playbackRate: 1,
+  crossfadeSec: 0,
   queue: [],
   currentSong: null,
   favorites: [],
   history: [],
   playlists: [],
   neteaseBuiltinSeeded: false,
+  unblockEnabled: true,
+  unblockSources: [...UNBLOCK_SOURCES],
   hydrate: () => {
     if (get().hydrated) return;
     const stored = loadState();
@@ -284,6 +344,7 @@ export const useMusicStore = create<MusicStore>((set, get) => ({
       eqEnabled: stored.eqEnabled ?? false,
       eqPreset: stored.eqPreset ?? "flat",
       eqGains: normalizeEqGains(stored.eqGains),
+      replayGainEnabled: stored.replayGainEnabled ?? false,
       lyricShowTrans: stored.lyricShowTrans ?? true,
       lyricShowRoma: stored.lyricShowRoma ?? true,
       lyricFontScale:
@@ -294,6 +355,7 @@ export const useMusicStore = create<MusicStore>((set, get) => ({
         stored.lyricOffsets && typeof stored.lyricOffsets === "object"
           ? stored.lyricOffsets
           : {},
+      desktopLyricStyle: normalizeDesktopLyricStyle(stored.desktopLyricStyle),
       sleepTimerEndAt:
         typeof stored.sleepTimerEndAt === "number" && stored.sleepTimerEndAt > Date.now()
           ? stored.sleepTimerEndAt
@@ -303,11 +365,17 @@ export const useMusicStore = create<MusicStore>((set, get) => ({
         typeof stored.playbackRate === "number"
           ? Math.min(3, Math.max(0.5, stored.playbackRate))
           : 1,
+      crossfadeSec:
+        typeof stored.crossfadeSec === "number"
+          ? Math.min(12, Math.max(0, stored.crossfadeSec))
+          : 0,
       queue: dedupeSongs(stored.queue ?? []).slice(0, QUEUE_LIMIT),
       currentSong: stored.currentSong ?? null,
       favorites: dedupeSongs(stored.favorites ?? []),
       history: (stored.history ?? []).slice(0, HISTORY_LIMIT),
       playlists: (stored.playlists ?? []).map(normalizePlaylist),
+      unblockEnabled: stored.unblockEnabled ?? true,
+      unblockSources: normalizeUnblockSources(stored.unblockSources),
       neteaseBuiltinSeeded: true,
       hydrated: true,
     });
@@ -370,6 +438,14 @@ export const useMusicStore = create<MusicStore>((set, get) => ({
     set({ showSpectrum });
     persist(get());
   },
+  setUnblockEnabled: (unblockEnabled) => {
+    set({ unblockEnabled });
+    persist(get());
+  },
+  setUnblockSources: (sources) => {
+    set({ unblockSources: normalizeUnblockSources(sources) });
+    persist(get());
+  },
   setEqEnabled: (eqEnabled) => {
     set({ eqEnabled });
     persist(get());
@@ -387,6 +463,10 @@ export const useMusicStore = create<MusicStore>((set, get) => ({
       persist(get());
     }
   },
+  setReplayGainEnabled: (replayGainEnabled) => {
+    set({ replayGainEnabled });
+    persist(get());
+  },
   setSleepTimerEndAt: (sleepTimerEndAt) => {
     set({ sleepTimerEndAt });
     persist(get());
@@ -398,6 +478,10 @@ export const useMusicStore = create<MusicStore>((set, get) => ({
   },
   setPlaybackRate: (rate) => {
     set({ playbackRate: Math.min(3, Math.max(0.5, rate)) });
+    persist(get());
+  },
+  setCrossfadeSec: (sec) => {
+    set({ crossfadeSec: Math.min(12, Math.max(0, Math.round(sec))) });
     persist(get());
   },
   setLyricShowTrans: (lyricShowTrans) => {
@@ -418,6 +502,10 @@ export const useMusicStore = create<MusicStore>((set, get) => ({
     if (Math.abs(clamped) < 0.05) delete next[songKey];
     else next[songKey] = Math.round(clamped * 10) / 10;
     set({ lyricOffsets: next });
+    persist(get());
+  },
+  setDesktopLyricStyle: (patch) => {
+    set({ desktopLyricStyle: normalizeDesktopLyricStyle({ ...get().desktopLyricStyle, ...patch }) });
     persist(get());
   },
   setQueue: (songs, current) => {

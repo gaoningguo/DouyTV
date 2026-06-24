@@ -62,3 +62,20 @@ export function pushDesktopLyricTime(time: number, playing: boolean): void {
     payload: { time, playing } satisfies DesktopLyricPush,
   });
 }
+
+export interface DesktopLyricStylePayload {
+  fontSize: number;
+  color: string;
+  strokeColor: string;
+}
+
+/** 推送桌面歌词外观（字号/主色/描边色）。通过独立 event 发，DesktopLyric 监听后应用。 */
+export async function pushDesktopLyricStyle(style: DesktopLyricStylePayload): Promise<void> {
+  if (!isTauri) return;
+  try {
+    const { emit } = await import("@tauri-apps/api/event");
+    await emit("desktop-lyric-style", style);
+  } catch (error) {
+    console.warn("[desktopLyric] push style failed", error);
+  }
+}

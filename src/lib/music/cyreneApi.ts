@@ -1,13 +1,15 @@
 /**
  * CyreneMusic 聚合音源适配器（nekofun 风格后端）。
- *  - 搜索/元数据：多平台 REST（/search、/qq/search、/kuwo/search、/kugou/search），各平台响应形态不同。
+ *  - 搜索/元数据：OmniParse 多平台 REST（/search、/qq/search、/kugou/search）。
+ *    ⚠️ OmniParse 源码只暴露 netease/qq/kugou，无 /kuwo/*，故不含酷我。
  *  - 播放解析：三种模式（对应 CyreneMusic audioSourceService 的 AudioSourceType）：
  *      omni    —— {playBase}/song?id=&quality=…（OmniParse，默认）
- *      tunehub —— {playBase}/api/?type=url&source=&id=&br=
+ *      tunehub —— TuneHub V3：POST {playBase}/v1/parse + X-API-Key（按文档实测）
  *      lx      —— {playBase}/url/{source}/{id}/{quality}
  * 已验证：nekofun 公共实例搜索可用；播放链在公共实例 404（公共聚合器禁播放），需用户填自有后端。
  */
 import { scriptFetch } from "@/source-script/fetch";
+import { getLxRuntimeMusicUrl } from "./lxRuntime";
 import type {
   MusicPlayResult,
   MusicPlatform,
@@ -17,9 +19,10 @@ import type {
   MusicSourceDescriptor,
 } from "./types";
 import { normalizeMusicPlatform } from "./types";
-import { asRecord, asString, cleanBaseUrl } from "./utils";
+import { asNumber, asRecord, asString, cleanBaseUrl } from "./utils";
 
-const DEFAULT_PLATFORMS: MusicPlatform[] = ["wy", "tx", "kw", "kg"];
+// OmniParse 源码仅 netease/qq/kugou，无酷我端点。
+const DEFAULT_PLATFORMS: MusicPlatform[] = ["wy", "tx", "kg"];
 
 interface PlatformSpec {
   path: string; // 搜索子路径
@@ -27,11 +30,11 @@ interface PlatformSpec {
   list: (payload: Record<string, unknown>) => unknown[];
 }
 
-// 各平台搜索端点（与 CyreneMusic urlService/searchService 一致）。mg 无 nekofun 端点，略。
+// OmniParse 搜索端点（源码 src/index.ts 实测：仅 /search、/qq/search、/kugou/search）。
+// 酷我(kw)/咪咕(mg) 无端点。酷狗搜索返回 {name,hash,album_id,emixsongid,...}。
 const SEARCH_SPECS: Partial<Record<MusicPlatform, PlatformSpec>> = {
   wy: { path: "/search", method: "POST", list: (p) => arr(p.result) },
   tx: { path: "/qq/search", method: "GET", list: (p) => arr(p.result) },
-  kw: { path: "/kuwo/search", method: "GET", list: (p) => arr(asRecord(p.data)?.songs) },
   kg: { path: "/kugou/search", method: "GET", list: (p) => arr(p.result) },
 };
 
@@ -70,11 +73,8 @@ function normalizeCyreneSong(
   if (platform === "tx") {
     id = asString(item.mid) || asString(item.id) || "";
   } else if (platform === "kg") {
-    const hash = asString(item.hash);
-    const albumId = asString(item.album_id) || "0";
-    id = hash ? `${hash}:${albumId}` : asString(item.emixsongid) || "";
-  } else if (platform === "kw") {
-    id = asString(item.rid) || asString(item.id) || "";
+    // OmniParse /kugou/song 只认 emixsongid（签名参数 encode_album_audio_id），不接受 hash。
+    id = asString(item.emixsongid) || "";
   } else {
     id = asString(item.id) || "";
   }
@@ -176,21 +176,79 @@ const TUNEHUB_SOURCE: Partial<Record<MusicPlatform, string>> = {
   kw: "kuwo",
 };
 
+/** TuneHub V3 音质档位(/v1/parse 的 quality 参数)。仅 128k/320k/flac/flac24bit;192k 归一到 320k。 */
+function tunehubQuality(quality: MusicQuality): string {
+  switch (quality) {
+    case "128k":
+      return "128k";
+    case "flac":
+      return "flac";
+    case "flac24bit":
+      return "flac24bit";
+    default:
+      return "320k";
+  }
+}
+
+/**
+ * TuneHub V3 播放解析:POST {base}/v1/parse + header X-API-Key,返回 data.data[0]。
+ * (旧实现用的 GET ?type=url 在 V3 不存在,真实服务返回 404。)
+ */
+async function resolveTunehub(
+  source: MusicSourceDescriptor,
+  song: MusicSong,
+  platform: MusicPlatform,
+  quality: MusicQuality
+): Promise<MusicPlayResult> {
+  const base = playBase(source);
+  if (!base) throw new Error("TuneHub 缺少后端地址");
+  const src = TUNEHUB_SOURCE[platform];
+  if (!src) throw new Error(`TuneHub 不支持平台 ${platform}(仅 netease/qq/kuwo)`);
+  if (!source.token) throw new Error("TuneHub 需要 API Key(在音源 token 填写 th_ 开头的 key)");
+
+  const res = await scriptFetch(`${base}/v1/parse`, {
+    method: "POST",
+    headers: {
+      ...headersFor(source),
+      "Content-Type": "application/json",
+      "X-API-Key": source.token,
+    },
+    json: { platform: src, ids: song.id, quality: tunehubQuality(quality) },
+    timeout: 15000,
+  });
+  if (!res.ok) {
+    throw new Error((await res.text()) || `TuneHub 请求失败 ${res.status}`);
+  }
+  const record = asRecord(await res.json<unknown>());
+  if (!record) throw new Error("TuneHub 返回格式异常");
+  const code = asNumber(record.code);
+  if (code !== undefined && code !== 0) {
+    throw new Error(asString(record.message) || `TuneHub 错误码 ${code}`);
+  }
+  const data = asRecord(record.data);
+  const first = Array.isArray(data?.data) ? asRecord(data?.data[0]) : undefined;
+  const direct = asString(first?.url);
+  if (!direct) {
+    throw new Error(asString(first?.error) || "TuneHub 未返回播放地址(积分不足/版权)");
+  }
+  return {
+    url: direct,
+    directUrl: direct,
+    quality: asString(first?.actualQuality) || quality,
+    headers: source.headers,
+    lyric: asString(first?.lyrics) || undefined,
+  };
+}
+
 function buildOmniUrl(base: string, platform: MusicPlatform, id: string, q: string): string {
   switch (platform) {
     case "wy":
       return `${base}/song?id=${encodeURIComponent(id)}&quality=${q}&type=json`;
     case "tx":
       return `${base}/qq/song?ids=${encodeURIComponent(id)}&quality=${q}`;
-    case "kw":
-      return `${base}/kuwo/song?mid=${encodeURIComponent(id)}&quality=${q}`;
-    case "kg": {
-      if (id.includes(":")) {
-        const [hash, albumId] = id.split(":");
-        return `${base}/kugou/song?hash=${hash}&album_audio_id=${albumId || "0"}&quality=${q}`;
-      }
+    case "kg":
+      // OmniParse /kugou/song 只认 emixsongid（id 即搜索结果的 emixsongid）。
       return `${base}/kugou/song?emixsongid=${encodeURIComponent(id)}&quality=${q}`;
-    }
     default:
       return "";
   }
@@ -211,17 +269,30 @@ export async function resolveCyrene(
   song: MusicSong,
   quality: MusicQuality
 ): Promise<MusicPlayResult> {
-  const base = playBase(source);
-  if (!base) throw new Error("聚合源缺少播放后端地址");
   const platform = (normalizeMusicPlatform(song.platform) || "wy") as MusicPlatform;
   const mode = source.cyreneMode ?? "omni";
 
-  let url = "";
+  // LX runtime 模式:执行脚本里的 request 处理器算签名取直链(无静态后端地址)。
+  if (mode === "lx" && source.lxMode === "runtime") {
+    const code = source.code;
+    if (!code) throw new Error("洛雪执行源缺少脚本源码");
+    const lxCode = LX_SOURCE_CODE[platform];
+    if (!lxCode) throw new Error(`LX 不支持平台 ${platform}`);
+    const cacheKey = `${source.id}:${source.updatedAt ?? 0}`;
+    const direct = await getLxRuntimeMusicUrl(cacheKey, code, lxCode, song.id, String(quality));
+    return { url: direct, directUrl: direct, quality, headers: source.headers };
+  }
+
+  // TuneHub V3:独立的 POST /v1/parse 流程(响应结构与 omni/lx 不同,提前返回)。
   if (mode === "tunehub") {
-    const src = TUNEHUB_SOURCE[platform];
-    if (!src) throw new Error(`TuneHub 不支持平台 ${platform}`);
-    url = `${base}/api/?type=url&source=${src}&id=${encodeURIComponent(song.id)}&br=${quality}`;
-  } else if (mode === "lx") {
+    return resolveTunehub(source, song, platform, quality);
+  }
+
+  const base = playBase(source);
+  if (!base) throw new Error("聚合源缺少播放后端地址");
+
+  let url = "";
+  if (mode === "lx") {
     const code = LX_SOURCE_CODE[platform];
     if (!code) throw new Error(`LX 不支持平台 ${platform}`);
     // 优先用导入脚本里解析出的 urlPathTemplate（含 {source}/{songId}/{quality} 占位），
@@ -242,15 +313,23 @@ export async function resolveCyrene(
   // 后端可能直接返回音频字节、JSON、或纯文本 URL。
   const text = await res.text();
   let direct = "";
+  let lyric: string | undefined;
+  let tlyric: string | undefined;
   if (/^https?:\/\//i.test(text.trim())) {
     direct = text.trim();
   } else {
     try {
-      direct = extractPlayUrl(JSON.parse(text)) ?? "";
+      const payload = JSON.parse(text);
+      direct = extractPlayUrl(payload) ?? "";
+      // OmniParse /song 顶层带 lyric/tlyric；/qq/song 为 lyric:{lyric,tylyric}。一并取出，省一次歌词请求。
+      const record = asRecord(payload);
+      const lyricObj = asRecord(record?.lyric);
+      lyric = asString(record?.lyric) || asString(lyricObj?.lyric) || undefined;
+      tlyric = asString(record?.tlyric) || asString(lyricObj?.tylyric) || asString(lyricObj?.tlyric) || undefined;
     } catch {
       direct = "";
     }
   }
   if (!direct) throw new Error("聚合源未返回可用播放地址（可能版权/实例禁播放）");
-  return { url: direct, directUrl: direct, quality, headers: source.headers };
+  return { url: direct, directUrl: direct, quality, headers: source.headers, lyric, tlyric };
 }

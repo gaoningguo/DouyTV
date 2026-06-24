@@ -1,5 +1,6 @@
 import { IconClose } from "@/components/Icon";
 import { formatDuration, type MusicQuality, type MusicSong } from "@/lib/music";
+import { type DesktopLyricStyle } from "@/stores/music";
 import { QUALITY_OPTIONS } from "../constants";
 import { type DrawerView, type LyricLine } from "../types";
 import { SettingRow, Switch } from "./ui";
@@ -32,6 +33,8 @@ export function MusicDrawer({
   onEqGain,
   desktopLyricOn,
   onDesktopLyric,
+  desktopLyricStyle,
+  onDesktopLyricStyle,
   sleepTimerEndAt,
   sleepRemaining,
   onClose,
@@ -45,6 +48,10 @@ export function MusicDrawer({
   onQuality,
   onProxy,
   onSpectrum,
+  replayGainEnabled,
+  onReplayGain,
+  crossfadeSec,
+  onCrossfadeSec,
   onSleep,
 }: {
   drawer: Exclude<DrawerView, null>;
@@ -71,6 +78,8 @@ export function MusicDrawer({
   onEqGain: (index: number, gain: number) => void;
   desktopLyricOn: boolean;
   onDesktopLyric: () => void;
+  desktopLyricStyle: DesktopLyricStyle;
+  onDesktopLyricStyle: (patch: Partial<DesktopLyricStyle>) => void;
   sleepTimerEndAt: number | null;
   sleepRemaining: number;
   onClose: () => void;
@@ -84,6 +93,10 @@ export function MusicDrawer({
   onQuality: (quality: MusicQuality) => void;
   onProxy: (enabled: boolean) => void;
   onSpectrum: (enabled: boolean) => void;
+  replayGainEnabled: boolean;
+  onReplayGain: (enabled: boolean) => void;
+  crossfadeSec: number;
+  onCrossfadeSec: (sec: number) => void;
   onSleep: (minutes: number) => void;
 }) {
   const title =
@@ -146,6 +159,49 @@ export function MusicDrawer({
               <SettingRow title="桌面歌词" desc="独立置顶窗口显示逐字歌词，可拖动。">
                 <Switch checked={desktopLyricOn} onChange={onDesktopLyric} />
               </SettingRow>
+              {desktopLyricOn && (
+                <section className="space-y-3 pl-3" style={{ borderLeft: "2px solid var(--cream-line)" }}>
+                  <div>
+                    <div className="flex items-center justify-between mb-1.5">
+                      <span className="text-sm">桌面歌词字号</span>
+                      <span className="font-mono text-xs text-cream-faint">
+                        {desktopLyricStyle.fontSize}px
+                      </span>
+                    </div>
+                    <input
+                      type="range"
+                      min={18}
+                      max={80}
+                      step={1}
+                      value={desktopLyricStyle.fontSize}
+                      onChange={(event) =>
+                        onDesktopLyricStyle({ fontSize: Number(event.target.value) })
+                      }
+                      className="w-full"
+                      style={{ accentColor: "var(--ember)" }}
+                      title="桌面歌词字号"
+                    />
+                  </div>
+                  <SettingRow title="主色" desc="已唱部分的填充色。">
+                    <input
+                      type="color"
+                      value={desktopLyricStyle.color}
+                      onChange={(event) => onDesktopLyricStyle({ color: event.target.value })}
+                      className="w-9 h-7 rounded cursor-pointer bg-transparent"
+                      title="桌面歌词主色"
+                    />
+                  </SettingRow>
+                  <SettingRow title="描边色" desc="文字描边/阴影底色，深色更易读。">
+                    <input
+                      type="color"
+                      value={desktopLyricStyle.strokeColor}
+                      onChange={(event) => onDesktopLyricStyle({ strokeColor: event.target.value })}
+                      className="w-9 h-7 rounded cursor-pointer bg-transparent"
+                      title="桌面歌词描边色"
+                    />
+                  </SettingRow>
+                </section>
+              )}
               <section className="space-y-3">
                 <h3 className="font-display text-sm font-semibold">歌词</h3>
                 <SettingRow title="显示翻译" desc="有翻译时在原文下方显示。">
@@ -215,6 +271,36 @@ export function MusicDrawer({
                 onPreset={onEqPreset}
                 onGain={onEqGain}
               />
+              <SettingRow
+                title="响度均衡"
+                desc="自动把不同歌曲的音量拉到相近水平，避免忽大忽小（需开启稳定流代理）。"
+              >
+                <Switch checked={replayGainEnabled} onChange={onReplayGain} />
+              </SettingRow>
+              <div>
+                <div className="flex items-center justify-between mb-1.5">
+                  <div className="min-w-0">
+                    <span className="text-sm">曲间过渡</span>
+                    <p className="text-xs text-cream-faint mt-0.5">
+                      自动连播切歌时淡出旧曲、淡入新曲。
+                    </p>
+                  </div>
+                  <span className="font-mono text-xs text-cream-faint shrink-0 ml-2">
+                    {crossfadeSec === 0 ? "关" : `${crossfadeSec.toFixed(1)}s`}
+                  </span>
+                </div>
+                <input
+                  type="range"
+                  min={0}
+                  max={8}
+                  step={0.5}
+                  value={crossfadeSec}
+                  onChange={(event) => onCrossfadeSec(Number(event.target.value))}
+                  className="w-full"
+                  style={{ accentColor: "var(--ember)" }}
+                  title="曲间淡入淡出时长"
+                />
+              </div>
               <section>
                 <h3 className="font-display text-sm font-semibold mb-2">音质</h3>
                 <div className="grid grid-cols-2 gap-2">
