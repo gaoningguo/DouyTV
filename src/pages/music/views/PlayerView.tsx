@@ -73,6 +73,8 @@ export function PlayerView({
   desktopLyricOn,
   onDesktopLyric,
   desktopLyricAvailable,
+  abLoop,
+  onAbLoop,
   extrasSource,
   onPlaySong,
   onOpenPlaylist,
@@ -120,6 +122,8 @@ export function PlayerView({
   desktopLyricOn: boolean;
   onDesktopLyric: () => void;
   desktopLyricAvailable: boolean;
+  abLoop: { a: number | null; b: number | null };
+  onAbLoop: () => void;
   extrasSource: MusicSourceDescriptor | null;
   onPlaySong: (song: MusicSong) => void;
   onOpenPlaylist: (summary: MusicSongListSummary) => void;
@@ -358,6 +362,21 @@ export function PlayerView({
             >
               <IconStats size={17} />
             </IconButton>
+            <button
+              type="button"
+              onClick={onAbLoop}
+              className="music-ab-btn"
+              data-state={abLoop.a !== null && abLoop.b !== null ? "full" : abLoop.a !== null ? "half" : undefined}
+              title={
+                abLoop.a !== null && abLoop.b !== null
+                  ? `A-B 循环 ${formatDuration(abLoop.a)}–${formatDuration(abLoop.b)}（点击取消）`
+                  : abLoop.a !== null
+                    ? `已设 A=${formatDuration(abLoop.a)}，再点设 B`
+                    : "A-B 循环：点击设起点 A"
+              }
+            >
+              {abLoop.a !== null && abLoop.b !== null ? "A-B" : abLoop.a !== null ? "A-" : "A·B"}
+            </button>
             <select
               value={playbackRate}
               onChange={(event) => onPlaybackRate(Number(event.target.value))}

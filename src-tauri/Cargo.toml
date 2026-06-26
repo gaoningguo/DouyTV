@@ -14,7 +14,7 @@ crate-type = ["staticlib", "cdylib", "rlib"]
 tauri-build = { version = "2", features = [] }
 
 [dependencies]
-tauri = { version = "2", features = ["macos-private-api", "protocol-asset"] }
+tauri = { version = "2", features = ["macos-private-api", "protocol-asset", "tray-icon", "image-png"] }
 tauri-plugin-fs = "2"
 tauri-plugin-sql = { version = "2", features = ["sqlite"] }
 serde = { version = "1", features = ["derive"] }
@@ -55,6 +55,10 @@ rustls = { version = "0.23", default-features = false, features = ["aws-lc-rs", 
 # default-features=false 避开 encoding_rs(与 rustc 1.95 不兼容)
 sha2 = { version = "0.10", default-features = false }
 base64 = { version = "0.22", default-features = false, features = ["std"] }
+
+# 网易云灰曲解灰(music_unblock.rs)—— 酷狗/波点直链签名要 MD5。
+# 纯 Rust 实现,无 encoding_rs 依赖。
+md-5 = { version = "0.10", default-features = false }
 
 # AmateurTV / a0s.net 系平台 SAMPLE-AES 解密用 —— 标准 AES-128-CBC,无 padding。
 # 跟 reqwest 的 aws-lc-rs / rustls 不冲突,纯 software 实现。

@@ -333,3 +333,120 @@ export async function resolveCyrene(
   if (!direct) throw new Error("聚合源未返回可用播放地址（可能版权/实例禁播放）");
   return { url: direct, directUrl: direct, quality, headers: source.headers, lyric, tlyric };
 }
+
+// ── 发现页/弱音源补充接口（OmniParse 已暴露但此前未调用）──
+
+/**
+ * OmniParse 网易内置榜单：GET {base}/toplists → {status, toplists:[{name, list/songs:[...]}]}。
+ * 4 个网易榜单（飙升/新歌/原创/热歌，每榜约 20 首），每首按 wy 平台归一。
+ * 发现页榜单展示用，免走网易直连被反爬。失败返回空数组。
+ */
+export async function getOmniToplists(
+  source: MusicSourceDescriptor
+): Promise<Array<{ name: string; list: MusicSong[] }>> {
+  const base = cleanBaseUrl(source.baseUrl);
+  if (!base) return [];
+  try {
+    const res = await scriptFetch(`${base}/toplists`, {
+      headers: headersFor(source),
+      timeout: 15000,
+    });
+    if (!res.ok) return [];
+    const payload = asRecord(await res.json<unknown>());
+    const toplists = arr(payload?.toplists);
+    return toplists
+      .map((entry) => {
+        const record = asRecord(entry);
+        if (!record) return null;
+        const name = asString(record.name);
+        if (!name) return null;
+        const rawList = arr(record.list).length > 0 ? arr(record.list) : arr(record.songs);
+        const list = rawList
+          .map((item) => normalizeCyreneSong(source, "wy", item))
+          .filter((item): item is MusicSong => !!item);
+        return { name, list };
+      })
+      .filter((entry): entry is { name: string; list: MusicSong[] } => !!entry);
+  } catch {
+    return [];
+  }
+}
+
+/**
+ * OmniParse 抖音 BGM 解析：GET {base}/douyin?url={分享链接或文案} →
+ * {code, data:{results:[{aweme_id, desc, author, music:{url}, video:{cover}}]}}。
+ * 提取每项 music.url 作可播音频（title 取 desc，cover 取 video.cover）。
+ * 弱音源（抖音 BGM）。失败返回空数组。
+ */
+export interface OmniDouyinTrack {
+  url: string;
+  title?: string;
+  cover?: string;
+}
+
+export async function getOmniDouyinMusic(
+  source: MusicSourceDescriptor,
+  shareUrlOrText: string
+): Promise<OmniDouyinTrack[]> {
+  const base = cleanBaseUrl(source.baseUrl);
+  if (!base || !shareUrlOrText) return [];
+  try {
+    const res = await scriptFetch(
+      `${base}/douyin?url=${encodeURIComponent(shareUrlOrText)}`,
+      { headers: headersFor(source), timeout: 15000 }
+    );
+    if (!res.ok) return [];
+    const payload = asRecord(await res.json<unknown>());
+    const data = asRecord(payload?.data);
+    const results = arr(data?.results);
+    return results
+      .map((entry): OmniDouyinTrack | null => {
+        const record = asRecord(entry);
+        if (!record) return null;
+        const music = asRecord(record.music);
+        const url = asString(music?.url);
+        if (!url) return null;
+        const video = asRecord(record.video);
+        return {
+          url,
+          title: asString(record.desc) || undefined,
+          cover: asString(video?.cover) || undefined,
+        };
+      })
+      .filter((entry): entry is OmniDouyinTrack => !!entry);
+  } catch {
+    return [];
+  }
+}
+
+/**
+ * OmniParse 网易歌词：复用 omni 的 /song 接口（GET，参数与 buildOmniUrl 严格对齐：
+ * id / quality / type=json），取其顶层 lyric/tlyric（或嵌套 lyric:{lyric,tylyric}）。
+ * 当播放走 omni 时可省一次额外歌词请求。失败返回空对象。
+ */
+export async function getOmniNeteaseLyric(
+  source: MusicSourceDescriptor,
+  id: string
+): Promise<{ lyric: string; tlyric?: string }> {
+  const base = playBase(source);
+  if (!base || !id) return { lyric: "" };
+  try {
+    const res = await scriptFetch(buildOmniUrl(base, "wy", id, "exhigh"), {
+      headers: headersFor(source),
+      timeout: 15000,
+    });
+    if (!res.ok) return { lyric: "" };
+    const payload = asRecord(await res.json<unknown>());
+    if (!payload) return { lyric: "" };
+    const lyricObj = asRecord(payload.lyric);
+    const lyric = asString(payload.lyric) || asString(lyricObj?.lyric) || "";
+    const tlyric =
+      asString(payload.tlyric) ||
+      asString(lyricObj?.tylyric) ||
+      asString(lyricObj?.tlyric) ||
+      undefined;
+    return { lyric, tlyric };
+  } catch {
+    return { lyric: "" };
+  }
+}

@@ -28,6 +28,7 @@ export * from "./discovery";
 export * from "./discoveryAggregate";
 export * from "./playback";
 export * from "./neteaseApi";
+export * from "./cyreneApi";
 export * from "./localMusic";
 export * from "./localMusicDb";
 export * from "./lxSource";

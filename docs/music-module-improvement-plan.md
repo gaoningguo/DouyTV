@@ -13,7 +13,7 @@
 | P0-1 | 洛雪脚本沙箱执行 ✅ 已完成 | 高（兼容洛雪生态） | 大 | 中 | 批 A |
 | P0-2 | 本地曲库持久化 ✅ 已完成 | 中高（体验） | 小 | 低 | 批 A |
 | P1-1 | ReplayGain 响度均衡 ✅ 已完成 | 中 | 中 | 低 | 批 B |
-| P1-2 | 曲间淡入淡出过渡 ✅ 已完成 | 中 | 中 | 中 | 批 B |
+| P1-2 | 曲间真·重叠 crossfade ✅ 已完成（双 deck） | 中 | 大 | 中 | 批 B |
 | P1-3 | 桌面歌词样式可配 ✅ 已完成 | 中 | 小 | 低 | 批 B |
 | P2-1 | 歌词跨源融合 ✅ 已完成（繁简暂缓） | 中低 | 中 | 低 | 批 C |
 | P2-2 | 封面取色就地改进 ✅ 已完成（不引依赖） | 低 | 小 | 低 | 批 C |
@@ -97,11 +97,21 @@
 
 ---
 
-### P1-2：曲间淡入淡出过渡 ✅ 已完成（方案：深入深出，非重叠）
+### P1-2：曲间真·重叠 crossfade ✅ 已完成（方案二：双 deck 混音图）
 
-> 实现：深入读播放核心后确认单例 Web Audio 图（`createMediaElementSource` 对一元素只能调一次且永久绑定）使「真重叠 crossfade」需重构成双 deck 混音图（约 40 处 `audioRef` 路由改动，中→大、有回归风险）。与用户确认后选**安全方案**——单元素淡入淡出过渡（非重叠，不动图）：`stores/music.ts` 加 `crossfadeSec`（0=关，默认 0，最大 12s）；`Music.tsx` 加 `fadeVolume(target,sec)` RAF 音量 ramp（重复调用自动取消上次）；`handleAudioTime` 在曲尾 `mediaDuration - time <= crossfadeSec` 触发淡出（`fadeOutStartedRef` 防重入，random/single 模式不淡出）；新曲 `play()` 后从 0 淡入到目标音量；手动调音量 / seek 回退会取消淡出并复位音量。`crossfadeSec=0` 时全程 no-op，行为与改动前完全一致。UI 在 MusicDrawer 加 0~12s 滑块。单独成 commit 便于回退。
+> **二次升级**：P1-2 初版做的是「非重叠淡入淡出」（保留备查见下）。用户后续明确要 **SPlayer 同款真·重叠 crossfade**（两首歌同时出声交叠），遂把播放核心从单 deck 重构成双 deck。
 
-> 与 SPlayer 真重叠 crossfade 的差异：听感是「旧曲淡出→新曲淡入」的平滑过渡而非两首交叠同响；换来零 gap 风险、不碰单例图、可秒回退。若日后要真重叠，需按方案二重构双 deck。
+> 架构：`audioGraph.ts` 重写为**双 deck 混音图**——`deckA/deckB`（各 `<audio>→source→deckGain`）合流到 `bus → EQ(filters) → analyser → masterGain → destination`。EQ/频谱/ReplayGain 都在合流后，只一套，crossfade 期间两首共享。对外保留全部旧接口（`ensureAudioGraph`/`applyEqGains`/`getSpectrum`/`setReplayGainEnabled` 等），新增 `ensureDeck`/`fadeDeckGain`/`setDeckGain`/`hasDeck`。
+
+> Music.tsx 接法（**最小爆炸半径**）：挂两个真实 `<audio>`（deck0/1，callback ref），`audioRef` 改成 getter 代理 `.current` 始终返回活动 deck → 现有 ~40 处 `audioRef.current` 读取**零改动**；事件处理器加「仅活动 deck」守卫，旧 deck 淡出尾音不会误触发 `onEnded`/`onTimeUpdate`。新增 `crossfadeToNext()`：曲尾触发时解析下一首载入**空闲 deck**、两 deck `.volume` 反向 ramp（`fadeDeckVolume` 直接动元素音量，天然可叠加、不依赖 CORS）、翻转活动指针、提交 currentSong/歌词/历史/预取，旧 deck 淡完 `pause()`。竞态用 `playRequestRef` 统一防护：crossfade 在途时手动 `playSong` 会 bump requestId 令其 commit 段失效，并清理空闲 deck 余音 + 取消其淡变 RAF。起重叠失败（解析不了/deck 不可用）回退到 P1-2 初版的单 deck 淡出 + onEnded 硬切。`crossfadeSec=0`（默认）时全程不触发，行为与改动前完全一致。
+
+> 验证：tsc + vite build 通过。运行时仍需 `pnpm tauri dev` 实测（重点：两首交叠听感、手动切歌打断重叠、seek/试听跳过/预取不被破坏、EQ/频谱在 crossfade 中持续生效）。
+
+<details><summary>P1-2 初版（非重叠淡入淡出，已被双 deck 取代，保留备查）</summary>
+
+> 实现：单元素淡入淡出过渡（非重叠，不动图）：`stores/music.ts` 加 `crossfadeSec`（0=关，默认 0，最大 12s）；`Music.tsx` 加 `fadeVolume(target,sec)` RAF 音量 ramp；`handleAudioTime` 在曲尾触发淡出，新曲 `play()` 后从 0 淡入。换来零 gap 风险、不碰单例图。后被方案二双 deck 真重叠取代。
+
+</details>
 
 <details><summary>原计划（保留备查）</summary>
 

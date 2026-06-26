@@ -142,7 +142,16 @@ export default function App() {
     !!backgroundLocation && location.pathname.startsWith("/live/room/");
 
   // 桌面歌词独立窗口：完全脱离主布局/导航，只渲染歌词层（透明背景）。
-  if (location.pathname === "/music/desktop-lyric") {
+  // 该窗口用 index.html#/music/desktop-lyric 打开（hash 形式），但本应用是
+  // BrowserRouter（只读 pathname、忽略 hash）→ location.pathname 会是 /index.html，
+  // 永不命中。故直接看完整 URL 是否含 desktop-lyric（无论它落在 pathname / hash /
+  // query 还是被编码），否则会落进主布局 = 黑框（带侧栏的整个 App 外壳）。
+  const isDesktopLyricWindow =
+    location.pathname === "/music/desktop-lyric" ||
+    (typeof window !== "undefined" &&
+      (window.location.hash.includes("desktop-lyric") ||
+        window.location.href.includes("desktop-lyric")));
+  if (isDesktopLyricWindow) {
     return <DesktopLyric />;
   }
 

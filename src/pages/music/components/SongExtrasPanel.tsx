@@ -35,6 +35,9 @@ export function SongExtrasPanel({
 }) {
   const [tab, setTab] = useState<ExtrasTab>("comments");
   const [comments, setComments] = useState<NeteaseComment[]>([]);
+  const [commentPage, setCommentPage] = useState(1);
+  const [commentHasMore, setCommentHasMore] = useState(false);
+  const [commentLoadingMore, setCommentLoadingMore] = useState(false);
   const [similar, setSimilar] = useState<MusicSong[]>([]);
   const [recommend, setRecommend] = useState<MusicSongListSummary[]>([]);
   const [loading, setLoading] = useState(false);
@@ -57,8 +60,12 @@ export function SongExtrasPanel({
     (async () => {
       try {
         if (tab === "comments") {
-          const list = await getNeteaseComments(source, songId);
-          if (!cancelled) setComments(list);
+          const res = await getNeteaseComments(source, songId, 1);
+          if (!cancelled) {
+            setComments(res.list);
+            setCommentPage(1);
+            setCommentHasMore(res.hasMore);
+          }
         } else if (tab === "similar") {
           const list = await getNeteaseSimiSongs(source, songId);
           if (!cancelled) setSimilar(list);
@@ -77,6 +84,26 @@ export function SongExtrasPanel({
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [tab, songId, source?.id]);
+
+  // 评论「加载更多」：翻下一页追加去重。
+  const loadMoreComments = async () => {
+    if (!source || !songId || commentLoadingMore) return;
+    setCommentLoadingMore(true);
+    try {
+      const next = commentPage + 1;
+      const res = await getNeteaseComments(source, songId, next);
+      setComments((prev) => {
+        const seen = new Set(prev.map((c) => c.id));
+        return [...prev, ...res.list.filter((c) => !seen.has(c.id))];
+      });
+      setCommentPage(next);
+      setCommentHasMore(res.hasMore);
+    } catch {
+      setCommentHasMore(false);
+    } finally {
+      setCommentLoadingMore(false);
+    }
+  };
 
   if (!source) {
     return (
@@ -129,10 +156,36 @@ export function SongExtrasPanel({
                       )}
                     </div>
                     <p className="music-comment-content">{c.content}</p>
-                    {c.timeText && <span className="music-comment-time">{c.timeText}</span>}
+                    {c.repliedContent && (
+                      <p className="music-comment-replied">
+                        {c.repliedNickname && (
+                          <span className="music-comment-replied-name">@{c.repliedNickname}：</span>
+                        )}
+                        {c.repliedContent}
+                      </p>
+                    )}
+                    <div className="flex items-center gap-2">
+                      {c.timeText && <span className="music-comment-time">{c.timeText}</span>}
+                      {c.replyCount > 0 && (
+                        <span className="music-comment-replies">{c.replyCount} 条回复</span>
+                      )}
+                    </div>
                   </div>
                 </li>
               ))}
+              {commentHasMore && (
+                <li className="music-comment-more">
+                  <button
+                    type="button"
+                    onClick={() => void loadMoreComments()}
+                    disabled={commentLoadingMore}
+                    className="h-9 px-4 rounded-lg text-xs tap disabled:opacity-45"
+                    style={{ background: "var(--ink-2)", border: "1px solid var(--cream-line)" }}
+                  >
+                    {commentLoadingMore ? "加载中…" : "加载更多评论"}
+                  </button>
+                </li>
+              )}
             </ul>
           )
         ) : tab === "similar" ? (

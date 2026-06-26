@@ -315,6 +315,17 @@ export interface NeteaseComment {
   liked: number;
   timeText?: string;
   hot: boolean;
+  /** 被回复数（楼中楼盖楼数），0 表示无回复。 */
+  replyCount: number;
+  /** 该评论引用的上一层评论（仅取最近一条，用于盖楼预览）。 */
+  repliedContent?: string;
+  repliedNickname?: string;
+}
+
+export interface NeteaseCommentPage {
+  list: NeteaseComment[];
+  hasMore: boolean;
+  total: number;
 }
 
 function normalizeComment(input: unknown, hot: boolean): NeteaseComment | null {
@@ -323,6 +334,10 @@ function normalizeComment(input: unknown, hot: boolean): NeteaseComment | null {
   const content = asString(item.content);
   if (!content) return null;
   const user = asRecord(item.user);
+  // beReplied: 该评论引用的上层评论数组（盖楼）。
+  const beReplied = Array.isArray(item.beReplied) ? item.beReplied : [];
+  const firstReplied = asRecord(beReplied[0]);
+  const repliedUser = asRecord(firstReplied?.user);
   return {
     id: asString(item.commentId) || asString(item.time) || content.slice(0, 12),
     nickname: asString(user?.nickname) || "网易云用户",
@@ -331,30 +346,47 @@ function normalizeComment(input: unknown, hot: boolean): NeteaseComment | null {
     liked: asNumber(item.likedCount) ?? 0,
     timeText: asString(item.timeStr) || undefined,
     hot,
+    replyCount: asNumber(item.replyCount) ?? 0,
+    repliedContent: firstReplied ? asString(firstReplied.content) || undefined : undefined,
+    repliedNickname: repliedUser ? asString(repliedUser.nickname) || undefined : undefined,
   };
 }
 
-/** 歌曲评论（热评 + 最新）。 */
+/**
+ * 歌曲评论分页。page=1 时含热评（置顶），后续页只取最新。
+ * 返回 { list, hasMore, total }，供「加载更多」翻页。
+ */
 export async function getNeteaseComments(
   source: MusicSourceDescriptor,
   songId: string,
+  page = 1,
   limit = 20
-): Promise<NeteaseComment[]> {
+): Promise<NeteaseCommentPage> {
+  const offset = (page - 1) * limit;
   const url = isExternal(source)
-    ? `${cleanBaseUrl(source.baseUrl)}/comment/music?id=${encodeURIComponent(songId)}&limit=${limit}`
+    ? `${cleanBaseUrl(source.baseUrl)}/comment/music?id=${encodeURIComponent(
+        songId
+      )}&limit=${limit}&offset=${offset}`
     : `${NETEASE_BASE}/api/v1/resource/comments/R_SO_4_${encodeURIComponent(
         songId
-      )}?limit=${limit}&offset=0`;
+      )}?limit=${limit}&offset=${offset}`;
   const record = asRecord(await getJson(url, headersFor(source)));
-  const hot = (Array.isArray(record?.hotComments) ? record?.hotComments : [])
-    .map((item) => normalizeComment(item, true))
-    .filter((item): item is NeteaseComment => !!item);
+  // 仅首页带热评（置顶），翻页时不重复。
+  const hot =
+    page === 1
+      ? (Array.isArray(record?.hotComments) ? record?.hotComments : [])
+          .map((item) => normalizeComment(item, true))
+          .filter((item): item is NeteaseComment => !!item)
+      : [];
   const latest = (Array.isArray(record?.comments) ? record?.comments : [])
     .map((item) => normalizeComment(item, false))
     .filter((item): item is NeteaseComment => !!item);
-  // 去重(热评常与最新重叠)，热评优先。
   const seen = new Set(hot.map((c) => c.id));
-  return [...hot, ...latest.filter((c) => !seen.has(c.id))];
+  const list = [...hot, ...latest.filter((c) => !seen.has(c.id))];
+  const total = asNumber(record?.total) ?? list.length;
+  const hasMore =
+    typeof record?.more === "boolean" ? (record.more as boolean) : offset + latest.length < total;
+  return { list, hasMore, total };
 }
 
 /** 相似歌曲。built-in 反爬挡返回空，external 正常。 */
@@ -933,5 +965,768 @@ export async function getNeteaseHotSearch(
       .slice(0, limit);
   } catch {
     return [];
+  }
+}
+
+// ───────────────────────── 发现页/搜索/详情补全接口（批 R2）─────────────────────────
+// NCM enhanced 路由：external base + 以下路由；能直连的给 builtin 回退。
+// 列表类失败返回空数组/空串；纯登录态接口（recommend/songs、personal_fm、like）本批不实现。
+
+/** 专辑/歌单卡通用归一（多路 fallback 取 id/name/pic/author）。source=wy。 */
+function normalizeListCard(
+  source: MusicSourceDescriptor,
+  input: unknown
+): MusicSongListSummary | null {
+  const row = asRecord(input);
+  const id = asString(row?.id);
+  const name = asString(row?.name);
+  if (!id || !name) return null;
+  return {
+    id,
+    name,
+    source: "wy",
+    sourceId: source.id,
+    pic:
+      asString(row?.picUrl) ||
+      asString(row?.coverImgUrl) ||
+      asString(row?.cover) ||
+      asString(row?.blurPicUrl) ||
+      asString(row?.coverUrl),
+    author:
+      asString(asRecord(row?.artist)?.name) ||
+      asString(asRecord(row?.creator)?.nickname) ||
+      asString(asRecord(row?.dj)?.nickname),
+    desc: asString(row?.description) || asString(row?.rcmdtext) || asString(row?.copywriter) || undefined,
+    playCount: asNumber(row?.playCount) ?? undefined,
+    total: asNumber(row?.trackCount) ?? asNumber(row?.size) ?? asNumber(row?.programCount) ?? undefined,
+  };
+}
+
+/** 搜索建议关键词（/search/suggest?type=mobile → result.allMatch[].keyword）。搜索框自动补全。失败空数组。 */
+export async function getNeteaseSearchSuggest(
+  source: MusicSourceDescriptor,
+  keyword: string
+): Promise<string[]> {
+  if (!keyword.trim()) return [];
+  try {
+    let record: Record<string, unknown> | undefined;
+    if (isExternal(source)) {
+      record = asRecord(
+        await getJson(
+          `${cleanBaseUrl(source.baseUrl)}/search/suggest?keywords=${encodeURIComponent(
+            keyword
+          )}&type=mobile`,
+          headersFor(source)
+        )
+      );
+    } else {
+      record = asRecord(await weapiPost("search/suggest/keyword", { s: keyword }));
+    }
+    if (asNumber(record?.code) === -462) return [];
+    const result = asRecord(record?.result);
+    const allMatch = Array.isArray(result?.allMatch) ? result?.allMatch : [];
+    return ((allMatch as unknown[]) ?? [])
+      .map((item) => asString(asRecord(item)?.keyword))
+      .filter((word): word is string => !!word);
+  } catch {
+    return [];
+  }
+}
+
+/** 搜索框默认关键词（/search/default → data.showKeyword）。失败空串。 */
+export async function getNeteaseDefaultKeyword(source: MusicSourceDescriptor): Promise<string> {
+  if (!isExternal(source)) return "";
+  try {
+    const record = asRecord(
+      await getJson(`${cleanBaseUrl(source.baseUrl)}/search/default`, headersFor(source))
+    );
+    const data = asRecord(record?.data);
+    return asString(data?.showKeyword) || asString(data?.realkeyword) || "";
+  } catch {
+    return "";
+  }
+}
+
+/** 排行榜详情（/toplist/detail → list[]，含 tracks 摘要）→ 歌单卡。失败空。 */
+export async function getNeteaseToplistDetail(
+  source: MusicSourceDescriptor
+): Promise<MusicSongListSummary[]> {
+  if (!isExternal(source)) return [];
+  try {
+    const record = asRecord(
+      await getJson(`${cleanBaseUrl(source.baseUrl)}/toplist/detail`, headersFor(source))
+    );
+    if (asNumber(record?.code) === -462) return [];
+    const rawList = Array.isArray(record?.list) ? record?.list : [];
+    return ((rawList as unknown[]) ?? [])
+      .map((item) => normalizeListCard(source, item))
+      .filter((item): item is MusicSongListSummary => !!item);
+  } catch {
+    return [];
+  }
+}
+
+/** 歌单广场（/top/playlist?cat=&order=hot → playlists[]）。返回分页信息。 */
+export async function getNeteaseTopPlaylists(
+  source: MusicSourceDescriptor,
+  options: { cat?: string; limit?: number; offset?: number; order?: string } = {}
+): Promise<{ list: MusicSongListSummary[]; total: number; hasMore: boolean }> {
+  const { cat = "全部", limit = 30, offset = 0, order = "hot" } = options;
+  if (!isExternal(source)) return { list: [], total: 0, hasMore: false };
+  try {
+    const record = asRecord(
+      await getJson(
+        `${cleanBaseUrl(source.baseUrl)}/top/playlist?cat=${encodeURIComponent(
+          cat
+        )}&limit=${limit}&offset=${offset}&order=${encodeURIComponent(order)}`,
+        headersFor(source)
+      )
+    );
+    if (asNumber(record?.code) === -462) return { list: [], total: 0, hasMore: false };
+    const rawList = Array.isArray(record?.playlists) ? record?.playlists : [];
+    const list = ((rawList as unknown[]) ?? [])
+      .map((item) => normalizeListCard(source, item))
+      .filter((item): item is MusicSongListSummary => !!item);
+    const total = asNumber(record?.total) ?? list.length;
+    const hasMore = record?.more === true || offset + list.length < total;
+    return { list, total, hasMore };
+  } catch {
+    return { list: [], total: 0, hasMore: false };
+  }
+}
+
+/** 精品歌单（/top/playlist/highquality → playlists[]）。失败空。 */
+export async function getNeteaseHighqualityPlaylists(
+  source: MusicSourceDescriptor,
+  options: { cat?: string; limit?: number } = {}
+): Promise<MusicSongListSummary[]> {
+  const { cat = "全部", limit = 30 } = options;
+  if (!isExternal(source)) return [];
+  try {
+    const record = asRecord(
+      await getJson(
+        `${cleanBaseUrl(source.baseUrl)}/top/playlist/highquality?cat=${encodeURIComponent(
+          cat
+        )}&limit=${limit}`,
+        headersFor(source)
+      )
+    );
+    if (asNumber(record?.code) === -462) return [];
+    const rawList = Array.isArray(record?.playlists) ? record?.playlists : [];
+    return ((rawList as unknown[]) ?? [])
+      .map((item) => normalizeListCard(source, item))
+      .filter((item): item is MusicSongListSummary => !!item);
+  } catch {
+    return [];
+  }
+}
+
+/** 歌单分类标签（/playlist/catlist → sub[].name + categories）。失败空。 */
+export async function getNeteasePlaylistCatlist(
+  source: MusicSourceDescriptor
+): Promise<{ name: string }[]> {
+  if (!isExternal(source)) return [];
+  try {
+    const record = asRecord(
+      await getJson(`${cleanBaseUrl(source.baseUrl)}/playlist/catlist`, headersFor(source))
+    );
+    if (asNumber(record?.code) === -462) return [];
+    const sub = Array.isArray(record?.sub) ? record?.sub : [];
+    return ((sub as unknown[]) ?? [])
+      .map((item) => asString(asRecord(item)?.name))
+      .filter((name): name is string => !!name)
+      .map((name) => ({ name }));
+  } catch {
+    return [];
+  }
+}
+
+/** 热门歌单标签（/playlist/hot → tags[].name）。失败空。 */
+export async function getNeteaseHotPlaylistTags(source: MusicSourceDescriptor): Promise<string[]> {
+  if (!isExternal(source)) return [];
+  try {
+    const record = asRecord(
+      await getJson(`${cleanBaseUrl(source.baseUrl)}/playlist/hot`, headersFor(source))
+    );
+    if (asNumber(record?.code) === -462) return [];
+    const tags = Array.isArray(record?.tags) ? record?.tags : [];
+    return ((tags as unknown[]) ?? [])
+      .map((item) => asString(asRecord(item)?.name))
+      .filter((name): name is string => !!name);
+  } catch {
+    return [];
+  }
+}
+
+/** 新碟上架（/album/new?area=ALL → albums[]）→ 专辑卡。失败空。 */
+export async function getNeteaseNewAlbums(
+  source: MusicSourceDescriptor,
+  options: { area?: string; limit?: number; offset?: number } = {}
+): Promise<MusicSongListSummary[]> {
+  const { area = "ALL", limit = 30, offset = 0 } = options;
+  if (!isExternal(source)) return [];
+  try {
+    const record = asRecord(
+      await getJson(
+        `${cleanBaseUrl(source.baseUrl)}/album/new?area=${encodeURIComponent(
+          area
+        )}&limit=${limit}&offset=${offset}`,
+        headersFor(source)
+      )
+    );
+    if (asNumber(record?.code) === -462) return [];
+    const rawList = Array.isArray(record?.albums) ? record?.albums : [];
+    return ((rawList as unknown[]) ?? [])
+      .map((item) => normalizeListCard(source, item))
+      .filter((item): item is MusicSongListSummary => !!item);
+  } catch {
+    return [];
+  }
+}
+
+/** 最新专辑（/album/newest → albums[]）。失败空。 */
+export async function getNeteaseNewestAlbums(
+  source: MusicSourceDescriptor
+): Promise<MusicSongListSummary[]> {
+  if (!isExternal(source)) return [];
+  try {
+    const record = asRecord(
+      await getJson(`${cleanBaseUrl(source.baseUrl)}/album/newest`, headersFor(source))
+    );
+    if (asNumber(record?.code) === -462) return [];
+    const rawList = Array.isArray(record?.albums) ? record?.albums : [];
+    return ((rawList as unknown[]) ?? [])
+      .map((item) => normalizeListCard(source, item))
+      .filter((item): item is MusicSongListSummary => !!item);
+  } catch {
+    return [];
+  }
+}
+
+/** 专辑榜（/top/album → monthData[] 或 albums[]）。失败空。 */
+export async function getNeteaseTopAlbums(
+  source: MusicSourceDescriptor,
+  options: { area?: string; type?: string; limit?: number } = {}
+): Promise<MusicSongListSummary[]> {
+  const { area = "ALL", type = "new", limit = 50 } = options;
+  if (!isExternal(source)) return [];
+  try {
+    const record = asRecord(
+      await getJson(
+        `${cleanBaseUrl(source.baseUrl)}/top/album?area=${encodeURIComponent(
+          area
+        )}&type=${encodeURIComponent(type)}&limit=${limit}`,
+        headersFor(source)
+      )
+    );
+    if (asNumber(record?.code) === -462) return [];
+    const rawList = Array.isArray(record?.monthData)
+      ? record?.monthData
+      : Array.isArray(record?.albums)
+        ? record?.albums
+        : [];
+    return ((rawList as unknown[]) ?? [])
+      .map((item) => normalizeListCard(source, item))
+      .filter((item): item is MusicSongListSummary => !!item);
+  } catch {
+    return [];
+  }
+}
+
+/** 歌手热门50首（/artist/top/song?id= → songs[]）。失败空。 */
+export async function getNeteaseArtistTopSongs(
+  source: MusicSourceDescriptor,
+  id: string
+): Promise<MusicSong[]> {
+  if (!isExternal(source)) return [];
+  try {
+    const record = asRecord(
+      await getJson(
+        `${cleanBaseUrl(source.baseUrl)}/artist/top/song?id=${encodeURIComponent(id)}`,
+        headersFor(source)
+      )
+    );
+    if (asNumber(record?.code) === -462) return [];
+    const rawList = Array.isArray(record?.songs) ? record?.songs : [];
+    return ((rawList as unknown[]) ?? [])
+      .map((item) => normalizeNeteaseSong(source, item))
+      .filter((item): item is MusicSong => !!item);
+  } catch {
+    return [];
+  }
+}
+
+/** 歌手全部歌曲（/artist/songs?id=&order=hot → songs[]）。返回分页信息。 */
+export async function getNeteaseArtistAllSongs(
+  source: MusicSourceDescriptor,
+  id: string,
+  options: { order?: string; limit?: number; offset?: number } = {}
+): Promise<{ list: MusicSong[]; total: number; hasMore: boolean }> {
+  const { order = "hot", limit = 50, offset = 0 } = options;
+  if (!isExternal(source)) return { list: [], total: 0, hasMore: false };
+  try {
+    const record = asRecord(
+      await getJson(
+        `${cleanBaseUrl(source.baseUrl)}/artist/songs?id=${encodeURIComponent(
+          id
+        )}&order=${encodeURIComponent(order)}&limit=${limit}&offset=${offset}`,
+        headersFor(source)
+      )
+    );
+    if (asNumber(record?.code) === -462) return { list: [], total: 0, hasMore: false };
+    const rawList = Array.isArray(record?.songs) ? record?.songs : [];
+    const list = ((rawList as unknown[]) ?? [])
+      .map((item) => normalizeNeteaseSong(source, item))
+      .filter((item): item is MusicSong => !!item);
+    const total = asNumber(record?.total) ?? list.length;
+    const hasMore = record?.more === true || offset + list.length < total;
+    return { list, total, hasMore };
+  } catch {
+    return { list: [], total: 0, hasMore: false };
+  }
+}
+
+/** 相似歌手（/simi/artist?id= → artists[]）。失败空。 */
+export async function getNeteaseSimiArtists(
+  source: MusicSourceDescriptor,
+  id: string
+): Promise<NeteaseArtist[]> {
+  if (!isExternal(source)) return [];
+  try {
+    const record = asRecord(
+      await getJson(
+        `${cleanBaseUrl(source.baseUrl)}/simi/artist?id=${encodeURIComponent(id)}`,
+        headersFor(source)
+      )
+    );
+    if (asNumber(record?.code) === -462) return [];
+    const rawList = Array.isArray(record?.artists) ? record?.artists : [];
+    return ((rawList as unknown[]) ?? [])
+      .map(normalizeArtistCard)
+      .filter((item): item is NeteaseArtist => !!item);
+  } catch {
+    return [];
+  }
+}
+
+/** 歌手简介（/artist/desc?id= → briefDesc + introduction[]）。失败空。 */
+export async function getNeteaseArtistDesc(
+  source: MusicSourceDescriptor,
+  id: string
+): Promise<{ briefDesc: string; sections: { ti: string; txt: string }[] }> {
+  const empty = { briefDesc: "", sections: [] as { ti: string; txt: string }[] };
+  if (!isExternal(source)) return empty;
+  try {
+    const record = asRecord(
+      await getJson(
+        `${cleanBaseUrl(source.baseUrl)}/artist/desc?id=${encodeURIComponent(id)}`,
+        headersFor(source)
+      )
+    );
+    if (asNumber(record?.code) === -462) return empty;
+    const intro = Array.isArray(record?.introduction) ? record?.introduction : [];
+    const sections = ((intro as unknown[]) ?? [])
+      .map((item) => {
+        const row = asRecord(item);
+        const ti = asString(row?.ti) || "";
+        const txt = asString(row?.txt) || "";
+        if (!txt) return null;
+        return { ti, txt };
+      })
+      .filter((s): s is { ti: string; txt: string } => !!s);
+    return { briefDesc: asString(record?.briefDesc) || "", sections };
+  } catch {
+    return empty;
+  }
+}
+
+/** 批量歌曲详情补全（/song/detail?ids= 逗号拼接 → songs[]）。builtin weapi v3/song/detail。失败空。 */
+export async function getNeteaseSongDetail(
+  source: MusicSourceDescriptor,
+  ids: string[]
+): Promise<MusicSong[]> {
+  if (!ids.length) return [];
+  try {
+    let record: Record<string, unknown> | undefined;
+    if (isExternal(source)) {
+      record = asRecord(
+        await getJson(
+          `${cleanBaseUrl(source.baseUrl)}/song/detail?ids=${encodeURIComponent(ids.join(","))}`,
+          headersFor(source)
+        )
+      );
+    } else {
+      record = asRecord(
+        await weapiPost("v3/song/detail", { c: JSON.stringify(ids.map((id) => ({ id }))) })
+      );
+    }
+    if (asNumber(record?.code) === -462) return [];
+    const rawList = Array.isArray(record?.songs) ? record?.songs : [];
+    return ((rawList as unknown[]) ?? [])
+      .map((item) => normalizeNeteaseSong(source, item))
+      .filter((item): item is MusicSong => !!item);
+  } catch {
+    return [];
+  }
+}
+
+/** 歌曲百科（/song/wiki/summary?id= → data.blocks[]，尽力解析文案）。失败空 blocks。 */
+export async function getNeteaseSongWiki(
+  source: MusicSourceDescriptor,
+  id: string
+): Promise<{ blocks: { title?: string; text: string }[] }> {
+  const empty = { blocks: [] as { title?: string; text: string }[] };
+  if (!isExternal(source)) return empty;
+  try {
+    const record = asRecord(
+      await getJson(
+        `${cleanBaseUrl(source.baseUrl)}/song/wiki/summary?id=${encodeURIComponent(id)}`,
+        headersFor(source)
+      )
+    );
+    if (asNumber(record?.code) === -462) return empty;
+    const data = asRecord(record?.data);
+    const rawBlocks = Array.isArray(data?.blocks) ? data?.blocks : [];
+    const blocks: { title?: string; text: string }[] = [];
+    for (const blk of (rawBlocks as unknown[]) ?? []) {
+      const block = asRecord(blk);
+      const title = asString(block?.uiElement && asRecord(block?.uiElement)?.mainTitle)
+        ? asString(asRecord(asRecord(block?.uiElement)?.mainTitle)?.title)
+        : asString(block?.showTitle);
+      const creatives = Array.isArray(block?.creatives) ? block?.creatives : [];
+      for (const cr of (creatives as unknown[]) ?? []) {
+        const creative = asRecord(cr);
+        const resources = Array.isArray(creative?.resources) ? creative?.resources : [];
+        for (const rs of (resources as unknown[]) ?? []) {
+          const res = asRecord(rs);
+          const uiElement = asRecord(res?.uiElement);
+          const text =
+            asString(asRecord(uiElement?.textLinks)) ||
+            asString(asRecord(uiElement?.description)?.description) ||
+            asString(asRecord(uiElement?.mainTitle)?.title);
+          if (text) blocks.push({ title: title || undefined, text });
+        }
+      }
+    }
+    return { blocks };
+  } catch {
+    return empty;
+  }
+}
+
+/** 首页轮播图（/banner?type=0 → banners[]：pic/typeTitle/url）。失败空。 */
+export async function getNeteaseBanners(
+  source: MusicSourceDescriptor
+): Promise<{ pic: string; url?: string; typeTitle?: string }[]> {
+  if (!isExternal(source)) return [];
+  try {
+    const record = asRecord(
+      await getJson(`${cleanBaseUrl(source.baseUrl)}/banner?type=0`, headersFor(source))
+    );
+    if (asNumber(record?.code) === -462) return [];
+    const banners = Array.isArray(record?.banners) ? record?.banners : [];
+    return ((banners as unknown[]) ?? [])
+      .map((item) => {
+        const row = asRecord(item);
+        const pic = asString(row?.pic) || asString(row?.imageUrl) || asString(row?.picUrl);
+        if (!pic) return null;
+        return {
+          pic,
+          url: asString(row?.url) || undefined,
+          typeTitle: asString(row?.typeTitle) || undefined,
+        };
+      })
+      .filter((b): b is NonNullable<typeof b> => !!b);
+  } catch {
+    return [];
+  }
+}
+
+/** 发现页首屏块（/homepage/block/page → data.blocks[]，原样返回让上层挑）。失败空。 */
+export async function getNeteaseHomepageBlocks(
+  source: MusicSourceDescriptor
+): Promise<Record<string, unknown>[]> {
+  if (!isExternal(source)) return [];
+  try {
+    const record = asRecord(
+      await getJson(`${cleanBaseUrl(source.baseUrl)}/homepage/block/page`, headersFor(source))
+    );
+    if (asNumber(record?.code) === -462) return [];
+    const data = asRecord(record?.data);
+    const blocks = Array.isArray(data?.blocks) ? data?.blocks : [];
+    return ((blocks as unknown[]) ?? [])
+      .map((item) => asRecord(item))
+      .filter((item): item is Record<string, unknown> => !!item);
+  } catch {
+    return [];
+  }
+}
+
+/** MV 详情（/mv/detail?mvid= → data）。失败抛错。 */
+export async function getNeteaseMvDetail(
+  source: MusicSourceDescriptor,
+  id: string
+): Promise<{
+  id: string;
+  name: string;
+  cover?: string;
+  artist?: string;
+  desc?: string;
+  playCount?: number;
+  durationSec?: number;
+}> {
+  const url = isExternal(source)
+    ? `${cleanBaseUrl(source.baseUrl)}/mv/detail?mvid=${encodeURIComponent(id)}`
+    : `${NETEASE_BASE}/api/mv/detail?mvid=${encodeURIComponent(id)}`;
+  const record = asRecord(await getJson(url, headersFor(source)));
+  assertNotAntiBot(record);
+  const data = asRecord(record?.data) ?? {};
+  const durationMs = asNumber(data.duration);
+  return {
+    id: asString(data.id) || id,
+    name: asString(data.name) || "未知 MV",
+    cover: asString(data.cover) || asString(data.coverUrl) || asString(data.picUrl),
+    artist: asString(data.artistName) || (data ? pickMvArtist(data) : "") || undefined,
+    desc: asString(data.desc) || undefined,
+    playCount: asNumber(data.playCount) ?? undefined,
+    durationSec: durationMs ? Math.round(durationMs / 1000) : undefined,
+  };
+}
+
+/** 最新 MV（/mv/first?limit= → data[]）。失败空。 */
+export async function getNeteaseFirstMv(
+  source: MusicSourceDescriptor,
+  options: { limit?: number } = {}
+): Promise<NeteaseMv[]> {
+  const { limit = 30 } = options;
+  if (!isExternal(source)) return [];
+  try {
+    const record = asRecord(
+      await getJson(`${cleanBaseUrl(source.baseUrl)}/mv/first?limit=${limit}`, headersFor(source))
+    );
+    if (asNumber(record?.code) === -462) return [];
+    const rawList = Array.isArray(record?.data) ? record?.data : [];
+    return ((rawList as unknown[]) ?? [])
+      .map((item): NeteaseMv | null => {
+        const row = asRecord(item);
+        const id = asString(row?.id);
+        const name = asString(row?.name);
+        if (!id || !name) return null;
+        const durationMs = asNumber(row?.duration);
+        return {
+          id,
+          name,
+          cover: asString(row?.picUrl) || asString(row?.cover) || asString(row?.imgurl),
+          artist: row ? pickMvArtist(row) : "",
+          playCount: asNumber(row?.playCount) ?? undefined,
+          durationSec: durationMs ? Math.round(durationMs / 1000) : undefined,
+        };
+      })
+      .filter((item): item is NeteaseMv => !!item);
+  } catch {
+    return [];
+  }
+}
+
+/** MV 排行（/top/mv?limit= → data[]）。失败空。 */
+export async function getNeteaseTopMv(
+  source: MusicSourceDescriptor,
+  options: { limit?: number } = {}
+): Promise<NeteaseMv[]> {
+  const { limit = 30 } = options;
+  if (!isExternal(source)) return [];
+  try {
+    const record = asRecord(
+      await getJson(`${cleanBaseUrl(source.baseUrl)}/top/mv?limit=${limit}`, headersFor(source))
+    );
+    if (asNumber(record?.code) === -462) return [];
+    const rawList = Array.isArray(record?.data) ? record?.data : [];
+    return ((rawList as unknown[]) ?? [])
+      .map((item): NeteaseMv | null => {
+        const row = asRecord(item);
+        const id = asString(row?.id);
+        const name = asString(row?.name);
+        if (!id || !name) return null;
+        const durationMs = asNumber(row?.duration);
+        return {
+          id,
+          name,
+          cover: asString(row?.picUrl) || asString(row?.cover) || asString(row?.imgurl),
+          artist: row ? pickMvArtist(row) : "",
+          playCount: asNumber(row?.playCount) ?? undefined,
+          durationSec: durationMs ? Math.round(durationMs / 1000) : undefined,
+        };
+      })
+      .filter((item): item is NeteaseMv => !!item);
+  } catch {
+    return [];
+  }
+}
+
+/** 电台排行（/dj/toplist?type=new → toplist[]）→ 电台卡。失败空。 */
+export async function getNeteaseDjToplist(
+  source: MusicSourceDescriptor,
+  options: { type?: string; limit?: number } = {}
+): Promise<MusicSongListSummary[]> {
+  const { type = "new", limit = 100 } = options;
+  if (!isExternal(source)) return [];
+  try {
+    const record = asRecord(
+      await getJson(
+        `${cleanBaseUrl(source.baseUrl)}/dj/toplist?type=${encodeURIComponent(type)}&limit=${limit}`,
+        headersFor(source)
+      )
+    );
+    if (asNumber(record?.code) === -462) return [];
+    const rawList = Array.isArray(record?.toplist) ? record?.toplist : [];
+    return ((rawList as unknown[]) ?? [])
+      .map((item) => normalizeListCard(source, item))
+      .filter((item): item is MusicSongListSummary => !!item);
+  } catch {
+    return [];
+  }
+}
+
+/** 热门电台（/dj/hot?limit= → djRadios[]）。失败空。 */
+export async function getNeteaseDjHot(
+  source: MusicSourceDescriptor,
+  options: { limit?: number } = {}
+): Promise<MusicSongListSummary[]> {
+  const { limit = 30 } = options;
+  if (!isExternal(source)) return [];
+  try {
+    const record = asRecord(
+      await getJson(`${cleanBaseUrl(source.baseUrl)}/dj/hot?limit=${limit}`, headersFor(source))
+    );
+    if (asNumber(record?.code) === -462) return [];
+    const rawList = Array.isArray(record?.djRadios) ? record?.djRadios : [];
+    return ((rawList as unknown[]) ?? [])
+      .map((item) => normalizeListCard(source, item))
+      .filter((item): item is MusicSongListSummary => !!item);
+  } catch {
+    return [];
+  }
+}
+
+/** 电台轮播图（/dj/banner → data[].pic）。失败空。 */
+export async function getNeteaseDjBanner(
+  source: MusicSourceDescriptor
+): Promise<{ pic: string; url?: string }[]> {
+  if (!isExternal(source)) return [];
+  try {
+    const record = asRecord(
+      await getJson(`${cleanBaseUrl(source.baseUrl)}/dj/banner`, headersFor(source))
+    );
+    if (asNumber(record?.code) === -462) return [];
+    const data = Array.isArray(record?.data) ? record?.data : [];
+    return ((data as unknown[]) ?? [])
+      .map((item) => {
+        const row = asRecord(item);
+        const pic = asString(row?.pic) || asString(row?.picUrl) || asString(row?.imageUrl);
+        if (!pic) return null;
+        return { pic, url: asString(row?.url) || undefined };
+      })
+      .filter((b): b is NonNullable<typeof b> => !!b);
+  } catch {
+    return [];
+  }
+}
+
+/** 推荐电台节目（/personalized/djprogram → result[].program 取所属电台卡）。失败空。 */
+export async function getNeteaseDjCategoryRecommend(
+  source: MusicSourceDescriptor
+): Promise<MusicSongListSummary[]> {
+  if (!isExternal(source)) return [];
+  try {
+    const record = asRecord(
+      await getJson(`${cleanBaseUrl(source.baseUrl)}/personalized/djprogram`, headersFor(source))
+    );
+    if (asNumber(record?.code) === -462) return [];
+    const rawList = Array.isArray(record?.result) ? record?.result : [];
+    return ((rawList as unknown[]) ?? [])
+      .map((item) => {
+        const row = asRecord(item);
+        const program = asRecord(row?.program) ?? row;
+        // 取节目所属电台卡（radio 字段），无则退回 program 本身。
+        const radio = asRecord(program?.radio) ?? program;
+        return normalizeListCard(source, radio);
+      })
+      .filter((item): item is MusicSongListSummary => !!item);
+  } catch {
+    return [];
+  }
+}
+
+/** 整轨非逐字歌词兜底（/lyric?id= → lrc.lyric）。builtin /api/song/lyric。失败空串。 */
+export async function getNeteaseLyricPlain(
+  source: MusicSourceDescriptor,
+  id: string
+): Promise<string> {
+  try {
+    const url = isExternal(source)
+      ? `${cleanBaseUrl(source.baseUrl)}/lyric?id=${encodeURIComponent(id)}`
+      : `${NETEASE_BASE}/api/song/lyric?id=${encodeURIComponent(id)}&lv=1&kv=1&tv=1`;
+    const record = asRecord(await getJson(url, headersFor(source)));
+    if (asNumber(record?.code) === -462) return "";
+    return asString(asRecord(record?.lrc)?.lyric) || "";
+  } catch {
+    return "";
+  }
+}
+
+/** 播放前可用性预检（/check/music?id=&br= → success 字段 / code===200）。失败 false。 */
+export async function checkNeteaseMusicAvailable(
+  source: MusicSourceDescriptor,
+  id: string,
+  br = 999000
+): Promise<boolean> {
+  if (!isExternal(source)) return false;
+  try {
+    const record = asRecord(
+      await getJson(
+        `${cleanBaseUrl(source.baseUrl)}/check/music?id=${encodeURIComponent(id)}&br=${br}`,
+        headersFor(source)
+      )
+    );
+    return record?.success === true || asNumber(record?.code) === 200;
+  } catch {
+    return false;
+  }
+}
+
+/**
+ * 302 直挂播放地址（/song/url/v1/302?id=&level=）。直接拼出 URL 字符串返回，
+ * 不发请求——该地址服务端 302 重定向到真实音频，可直挂 <audio>。builtin 无此能力返回空串。
+ */
+export function getNeteaseSongUrl302(
+  source: MusicSourceDescriptor,
+  id: string,
+  level = "exhigh"
+): string {
+  if (!isExternal(source)) return "";
+  const base = cleanBaseUrl(source.baseUrl);
+  if (!base) return "";
+  return `${base}/song/url/v1/302?id=${encodeURIComponent(id)}&level=${encodeURIComponent(level)}`;
+}
+
+/** 灰曲换可播版本（/song/copyright/rcmd?id= → data.url）。失败 undefined。 */
+export async function getNeteaseSongCopyrightRcmd(
+  source: MusicSourceDescriptor,
+  id: string
+): Promise<string | undefined> {
+  if (!isExternal(source)) return undefined;
+  try {
+    const record = asRecord(
+      await getJson(
+        `${cleanBaseUrl(source.baseUrl)}/song/copyright/rcmd?id=${encodeURIComponent(id)}`,
+        headersFor(source)
+      )
+    );
+    if (asNumber(record?.code) === -462) return undefined;
+    const data = record?.data;
+    const url = typeof data === "string" ? data : asString(asRecord(data)?.url);
+    return url || asString(record?.url) || undefined;
+  } catch {
+    return undefined;
   }
 }

@@ -15,6 +15,7 @@ mod cf_cookies;
 mod fc2_ws;
 mod mfc_ws;
 mod mouflon;
+mod music_unblock;
 mod sample_aes_proxy;
 mod stream_proxy;
 mod ts_mp4;
@@ -2776,6 +2777,86 @@ async fn mfc_diagnose(proxy_url: Option<String>) -> Result<String, String> {
     mfc_ws::diagnose(proxy_url).await
 }
 
+/// 系统托盘（仅桌面端）。菜单项点击 → emit "tray-command"，前端音乐页监听后驱动播放；
+/// 左键单击托盘图标切换主窗口显示/隐藏。命令字符串与桌面歌词 "desktop-lyric-command" 一致
+/// （toggle/prev/next），前端可复用同一套处理。
+#[cfg(not(any(target_os = "android", target_os = "ios")))]
+fn setup_tray(app: &tauri::AppHandle) -> Result<(), Box<dyn std::error::Error>> {
+    use tauri::menu::{MenuBuilder, MenuItemBuilder};
+    use tauri::tray::{MouseButton, TrayIconBuilder, TrayIconEvent};
+    use tauri::Manager;
+
+    let show = MenuItemBuilder::with_id("tray-show", "显示 / 隐藏窗口").build(app)?;
+    let prev = MenuItemBuilder::with_id("tray-prev", "上一首").build(app)?;
+    let toggle = MenuItemBuilder::with_id("tray-toggle", "播放 / 暂停").build(app)?;
+    let next = MenuItemBuilder::with_id("tray-next", "下一首").build(app)?;
+    let quit = MenuItemBuilder::with_id("tray-quit", "退出").build(app)?;
+    let menu = MenuBuilder::new(app)
+        .item(&show)
+        .separator()
+        .item(&prev)
+        .item(&toggle)
+        .item(&next)
+        .separator()
+        .item(&quit)
+        .build()?;
+
+    let toggle_main = |app: &tauri::AppHandle| {
+        if let Some(win) = app.get_webview_window("main") {
+            if win.is_visible().unwrap_or(true) {
+                let _ = win.hide();
+            } else {
+                let _ = win.show();
+                let _ = win.set_focus();
+            }
+        }
+    };
+
+    let mut builder = TrayIconBuilder::with_id("douytv-tray")
+        .tooltip("DouyTV")
+        .menu(&menu)
+        .show_menu_on_left_click(false);
+    if let Some(icon) = app.default_window_icon() {
+        builder = builder.icon(icon.clone());
+    }
+    builder
+        .on_menu_event(move |app, event| match event.id().as_ref() {
+            "tray-show" => {
+                if let Some(win) = app.get_webview_window("main") {
+                    if win.is_visible().unwrap_or(true) {
+                        let _ = win.hide();
+                    } else {
+                        let _ = win.show();
+                        let _ = win.set_focus();
+                    }
+                }
+            }
+            "tray-prev" => {
+                let _ = app.emit("tray-command", "prev");
+            }
+            "tray-toggle" => {
+                let _ = app.emit("tray-command", "toggle");
+            }
+            "tray-next" => {
+                let _ = app.emit("tray-command", "next");
+            }
+            "tray-quit" => app.exit(0),
+            _ => {}
+        })
+        .on_tray_icon_event(move |tray, event| {
+            if let TrayIconEvent::Click {
+                button: MouseButton::Left,
+                button_state: tauri::tray::MouseButtonState::Up,
+                ..
+            } = event
+            {
+                toggle_main(tray.app_handle());
+            }
+        })
+        .build(app)?;
+    Ok(())
+}
+
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
     let migrations = vec![
@@ -2851,6 +2932,10 @@ pub fn run() {
             {
                 let _ = app.handle().plugin(tauri_plugin_updater::Builder::new().build());
                 let _ = app.handle().plugin(tauri_plugin_process::init());
+                // 系统托盘：菜单控制播放（命令经 "tray-command" 事件转给前端音乐页处理）。
+                if let Err(e) = setup_tray(app.handle()) {
+                    eprintln!("[tray] setup failed: {e}");
+                }
             }
             #[cfg(any(target_os = "android", target_os = "ios"))]
             let _ = app;
@@ -3166,7 +3251,8 @@ pub fn run() {
             fc2_resolve_hls,
             fc2_diagnose,
             mfc_list_online,
-            mfc_diagnose
+            mfc_diagnose,
+            music_unblock::music_unblock
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

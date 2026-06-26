@@ -143,24 +143,25 @@ export function parseLxScript(scriptContent: string): LxSourceParsed | null {
         /\/url\/\{?[a-zA-Z]+\}?\/\{?[a-zA-Z]+\}?\/\{?[a-zA-Z]+\}?/,
       ]) || DEFAULT_URL_TEMPLATE;
 
-    // 没有静态 apiUrl 的脚本:若注册了 lx.on('request') 则当 runtime 模式(执行脚本取链)。
-    if (!apiUrl) {
-      if (canRunLxScript(scriptContent)) {
-        return {
-          name,
-          version,
-          author,
-          description,
-          homepage,
-          apiUrl: "",
-          apiKey,
-          urlPathTemplate,
-          mode: "runtime",
-          code: scriptContent,
-        };
-      }
-      return null;
+    // 模式判定（对齐 CyreneMusic「所有洛雪源都走沙箱执行」）：
+    // 只要脚本注册了 request 处理器（可执行），就优先 runtime 模式——很多源即便
+    // 有静态 apiUrl，也需要在脚本里算签名/MD5，当成静态模板会取不到链接而失败。
+    // 只有「不可执行但有静态 apiUrl」的纯模板源才走 template。
+    if (canRunLxScript(scriptContent)) {
+      return {
+        name,
+        version,
+        author,
+        description,
+        homepage,
+        apiUrl,
+        apiKey,
+        urlPathTemplate,
+        mode: "runtime",
+        code: scriptContent,
+      };
     }
+    if (!apiUrl) return null;
     return {
       name,
       version,

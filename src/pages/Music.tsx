@@ -23,6 +23,7 @@ import {
   getNeteaseArtist,
   getNeteaseArtistAlbums,
   getNeteaseHotSearch,
+  getNeteaseSearchSuggest,
   getNeteaseMvUrl,
   getNeteaseNewSongRecommend,
   fetchNeteaseLyricByMatch,
@@ -188,6 +189,8 @@ export default function Music() {
   const [desktopLyricOn, setDesktopLyricOn] = useState(false);
   const [recentSearches, setRecentSearches] = useState<string[]>([]);
   const [recommendedKeywords, setRecommendedKeywords] = useState<string[]>([]);
+  // 搜索实时联想（网易 /search/suggest）：输入时防抖拉取，展示在近期搜索之上。
+  const [searchSuggestions, setSearchSuggestions] = useState<string[]>([]);
   const searchInputRef = useRef<HTMLInputElement>(null);
   const [discoveryLoading, setDiscoveryLoading] = useState(false);
   const [boardLoading, setBoardLoading] = useState(false);
@@ -204,6 +207,9 @@ export default function Music() {
   const [yrcText, setYrcText] = useState("");
   const [romaText, setRomaText] = useState("");
   const [sourceDialogOpen, setSourceDialogOpen] = useState(false);
+  // AB 循环（段落复读）：A/B 为秒数，null 表示未设。两点都设后播放到 B 自动跳回 A。
+  const [abLoop, setAbLoop] = useState<{ a: number | null; b: number | null }>({ a: null, b: null });
+  const abLoopRef = useRef<{ a: number | null; b: number | null }>({ a: null, b: null });
   const [mvPlay, setMvPlay] = useState<{ url: string; title: string } | null>(null);
   const [neteaseRecommend, setNeteaseRecommend] = useState<MusicSong[]>([]);
   const [importOpen, setImportOpen] = useState(false);
@@ -376,6 +382,10 @@ export default function Music() {
   useEffect(() => {
     crossfadeSecRef.current = crossfadeSec;
   }, [crossfadeSec]);
+
+  useEffect(() => {
+    abLoopRef.current = abLoop;
+  }, [abLoop]);
 
   // 音量淡变：在 durationSec 内把指定 deck 元素的 .volume 线性 ramp 到 target。
   // 直接动 <audio>.volume（两 deck 各一份，天然可叠加出声，不依赖 Web Audio 图 / CORS）。
@@ -562,6 +572,29 @@ export default function Music() {
     };
   }, [extrasSource]);
 
+  // 搜索实时联想（对齐 SPlayer searchSuggest）：输入时防抖 300ms 调网易 /search/suggest。
+  // 仅在搜索面板开启 + 有网易源时拉；空关键词清空。
+  useEffect(() => {
+    const q = keyword.trim();
+    if (!extrasSource || !searchPanelOpen || q.length < 1) {
+      setSearchSuggestions([]);
+      return;
+    }
+    let cancelled = false;
+    const timer = window.setTimeout(async () => {
+      try {
+        const words = await getNeteaseSearchSuggest(extrasSource, q);
+        if (!cancelled) setSearchSuggestions(words.slice(0, 10));
+      } catch {
+        if (!cancelled) setSearchSuggestions([]);
+      }
+    }, 300);
+    return () => {
+      cancelled = true;
+      window.clearTimeout(timer);
+    };
+  }, [keyword, extrasSource, searchPanelOpen]);
+
   const lyricLines = useMemo(
     () => parseLyric({ lyric: lyricText, tlyric: tlyricText, yrc: yrcText, romalrc: romaText }),
     [lyricText, tlyricText, yrcText, romaText]
@@ -625,6 +658,20 @@ export default function Music() {
       }
 
       const requestId = ++playRequestRef.current;
+      // 若正处于重叠 crossfade 尾段，手动/续播切歌要先停掉空闲 deck 的余音，
+      // 并清掉重叠标记，避免旧 deck 继续出声或淡变 RAF 残留。
+      crossfadingRef.current = false;
+      const idleDeck = activeDeckRef.current === 0 ? 1 : 0;
+      const idleRaf = deckFadeRafs.current[idleDeck];
+      if (idleRaf !== null) {
+        cancelAnimationFrame(idleRaf);
+        deckFadeRafs.current[idleDeck] = null;
+      }
+      const idleEl = deckEls.current[idleDeck];
+      if (idleEl) {
+        idleEl.pause();
+        idleEl.volume = 0;
+      }
       pendingAutoPlayRef.current = true;
       setResolving(true);
       setError("");
@@ -846,6 +893,126 @@ export default function Music() {
     [currentSong, playMode, playSong, queue]
   );
 
+  // 真·重叠 crossfade：把下一首载入空闲 deck，两 deck 同时出声、音量反向 ramp，
+  // 然后把"活动 deck"指针翻到新 deck。返回 false 表示没能起重叠（调用方回退到单 deck 淡出）。
+  // 只在曲尾自动续接时调用；手动切歌仍走 playSong（硬切+淡入）。
+  const crossfadeToNext = useCallback(async (): Promise<boolean> => {
+    if (crossfadingRef.current) return true; // 已在重叠中
+    const q = queueRef.current;
+    const cur = currentSongRef.current;
+    if (q.length < 2 || !cur) return false;
+    const curKey = musicSongKey(cur);
+    const idx = q.findIndex((s) => musicSongKey(s) === curKey);
+    const nextIndex =
+      playMode === "random"
+        ? Math.floor(Math.random() * q.length)
+        : (idx + 1 + q.length) % q.length;
+    const next = q[nextIndex];
+    if (!next || musicSongKey(next) === curKey) return false;
+    const source = sources.find((item) => item.enabled && item.id === next.sourceId);
+    if (!source) return false; // 解析不了 → 交给 onEnded 硬切
+
+    const fromDeck = activeDeckRef.current;
+    const toDeck = fromDeck === 0 ? 1 : 0;
+    const fromEl = deckEls.current[fromDeck];
+    const toEl = deckEls.current[toDeck];
+    if (!fromEl || !toEl) return false;
+
+    crossfadingRef.current = true;
+    const xfade = crossfadeSecRef.current;
+    const requestId = ++playRequestRef.current; // 取消任何在途 playSong / 前次 crossfade
+    const bail = () => {
+      crossfadingRef.current = false;
+    };
+    try {
+      const play =
+        takePrefetchedSource(source.id, next.id, quality) ??
+        (await resolveMusicSourceWithFallback(source, next, quality, {
+          proxy: proxyEnabled,
+          unblock: unblockContext,
+        }));
+      if (requestId !== playRequestRef.current) return bail(), false;
+
+      toEl.crossOrigin = /^https?:\/\/127\.0\.0\.1[:/]/.test(play.url) ? "anonymous" : null;
+      toEl.src = play.url;
+      toEl.load();
+      await waitForUsableMusicAudio(toEl, next.durationSec);
+      if (requestId !== playRequestRef.current) return bail(), false;
+
+      // 新 deck 从 0 起播，建图（频谱/EQ 合流后共享，无需 per-deck 处理）。
+      toEl.volume = 0;
+      toEl.playbackRate = playbackRate;
+      toEl.preservesPitch = true;
+      if (toEl.crossOrigin === "anonymous" && ensureAudioGraph(toEl)) {
+        resumeAudioGraph();
+      }
+      await toEl.play().catch(() => undefined);
+      if (requestId !== playRequestRef.current) {
+        toEl.pause();
+        return bail(), false;
+      }
+
+      // 翻活动 deck —— 此后事件（onTimeUpdate/onEnded）只认新 deck，旧 deck 尾音被守卫忽略。
+      activeDeckRef.current = toDeck;
+      fadeOutStartedRef.current = false;
+      setCurrentSong(next);
+      setAudioUrl(play.url);
+      setCurrentTime(0);
+      setDuration(next.durationSec ?? toEl.duration ?? 0);
+      setLyricText(play.lyric || "");
+      setTlyricText(play.tlyric || "");
+      setYrcText(play.yrc || "");
+      setRomaText(play.romalrc || "");
+      resetReplayGain();
+      noteHistory(next, 0, next.durationSec ?? 0);
+
+      // 反向 ramp：旧 deck → 0（完成后暂停），新 deck → 目标音量。
+      fadeDeckVolume(fromDeck, 0, xfade, () => fromEl.pause());
+      fadeDeckVolume(toDeck, volumeRef.current, xfade);
+
+      // 跨源歌词兜底（与 playSong 同策略）。
+      const extras = extrasSourceRef.current;
+      if (!play.yrc && extras && next.sourceId !== extras.id) {
+        void fetchNeteaseLyricByMatch(extras, next.title, next.artist)
+          .then((fallback) => {
+            if (requestId !== playRequestRef.current) return;
+            if (fallback.yrc) setYrcText(fallback.yrc);
+            if (fallback.lyric && !play.lyric) setLyricText(fallback.lyric);
+            if (fallback.tlyric && !play.tlyric) setTlyricText(fallback.tlyric);
+            if (fallback.romalrc && !play.romalrc) setRomaText(fallback.romalrc);
+          })
+          .catch(() => undefined);
+      }
+
+      // 预取再下一首。
+      const afterIndex = playMode === "random" ? -1 : (nextIndex + 1) % q.length;
+      const afterNext = afterIndex >= 0 ? q[afterIndex] : undefined;
+      if (afterNext && musicSongKey(afterNext) !== musicSongKey(next)) {
+        const afterSource = sources.find((item) => item.enabled && item.id === afterNext.sourceId);
+        if (afterSource) {
+          void prefetchMusicSource(afterSource, afterNext, quality, {
+            proxy: proxyEnabled,
+            unblock: unblockContext,
+          });
+        }
+      }
+      crossfadingRef.current = false;
+      return true;
+    } catch {
+      return bail(), false;
+    }
+  }, [
+    playMode,
+    sources,
+    quality,
+    proxyEnabled,
+    unblockContext,
+    playbackRate,
+    fadeDeckVolume,
+    noteHistory,
+    setCurrentSong,
+  ]);
+
   // 打开网易推荐歌单：载入歌曲入队并从首曲播放（内置源受反爬限制时降级提示）。
   const openNeteasePlaylist = useCallback(
     async (summary: MusicSongListSummary) => {
@@ -950,6 +1117,14 @@ export default function Music() {
   useEffect(() => {
     queueRef.current = queue;
   }, [queue]);
+  useEffect(() => {
+    currentSongRef.current = currentSong;
+  }, [currentSong]);
+  // 切歌时清掉 AB 循环点（A/B 是按当前曲设的，换曲即失效）。
+  const currentSongKey = currentSong ? musicSongKey(currentSong) : "";
+  useEffect(() => {
+    setAbLoop({ a: null, b: null });
+  }, [currentSongKey]);
   useEffect(() => {
     playByQueueOffsetRef.current = (offset: number) => playByQueueOffset(offset, true);
   }, [playByQueueOffset]);
@@ -1616,24 +1791,38 @@ export default function Music() {
   const handleAudioTime = (time: number, mediaDuration: number) => {
     setCurrentTime(time);
     if (!currentSong) return;
+    // AB 循环（段落复读）：两点都设且播放越过 B 点，立即跳回 A。优先于 crossfade。
+    const ab = abLoopRef.current;
+    if (ab.a !== null && ab.b !== null && ab.b > ab.a && time >= ab.b) {
+      const audio = audioRef.current;
+      if (audio) audio.currentTime = ab.a;
+      setCurrentTime(ab.a);
+      return;
+    }
     const now = Date.now();
     if (now - lastHistorySaveRef.current > 10_000) {
       lastHistorySaveRef.current = now;
       noteHistory(currentSong, time, mediaDuration || duration || currentSong.durationSec || 0);
     }
-    // 过渡（深入深出）：开启且非单曲循环、队列有下一首时，在曲尾 crossfadeSec 秒把音量淡到 0。
-    // onEnded 随后推进到下一首，新曲再从 0 淡入（见 playSong）。
+    // 真·重叠 crossfade：开启且非单曲循环、队列有下一首时，在曲尾 crossfadeSec 秒触发。
+    // 优先 crossfadeToNext()（下一首载入空闲 deck、两 deck 同时出声反向 ramp、翻活动指针）；
+    // 起重叠失败（解析不了 / deck 不可用）则回退到单 deck 淡出，由 onEnded 硬切推进。
     const xfade = crossfadeSecRef.current;
     if (
       xfade > 0 &&
       playMode !== "single" &&
       queue.length > 1 &&
       !fadeOutStartedRef.current &&
+      !crossfadingRef.current &&
       mediaDuration > xfade * 2 &&
       mediaDuration - time <= xfade
     ) {
       fadeOutStartedRef.current = true;
-      fadeVolume(0, Math.max(0.1, mediaDuration - time));
+      const span = Math.max(0.1, mediaDuration - time);
+      void crossfadeToNext().then((overlapped) => {
+        // 没能起重叠 → 退回单 deck 淡出（旧行为），onEnded 会推进到下一首。
+        if (!overlapped) fadeVolume(0, span);
+      });
     }
   };
 
@@ -1658,16 +1847,31 @@ export default function Music() {
     const next = modes[(modes.indexOf(playMode) + 1) % modes.length];
     setPlayMode(next);
   };
+  // AB 循环三态循环：首点设 A=当前时间 → 再点设 B（须 > A）→ 三点清除。
+  const cycleAbLoop = () => {
+    const t = audioRef.current?.currentTime ?? currentTime;
+    setAbLoop((prev) => {
+      if (prev.a === null) return { a: t, b: null };
+      if (prev.b === null) {
+        // B 必须晚于 A，否则把这次当作重设 A。
+        if (t > prev.a + 0.5) return { a: prev.a, b: t };
+        return { a: t, b: null };
+      }
+      return { a: null, b: null };
+    });
+  };
   const seekTo = (time: number) => {
     const audio = audioRef.current;
     if (audio) {
       audio.currentTime = time;
-      // 若 seek 回到尾部淡出区之前，取消淡出并恢复目标音量。
+      // 若 seek 回到尾部淡出区之前，取消活动 deck 的淡出并恢复目标音量。
       if (fadeOutStartedRef.current) {
         fadeOutStartedRef.current = false;
-        if (fadeRafRef.current !== null) {
-          cancelAnimationFrame(fadeRafRef.current);
-          fadeRafRef.current = null;
+        const deck = activeDeckRef.current;
+        const raf = deckFadeRafs.current[deck];
+        if (raf !== null) {
+          cancelAnimationFrame(raf);
+          deckFadeRafs.current[deck] = null;
         }
         audio.volume = volumeRef.current;
       }
@@ -1753,6 +1957,22 @@ export default function Music() {
     playByQueueOffset,
     desktopLyricStyle,
   ]);
+
+  // 系统托盘命令（Rust 托盘菜单 / 图标点击经 "tray-command" 事件转来）：驱动播放。
+  useEffect(() => {
+    if (!isTauri) return;
+    let unCmd: (() => void) | undefined;
+    (async () => {
+      const { listen } = await import("@tauri-apps/api/event");
+      unCmd = await listen<string>("tray-command", (event) => {
+        const cmd = event.payload;
+        if (cmd === "toggle") void togglePlay();
+        else if (cmd === "next") void playByQueueOffset(1);
+        else if (cmd === "prev") void playByQueueOffset(-1);
+      });
+    })();
+    return () => unCmd?.();
+  }, [togglePlay, playByQueueOffset]);
 
   // 系统媒体集成（MediaSession）：锁屏/系统媒体浮层/媒体键。
   useEffect(() => {
@@ -2059,6 +2279,27 @@ export default function Music() {
                 backdropFilter: "blur(20px)",
               }}
             >
+              {/* 实时联想（网易 /search/suggest，输入时防抖拉取）。优先级最高，置顶。 */}
+              {searchSuggestions.length > 0 && (
+                <div className="p-2 border-b" style={{ borderColor: "var(--cream-line)" }}>
+                  {searchSuggestions.map((item, index) => (
+                    <button
+                      key={index}
+                      type="button"
+                      onClick={() => {
+                        setKeyword(item);
+                        setSearchSuggestions([]);
+                        void doSearch(1, item);
+                      }}
+                      className="flex w-full items-center gap-2.5 rounded-lg px-3 py-2 text-left text-sm text-cream-dim transition-colors hover:bg-[rgba(242,232,213,0.07)] hover:text-cream"
+                    >
+                      <IconSearch size={14} className="shrink-0 text-cream-faint" />
+                      <span className="min-w-0 flex-1 truncate">{item}</span>
+                    </button>
+                  ))}
+                </div>
+              )}
+
               {/* Recent Searches */}
               {recentSearches.length > 0 && (
                 <div className="p-4 border-b" style={{ borderColor: "var(--cream-line)" }}>
@@ -2200,6 +2441,8 @@ export default function Music() {
             desktopLyricOn={desktopLyricOn}
             onDesktopLyric={() => void toggleDesktopLyric()}
             desktopLyricAvailable={isTauri}
+            abLoop={abLoop}
+            onAbLoop={cycleAbLoop}
             extrasSource={extrasSource}
             onPlaySong={(song) => void playSong(song, [song])}
             onOpenPlaylist={(summary) => void openNeteasePlaylist(summary)}

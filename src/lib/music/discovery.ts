@@ -1,3 +1,4 @@
+import { scriptFetch } from "@/source-script/fetch";
 import { lxGet, normalizeLxSong } from "./lxServer";
 import type {
   MusicDiscoveryBoard,
@@ -11,7 +12,7 @@ import type {
   MusicSourceDescriptor,
 } from "./types";
 import { MUSIC_PLATFORMS, normalizeMusicPlatform } from "./types";
-import { asNumber, asRecord, asString, unwrapArray } from "./utils";
+import { asNumber, asRecord, asString, cleanBaseUrl, unwrapArray } from "./utils";
 
 const BOARD_FALLBACKS: MusicPlatform[] = ["kg", "kw", "tx", "wy", "mg"];
 const HOT_FALLBACKS: MusicPlatform[] = ["mg", "kw", "tx", "wy", "kg"];
@@ -408,4 +409,288 @@ export async function getMusicHotSearch(
     settled.flatMap((item) => (item.status === "fulfilled" ? item.value : [])),
     (item) => item.keyword.trim().toLowerCase()
   );
+}
+
+// ── lxserver 增强 fork 扩展接口 ──────────────────────────────────────────────
+// 以下函数对接 lxserver fork 暴露但此前未调用的 REST `/api/music/*` 端点。
+// 列表型一律失败返回空、不抛未捕获异常;歌手/专辑详情按约定失败抛错。
+
+type LxSongInput = Parameters<typeof normalizeLxSong>[1];
+
+/** 搜索建议(搜索框补全)。返回可能是 string[] 或 {list}。失败空数组。 */
+export async function getLxTipSearch(
+  source: MusicSourceDescriptor,
+  platform: MusicPlatform,
+  keyword: string
+): Promise<string[]> {
+  assertLxSource(source);
+  if (!keyword.trim()) return [];
+  try {
+    const payload = await lxGet<unknown>(
+      source,
+      `/api/music/tipSearch?source=${platform}&name=${encodeURIComponent(keyword)}`
+    );
+    const rawList = Array.isArray(payload) ? payload : asRecord(payload)?.list;
+    if (!Array.isArray(rawList)) return [];
+    return rawList
+      .map((item) => {
+        if (typeof item === "string") return item;
+        const row = asRecord(item);
+        return (
+          asString(row?.name) ||
+          asString(row?.keyword) ||
+          asString(row?.word) ||
+          ""
+        );
+      })
+      .filter((item): item is string => !!item);
+  } catch {
+    return [];
+  }
+}
+
+/** 歌手详情,返回原始记录。失败抛错。 */
+export async function getLxArtistDetail(
+  source: MusicSourceDescriptor,
+  platform: MusicPlatform,
+  id: string
+): Promise<Record<string, unknown>> {
+  assertLxSource(source);
+  if (!id) throw new Error("缺少歌手 ID");
+  const payload = await lxGet<unknown>(
+    source,
+    `/api/music/artistDetail?source=${platform}&id=${id}`
+  );
+  const record = asRecord(payload);
+  return asRecord(record?.data) ?? record ?? {};
+}
+
+/** 歌手专辑列表(归一成专辑卡)。失败空。 */
+export async function getLxArtistAlbums(
+  source: MusicSourceDescriptor,
+  platform: MusicPlatform,
+  id: string,
+  page = 1
+): Promise<{ list: MusicSongListSummary[]; total: number; page: number }> {
+  assertLxSource(source);
+  if (!id) return { list: [], total: 0, page };
+  try {
+    const payload = await lxGet<unknown>(
+      source,
+      `/api/music/artistAlbums?source=${platform}&id=${id}&page=${page}`
+    );
+    const record = asRecord(payload);
+    const data = asRecord(record?.data);
+    const list = unwrapArray<unknown>(payload)
+      .map((item) => normalizeSongListSummary(item, platform))
+      .filter((item): item is MusicSongListSummary => !!item);
+    return {
+      list,
+      total: asNumber(record?.total) ?? asNumber(data?.total) ?? list.length,
+      page,
+    };
+  } catch {
+    return { list: [], total: 0, page };
+  }
+}
+
+/** 歌手歌曲(后端循环拉全部 ≤500)。失败空。 */
+export async function getLxArtistSongs(
+  source: MusicSourceDescriptor,
+  platform: MusicPlatform,
+  id: string,
+  order = "hot"
+): Promise<MusicSong[]> {
+  assertLxSource(source);
+  if (!id) return [];
+  try {
+    const payload = await lxGet<unknown>(
+      source,
+      `/api/music/artistSongs?source=${platform}&id=${id}&order=${order}`
+    );
+    return unwrapArray<unknown>(payload)
+      .map((item) => normalizeLxSong(source, item as LxSongInput, platform))
+      .filter((item): item is MusicSong => !!item);
+  } catch {
+    return [];
+  }
+}
+
+/** 专辑内歌曲。失败空。 */
+export async function getLxAlbumSongs(
+  source: MusicSourceDescriptor,
+  platform: MusicPlatform,
+  id: string
+): Promise<MusicSong[]> {
+  assertLxSource(source);
+  if (!id) return [];
+  try {
+    const payload = await lxGet<unknown>(
+      source,
+      `/api/music/albumSongs?source=${platform}&id=${id}`
+    );
+    return unwrapArray<unknown>(payload)
+      .map((item) => normalizeLxSong(source, item as LxSongInput, platform))
+      .filter((item): item is MusicSong => !!item);
+  } catch {
+    return [];
+  }
+}
+
+/** 歌单搜索(归一成歌单卡)。失败空。 */
+export async function searchLxSonglists(
+  source: MusicSourceDescriptor,
+  platform: MusicPlatform,
+  text: string,
+  page = 1
+): Promise<{ list: MusicSongListSummary[]; total: number; page: number }> {
+  assertLxSource(source);
+  if (!text.trim()) return { list: [], total: 0, page };
+  try {
+    const payload = await lxGet<unknown>(
+      source,
+      `/api/music/songList/search?source=${platform}&text=${encodeURIComponent(
+        text
+      )}&page=${page}`
+    );
+    const record = asRecord(payload);
+    const data = asRecord(record?.data);
+    const list = unwrapArray<unknown>(payload)
+      .map((item) => normalizeSongListSummary(item, platform))
+      .filter((item): item is MusicSongListSummary => !!item);
+    return {
+      list,
+      total: asNumber(record?.total) ?? asNumber(data?.total) ?? list.length,
+      page,
+    };
+  } catch {
+    return { list: [], total: 0, page };
+  }
+}
+
+/** 用户歌单。失败空。 */
+export async function getLxUserPlaylist(
+  source: MusicSourceDescriptor,
+  platform: MusicPlatform,
+  uid: string,
+  page = 1
+): Promise<{ list: MusicSongListSummary[]; total: number; page: number }> {
+  assertLxSource(source);
+  if (!uid) return { list: [], total: 0, page };
+  try {
+    const payload = await lxGet<unknown>(
+      source,
+      `/api/music/songList/userPlaylist?source=${platform}&uid=${uid}&page=${page}`
+    );
+    const record = asRecord(payload);
+    const data = asRecord(record?.data);
+    const list = unwrapArray<unknown>(payload)
+      .map((item) => normalizeSongListSummary(item, platform))
+      .filter((item): item is MusicSongListSummary => !!item);
+    return {
+      list,
+      total: asNumber(record?.total) ?? asNumber(data?.total) ?? list.length,
+      page,
+    };
+  } catch {
+    return { list: [], total: 0, page };
+  }
+}
+
+/** 评论(结构对齐 neteaseApi 的 NeteaseComment)。 */
+export interface LxComment {
+  id: string;
+  nickname: string;
+  avatar?: string;
+  content: string;
+  liked: number;
+  timeText?: string;
+  hot: boolean;
+}
+
+function normalizeLxComment(item: unknown, hot: boolean): LxComment | null {
+  const record = asRecord(item);
+  if (!record) return null;
+  const user = asRecord(record.user) ?? asRecord(record.userInfo);
+  const id =
+    asString(record.id) ||
+    asString(record.commentId) ||
+    asString(record.cid) ||
+    "";
+  const content = asString(record.content) || asString(record.comment) || "";
+  if (!id || !content) return null;
+  return {
+    id,
+    nickname:
+      asString(record.nickname) ||
+      asString(user?.nickname) ||
+      asString(user?.name) ||
+      asString(record.username) ||
+      "匿名用户",
+    avatar:
+      asString(record.avatar) ||
+      asString(user?.avatarUrl) ||
+      asString(user?.avatar),
+    content,
+    liked:
+      asNumber(record.liked) ??
+      asNumber(record.likedCount) ??
+      asNumber(record.like) ??
+      0,
+    timeText: asString(record.timeText) || asString(record.timeStr),
+    hot,
+  };
+}
+
+/**
+ * 歌曲评论。lxGet 仅支持 GET,故此处用 scriptFetch 直接 POST,
+ * 鉴权 token 放 x-user-token(与 lxServer.ts headersFor 一致)。失败空数组。
+ */
+export async function getLxComments(
+  source: MusicSourceDescriptor,
+  song: MusicSong,
+  type = "hot",
+  page = 1,
+  limit = 20
+): Promise<LxComment[]> {
+  assertLxSource(source);
+  const base = cleanBaseUrl(source.baseUrl);
+  if (!base) return [];
+  try {
+    const headers: Record<string, string> = {
+      Accept: "application/json",
+      ...(source.headers ?? {}),
+    };
+    if (source.token) headers["x-user-token"] = source.token;
+    const res = await scriptFetch(`${base}/api/music/comment`, {
+      method: "POST",
+      json: { songInfo: song.raw ?? song, type, page, limit },
+      headers,
+      timeout: 15000,
+    });
+    if (!res.ok) return [];
+    const payload = await res.json<unknown>();
+    const record = asRecord(payload);
+    const result = asRecord(record?.result) ?? asRecord(record?.data) ?? record;
+    const comments = result?.comments;
+    const hotComments = result?.hotComments;
+    const out: LxComment[] = [];
+    if (Array.isArray(hotComments)) {
+      out.push(
+        ...hotComments
+          .map((item) => normalizeLxComment(item, true))
+          .filter((item): item is LxComment => !!item)
+      );
+    }
+    if (Array.isArray(comments)) {
+      out.push(
+        ...comments
+          .map((item) => normalizeLxComment(item, false))
+          .filter((item): item is LxComment => !!item)
+      );
+    }
+    return dedupeBy(out, (item) => item.id);
+  } catch {
+    return [];
+  }
 }

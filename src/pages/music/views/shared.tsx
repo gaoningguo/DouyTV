@@ -1,8 +1,9 @@
-import { useEffect, useState, type ReactNode } from "react";
+import { useEffect, useMemo, useState, type ReactNode } from "react";
 import { IconLocal, IconPlus, IconTrash } from "@/components/Icon";
 import { type MusicSong } from "@/lib/music";
 import { useMusicLocalStore } from "@/stores/musicLocal";
 import { SongList } from "../components/SongList";
+import { FilterChip } from "../components/ui";
 
 /** 各页面通用的页头：大标题 + 副标题 + 右侧操作槽。 */
 export function PageHeader({
@@ -65,12 +66,42 @@ export function LocalView({
   const { folders, tracks, scanning, error, hydrate, addFolder, removeFolder, rescan } =
     useMusicLocalStore();
   const [path, setPath] = useState("");
+  // 分组视图：平铺 / 按歌手 / 按专辑 / 按文件夹。曲库大时便于浏览。
+  const [groupBy, setGroupBy] = useState<"none" | "artist" | "album" | "folder">("none");
 
   useEffect(() => {
     // 先 hydrate(从 SQLite 秒读缓存曲目),完成后再后台增量补扫。
     void hydrate().then(() => rescan());
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
+
+  // 按当前维度把曲目分组（平铺时单组）。文件夹取 id（文件绝对路径）的父目录。
+  const groups = useMemo(() => {
+    if (groupBy === "none") return [{ key: "", songs: tracks }];
+    const map = new Map<string, MusicSong[]>();
+    for (const song of tracks) {
+      let key: string;
+      if (groupBy === "artist") key = song.artist || "未知歌手";
+      else if (groupBy === "album") key = song.album || "未知专辑";
+      else {
+        const p = song.id.replace(/[/\\][^/\\]*$/, "");
+        key = p.split(/[/\\]/).pop() || p || "根目录";
+      }
+      const arr = map.get(key);
+      if (arr) arr.push(song);
+      else map.set(key, [song]);
+    }
+    return Array.from(map.entries())
+      .map(([key, songs]) => ({ key, songs }))
+      .sort((a, b) => a.key.localeCompare(b.key, "zh"));
+  }, [tracks, groupBy]);
+
+  const GROUP_OPTIONS: Array<{ id: typeof groupBy; label: string }> = [
+    { id: "none", label: "全部" },
+    { id: "artist", label: "歌手" },
+    { id: "album", label: "专辑" },
+    { id: "folder", label: "文件夹" },
+  ];
 
   return (
     <div className="music-page-wrap space-y-5">
@@ -123,17 +154,50 @@ export function LocalView({
         </div>
       )}
       {error && <p className="text-xs text-ember">{error}</p>}
-      <SongList
-        songs={tracks}
-        activeSong={currentSong}
-        activePlaying={isPlaying}
-        emptyText={folders.length === 0 ? "添加一个文件夹开始扫描本地音乐" : "该目录没有音频文件"}
-        isFavorite={isFavorite}
-        onPlay={(song) => onPlay(song, tracks)}
-        onFavorite={onFavorite}
-        onQueue={onQueue}
-        onAddToPlaylist={onAddToPlaylist}
-      />
+      {tracks.length > 0 && (
+        <div className="flex gap-2 overflow-x-auto scrollbar-hide pb-1">
+          {GROUP_OPTIONS.map((item) => (
+            <FilterChip key={item.id} active={groupBy === item.id} onClick={() => setGroupBy(item.id)}>
+              {item.label}
+            </FilterChip>
+          ))}
+        </div>
+      )}
+      {groupBy === "none" ? (
+        <SongList
+          songs={tracks}
+          activeSong={currentSong}
+          activePlaying={isPlaying}
+          emptyText={folders.length === 0 ? "添加一个文件夹开始扫描本地音乐" : "该目录没有音频文件"}
+          isFavorite={isFavorite}
+          onPlay={(song) => onPlay(song, tracks)}
+          onFavorite={onFavorite}
+          onQueue={onQueue}
+          onAddToPlaylist={onAddToPlaylist}
+        />
+      ) : (
+        <div className="space-y-6">
+          {groups.map((group) => (
+            <section key={group.key}>
+              <div className="mb-2 flex items-baseline gap-2">
+                <h3 className="font-display text-sm font-bold text-cream">{group.key}</h3>
+                <span className="text-xs text-cream-faint">{group.songs.length} 首</span>
+              </div>
+              <SongList
+                songs={group.songs}
+                activeSong={currentSong}
+                activePlaying={isPlaying}
+                emptyText=""
+                isFavorite={isFavorite}
+                onPlay={(song) => onPlay(song, group.songs)}
+                onFavorite={onFavorite}
+                onQueue={onQueue}
+                onAddToPlaylist={onAddToPlaylist}
+              />
+            </section>
+          ))}
+        </div>
+      )}
     </div>
   );
 }

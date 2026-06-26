@@ -2494,6 +2494,33 @@ code {
   font-size: 10px;
   color: var(--cream-faint);
 }
+/* 楼中楼：被引用的上层评论预览 */
+.music-comment-replied {
+  margin-top: 5px;
+  padding: 6px 9px;
+  border-left: 2px solid var(--cream-line);
+  background: rgba(242, 232, 213, 0.04);
+  border-radius: 4px;
+  font-size: 12px;
+  line-height: 1.55;
+  color: var(--cream-dim);
+  white-space: pre-wrap;
+  word-break: break-word;
+}
+.music-comment-replied-name {
+  color: var(--ember);
+  font-weight: 600;
+}
+.music-comment-replies {
+  font-size: 10px;
+  color: var(--ember);
+}
+.music-comment-more {
+  display: flex;
+  justify-content: center;
+  padding: 8px 0 2px;
+  list-style: none;
+}
 .music-simi-list {
   display: flex;
   flex-direction: column;
@@ -2600,6 +2627,32 @@ code {
   min-width: 0;
   width: 100%;
   accent-color: var(--ember);
+}
+/* AB 循环按钮：未设/设了 A/设了 A+B 三态。 */
+.music-ab-btn {
+  height: 30px;
+  padding: 0 9px;
+  border-radius: 8px;
+  font-family: "JetBrains Mono", "SF Mono", Consolas, monospace;
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  color: var(--cream-dim);
+  background: rgba(255, 255, 255, 0.06);
+  border: 1px solid var(--cream-line);
+  transition: color 150ms ease, background 150ms ease, border-color 150ms ease;
+}
+.music-ab-btn:hover {
+  color: var(--cream);
+}
+.music-ab-btn[data-state="partial"] {
+  color: var(--ember);
+  border-color: rgba(255, 129, 97, 0.4);
+}
+.music-ab-btn[data-state="active"] {
+  color: var(--ink);
+  background: var(--ember);
+  border-color: var(--ember);
 }
 
 @media (max-width: 860px) {
