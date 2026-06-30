@@ -33,6 +33,7 @@ export function SongList({
   onRemove,
   hideFavorite,
   hideQueue,
+  onOpenAlbumSong,
 }: {
   songs: MusicSong[];
   activeSong: MusicSong | null;
@@ -48,6 +49,8 @@ export function SongList({
   onRemove?: (song: MusicSong) => void;
   hideFavorite?: boolean;
   hideQueue?: boolean;
+  /** 提供时，带 albumId 的歌曲的专辑名可点（跳专辑页，LX 源走 getLxAlbumSongs 路由）。 */
+  onOpenAlbumSong?: (song: MusicSong) => void;
 }) {
   if (loading) {
     return (
@@ -94,7 +97,18 @@ export function SongList({
               <div className="mt-1 flex items-center gap-2 text-xs text-cream-dim min-w-0">
                 <span className="line-clamp-1">{song.artist}</span>
                 <span className="hidden sm:inline text-cream-faint">/</span>
-                <span className="hidden sm:inline line-clamp-1">{song.album || song.sourceName}</span>
+                {onOpenAlbumSong && song.album && song.albumId ? (
+                  <button
+                    type="button"
+                    onClick={() => onOpenAlbumSong(song)}
+                    className="hidden sm:inline line-clamp-1 hover:text-ember transition-colors tap text-left"
+                    title="查看专辑"
+                  >
+                    {song.album}
+                  </button>
+                ) : (
+                  <span className="hidden sm:inline line-clamp-1">{song.album || song.sourceName}</span>
+                )}
               </div>
             </div>
             <span className="hidden sm:inline font-mono text-[11px] text-cream-faint w-12 text-right">

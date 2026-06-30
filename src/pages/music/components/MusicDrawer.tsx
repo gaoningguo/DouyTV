@@ -200,6 +200,69 @@ export function MusicDrawer({
                       title="桌面歌词描边色"
                     />
                   </SettingRow>
+                  <SettingRow title="未唱色" desc="尚未唱到的文字底色。">
+                    <input
+                      type="color"
+                      value={desktopLyricStyle.idleColor}
+                      onChange={(event) => onDesktopLyricStyle({ idleColor: event.target.value })}
+                      className="w-9 h-7 rounded cursor-pointer bg-transparent"
+                      title="桌面歌词未唱色"
+                    />
+                  </SettingRow>
+                  <div>
+                    <div className="flex items-center justify-between mb-1.5">
+                      <span className="text-sm">字重</span>
+                      <span className="font-mono text-xs text-cream-faint">
+                        {desktopLyricStyle.fontWeight}
+                      </span>
+                    </div>
+                    <input
+                      type="range"
+                      min={400}
+                      max={900}
+                      step={100}
+                      value={desktopLyricStyle.fontWeight}
+                      onChange={(event) =>
+                        onDesktopLyricStyle({ fontWeight: Number(event.target.value) })
+                      }
+                      className="w-full"
+                      style={{ accentColor: "var(--ember)" }}
+                      title="桌面歌词字重"
+                    />
+                  </div>
+                  <div>
+                    <div className="flex items-center justify-between mb-1.5">
+                      <span className="text-sm">背景板</span>
+                      <span className="font-mono text-xs text-cream-faint">
+                        {Math.round(desktopLyricStyle.bgOpacity * 100)}%
+                      </span>
+                    </div>
+                    <input
+                      type="range"
+                      min={0}
+                      max={1}
+                      step={0.05}
+                      value={desktopLyricStyle.bgOpacity}
+                      onChange={(event) =>
+                        onDesktopLyricStyle({ bgOpacity: Number(event.target.value) })
+                      }
+                      className="w-full"
+                      style={{ accentColor: "var(--ember)" }}
+                      title="桌面歌词背景板透明度"
+                    />
+                  </div>
+                  <SettingRow title="逐字填色" desc="按词时间逐字点亮（关闭则整行线性扫光）。">
+                    <Switch
+                      checked={desktopLyricStyle.karaoke}
+                      onChange={(checked) => onDesktopLyricStyle({ karaoke: checked })}
+                    />
+                  </SettingRow>
+                  <SettingRow title="显示翻译行" desc="桌面歌词第二行显示翻译。">
+                    <Switch
+                      checked={desktopLyricStyle.showTrans}
+                      onChange={(checked) => onDesktopLyricStyle({ showTrans: checked })}
+                    />
+                  </SettingRow>
                 </section>
               )}
               <section className="space-y-3">

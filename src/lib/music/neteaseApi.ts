@@ -1,14 +1,17 @@
 /**
  * 网易云音源适配器，两种传输模式归一到同一 MusicSong/MusicPlayResult：
- *  - builtin  ：前端直连 music.163.com。搜索走免加密 GET /api/search/get，
- *               播放链走 weapi POST，歌词走 GET /api/song/lyric。全平台零部署。
+ *  - builtin  ：前端直连 music.163.com。搜索走 weapi 加密 POST /api/cloudsearch/pc
+ *               （明文 /api/search/get 已被反爬退化、忽略关键词），播放链走 weapi POST，
+ *               歌词走 GET /api/song/lyric。全平台零部署。
  *  - external ：用户自部署的 NeteaseCloudMusicApi 实例（REST /cloudsearch、
  *               /song/url/v1、/lyric/new）。
  * 经 scriptFetch（Tauri 下 Rust ureq，绕 WebView CORS、走用户代理）。
  * 已 curl 匿名验证：搜索/播放链/歌词均可用，免费曲 320k、版权曲 128k，VIP 曲 url=null（交上层回落解灰）。
  */
+import { invoke } from "@tauri-apps/api/core";
 import { scriptFetch } from "@/source-script/fetch";
 import { weapiEncrypt } from "./neteaseCrypto";
+import { getActiveProxyUrl } from "@/stores/proxy";
 import type {
   MusicLyricResult,
   MusicPlayResult,
@@ -97,6 +100,66 @@ async function weapiPost(endpoint: string, payload: unknown): Promise<unknown> {
   return res.json<unknown>();
 }
 
+const isTauriEnv =
+  typeof window !== "undefined" && "__TAURI_INTERNALS__" in window;
+
+/**
+ * builtin 富接口走 Rust `netease_request` 命令（全套 weapi/eapi 加密 + 匿名 cookie/UA +
+ * 随机中国 IP 注入，原生出网绕反爬）。等价 NeteaseCloudMusicApi 的服务端请求，命中率
+ * 远高于前端直连 scriptFetch（后者常被 -462 反爬挡）。
+ *
+ * @param uri  网易 API path，如 `/api/v1/artist/12345`（weapi 会取 uri[5..] 拼到 /weapi/）。
+ * @param data 请求体 JSON 对象。
+ * @param crypto 加密方式 weapi(默认)/eapi/api。
+ * 非 Tauri 环境（纯浏览器 dev）抛错，调用方自行回退到 weapiPost/直连。
+ */
+async function neteaseRequest(
+  uri: string,
+  data: Record<string, unknown> = {},
+  crypto: "weapi" | "eapi" | "api" = "weapi"
+): Promise<unknown> {
+  if (!isTauriEnv) throw new Error("netease_request 需 Tauri 环境");
+  const resp = await invoke<{ status: number; body: string }>("netease_request", {
+    req: {
+      uri,
+      data,
+      crypto,
+      proxy_url: getActiveProxyUrl() ?? null,
+    },
+  });
+  try {
+    return JSON.parse(resp.body);
+  } catch {
+    throw new Error(`netease_request 返回非 JSON（HTTP ${resp.status}）`);
+  }
+}
+
+/**
+ * builtin 富接口统一入口：优先走 Rust `netease_request`（weapi 加密 + 匿名注入绕 -462），
+ * Rust 不可用（非 Tauri）或异常时回退到直连 weapiPost（uri 去掉前缀 /api/ 或 /eapi/）。
+ * 返回顶层 record（调用方按既有字段解析）。
+ */
+async function builtinJson(
+  uri: string,
+  data: Record<string, unknown> = {},
+  crypto: "weapi" | "eapi" | "api" = "weapi"
+): Promise<Record<string, unknown> | undefined> {
+  if (isTauriEnv) {
+    try {
+      return asRecord(await neteaseRequest(uri, data, crypto));
+    } catch {
+      /* 回退直连 */
+    }
+  }
+  // 回退：weapi 直连（uri 形如 /api/xxx → /weapi/xxx）。
+  const endpoint = uri.startsWith("/api/")
+    ? uri.slice(5)
+    : uri.startsWith("/")
+      ? uri.slice(1)
+      : uri;
+  return asRecord(await weapiPost(endpoint, data));
+}
+
 function pickArtists(item: Record<string, unknown>): string {
   const arr = Array.isArray(item.ar)
     ? item.ar
@@ -147,14 +210,22 @@ export async function searchNeteaseApi(
   limit: number
 ): Promise<MusicSearchResult> {
   const offset = (page - 1) * limit;
-  const url = isExternal(source)
-    ? `${cleanBaseUrl(source.baseUrl)}/cloudsearch?keywords=${encodeURIComponent(
-        keyword
-      )}&type=1&limit=${limit}&offset=${offset}`
-    : `${NETEASE_BASE}/api/search/get?s=${encodeURIComponent(
-        keyword
-      )}&type=1&limit=${limit}&offset=${offset}`;
-  const payload = await getJson(url, headersFor(source));
+  // external 走自部署 /cloudsearch；builtin 走 weapi 加密 /api/cloudsearch/pc。
+  // 明文老接口 /api/search/get 已被网易反爬退化（忽略关键词返回不相关结果），不再使用。
+  const payload = isExternal(source)
+    ? await getJson(
+        `${cleanBaseUrl(source.baseUrl)}/cloudsearch?keywords=${encodeURIComponent(
+          keyword
+        )}&type=1&limit=${limit}&offset=${offset}`,
+        headersFor(source)
+      )
+    : await builtinJson("/api/cloudsearch/pc", {
+        s: keyword,
+        type: 1,
+        limit,
+        offset,
+        total: true,
+      });
   const record = asRecord(payload);
   const result = asRecord(record?.result);
   const rawList = Array.isArray(result?.songs) ? result?.songs : unwrapArray(payload);
@@ -180,12 +251,30 @@ export async function fetchNeteaseLyric(
   id: string
 ): Promise<MusicLyricResult> {
   try {
-    const url = isExternal(source)
-      ? `${cleanBaseUrl(source.baseUrl)}/lyric/new?id=${encodeURIComponent(id)}`
-      : `${NETEASE_BASE}/api/song/lyric/v1?id=${encodeURIComponent(
-          id
-        )}&lv=-1&kv=-1&tv=-1&rv=-1&yv=1&ytv=1&yrc=1`;
-    return normalizeLyricPayload(await getJson(url, headersFor(source)));
+    // builtin 走 weapi 加密 /api/song/lyric/v1（含逐字 yrc）；明文 GET 已被反爬退化（不返歌词）。
+    const payload = isExternal(source)
+      ? await getJson(
+          `${cleanBaseUrl(source.baseUrl)}/lyric/new?id=${encodeURIComponent(id)}`,
+          headersFor(source)
+        )
+      : await builtinJson("/api/song/lyric/v1", {
+          id,
+          cp: false,
+          tv: 0,
+          lv: 0,
+          rv: 0,
+          kv: 0,
+          yv: 0,
+          ytv: 0,
+          yrv: 0,
+        });
+    const result = normalizeLyricPayload(payload);
+    // 逐字/结构化歌词取不到时，回退整轨老歌词（/lyric，lv=1）。
+    if (!result.lyric) {
+      const plain = await getNeteaseLyricPlain(source, id);
+      if (plain) return { ...result, lyric: plain };
+    }
+    return result;
   } catch {
     return { lyric: "" };
   }
@@ -289,6 +378,8 @@ export async function resolveNeteaseApi(
   const data = Array.isArray(record?.data) ? asRecord(record?.data[0]) : asRecord(record?.data);
   const url = asString(data?.url);
   if (!url) {
+    // v1 没给直链（VIP/灰曲）→ 抛错，交上层解灰兜底（UNM/外部 match/copyright）。
+    // 注意：不要在这里拼 /song/url/v1/302 死链兜底，否则会挡住解灰，VIP 曲永远拿不到可播链。
     throw new Error("网易匿名播放链不可用（版权/VIP），可回落其它源");
   }
   const br = asNumber(data?.br);
@@ -363,14 +454,19 @@ export async function getNeteaseComments(
   limit = 20
 ): Promise<NeteaseCommentPage> {
   const offset = (page - 1) * limit;
-  const url = isExternal(source)
-    ? `${cleanBaseUrl(source.baseUrl)}/comment/music?id=${encodeURIComponent(
-        songId
-      )}&limit=${limit}&offset=${offset}`
-    : `${NETEASE_BASE}/api/v1/resource/comments/R_SO_4_${encodeURIComponent(
-        songId
-      )}?limit=${limit}&offset=${offset}`;
-  const record = asRecord(await getJson(url, headersFor(source)));
+  const record = isExternal(source)
+    ? asRecord(
+        await getJson(
+          `${cleanBaseUrl(source.baseUrl)}/comment/music?id=${encodeURIComponent(
+            songId
+          )}&limit=${limit}&offset=${offset}`,
+          headersFor(source)
+        )
+      )
+    : await builtinJson(
+        `/api/v1/resource/comments/R_SO_4_${encodeURIComponent(songId)}`,
+        { limit, offset }
+      );
   // 仅首页带热评（置顶），翻页时不重复。
   const hot =
     page === 1
@@ -395,12 +491,18 @@ export async function getNeteaseSimiSongs(
   songId: string
 ): Promise<MusicSong[]> {
   try {
-    const url = isExternal(source)
-      ? `${cleanBaseUrl(source.baseUrl)}/simi/song?id=${encodeURIComponent(songId)}`
-      : `${NETEASE_BASE}/api/v1/discovery/simiSong?songid=${encodeURIComponent(
-          songId
-        )}&limit=30&offset=0`;
-    const record = asRecord(await getJson(url, headersFor(source)));
+    const record = isExternal(source)
+      ? asRecord(
+          await getJson(
+            `${cleanBaseUrl(source.baseUrl)}/simi/song?id=${encodeURIComponent(songId)}`,
+            headersFor(source)
+          )
+        )
+      : await builtinJson(`/api/v1/discovery/simiSong`, {
+          songid: songId,
+          limit: 30,
+          offset: 0,
+        });
     if (asNumber(record?.code) === -462) return []; // 反爬验证，built-in 拿不到
     const rawList = Array.isArray(record?.songs) ? record?.songs : [];
     return (rawList ?? [])
@@ -416,10 +518,14 @@ export async function getNeteasePersonalized(
   source: MusicSourceDescriptor,
   limit = 12
 ): Promise<MusicSongListSummary[]> {
-  const url = isExternal(source)
-    ? `${cleanBaseUrl(source.baseUrl)}/personalized?limit=${limit}`
-    : `${NETEASE_BASE}/api/personalized/playlist?limit=${limit}`;
-  const record = asRecord(await getJson(url, headersFor(source)));
+  const record = isExternal(source)
+    ? asRecord(
+        await getJson(
+          `${cleanBaseUrl(source.baseUrl)}/personalized?limit=${limit}`,
+          headersFor(source)
+        )
+      )
+    : await builtinJson(`/api/personalized/playlist`, { limit });
   const rawList = Array.isArray(record?.result) ? record?.result : [];
   return (rawList ?? [])
     .map((item): MusicSongListSummary | null => {
@@ -447,10 +553,9 @@ export async function getNeteaseToplists(
   source: MusicSourceDescriptor
 ): Promise<MusicSongListSummary[]> {
   try {
-    const url = isExternal(source)
-      ? `${cleanBaseUrl(source.baseUrl)}/toplist`
-      : `${NETEASE_BASE}/api/toplist`;
-    const record = asRecord(await getJson(url, headersFor(source)));
+    const record = isExternal(source)
+      ? asRecord(await getJson(`${cleanBaseUrl(source.baseUrl)}/toplist`, headersFor(source)))
+      : await builtinJson(`/api/toplist`, {});
     if (asNumber(record?.code) === -462) return [];
     const rawList = Array.isArray(record?.list) ? record?.list : [];
     return ((rawList as unknown[]) ?? [])
@@ -496,12 +601,16 @@ export async function getNeteasePlaylistSongs(
   playlistId: string,
   limit = 50
 ): Promise<MusicSong[]> {
-  const url = isExternal(source)
-    ? `${cleanBaseUrl(source.baseUrl)}/playlist/track/all?id=${encodeURIComponent(
-        playlistId
-      )}&limit=${limit}`
-    : `${NETEASE_BASE}/api/v6/playlist/detail?id=${encodeURIComponent(playlistId)}&n=${limit}`;
-  const record = asRecord(await getJson(url, headersFor(source)));
+  const record = isExternal(source)
+    ? asRecord(
+        await getJson(
+          `${cleanBaseUrl(source.baseUrl)}/playlist/track/all?id=${encodeURIComponent(
+            playlistId
+          )}&limit=${limit}`,
+          headersFor(source)
+        )
+      )
+    : await builtinJson("/api/v6/playlist/detail", { id: playlistId, n: limit });
   // external /playlist/track/all → {songs:[]}；built-in v6 → {playlist:{tracks:[]}}
   const rawList = Array.isArray(record?.songs)
     ? record?.songs
@@ -521,14 +630,17 @@ export async function searchNeteasePlaylists(
   limit = 20
 ): Promise<MusicSongListSummary[]> {
   try {
-    const url = isExternal(source)
-      ? `${cleanBaseUrl(source.baseUrl)}/cloudsearch?keywords=${encodeURIComponent(
-          keyword
-        )}&type=1000&limit=${limit}`
-      : `${NETEASE_BASE}/api/search/get?s=${encodeURIComponent(
-          keyword
-        )}&type=1000&limit=${limit}`;
-    const record = asRecord(await getJson(url, headersFor(source)));
+    // builtin 走 weapi 加密 /api/cloudsearch/pc（明文 /api/search/get 已被反爬退化）。
+    const record = isExternal(source)
+      ? asRecord(
+          await getJson(
+            `${cleanBaseUrl(source.baseUrl)}/cloudsearch?keywords=${encodeURIComponent(
+              keyword
+            )}&type=1000&limit=${limit}`,
+            headersFor(source)
+          )
+        )
+      : await builtinJson("/api/cloudsearch/pc", { s: keyword, type: 1000, limit, total: true });
     if (asNumber(record?.code) === -462) return [];
     const result = asRecord(record?.result);
     const rawList = Array.isArray(result?.playlists) ? result?.playlists : [];
@@ -559,10 +671,14 @@ export async function getNeteaseNewSongRecommend(
   source: MusicSourceDescriptor,
   limit = 30
 ): Promise<MusicSong[]> {
-  const url = isExternal(source)
-    ? `${cleanBaseUrl(source.baseUrl)}/personalized/newsong?limit=${limit}`
-    : `${NETEASE_BASE}/api/personalized/newsong?limit=${limit}`;
-  const record = asRecord(await getJson(url, headersFor(source)));
+  const record = isExternal(source)
+    ? asRecord(
+        await getJson(
+          `${cleanBaseUrl(source.baseUrl)}/personalized/newsong?limit=${limit}`,
+          headersFor(source)
+        )
+      )
+    : await builtinJson("/api/personalized/newsong", { limit });
   if (asNumber(record?.code) === -462) return [];
   const rawList = Array.isArray(record?.result) ? record?.result : [];
   return (rawList ?? [])
@@ -597,10 +713,11 @@ function pickMvArtist(item: Record<string, unknown>): string {
 
 /** MV 列表:个性化推荐(/personalized/mv,内置匿名可列)。 */
 export async function getNeteaseMvList(source: MusicSourceDescriptor): Promise<NeteaseMv[]> {
-  const url = isExternal(source)
-    ? `${cleanBaseUrl(source.baseUrl)}/personalized/mv`
-    : `${NETEASE_BASE}/api/personalized/mv`;
-  const record = asRecord(await getJson(url, headersFor(source)));
+  const record = isExternal(source)
+    ? asRecord(
+        await getJson(`${cleanBaseUrl(source.baseUrl)}/personalized/mv`, headersFor(source))
+      )
+    : await builtinJson("/api/personalized/mv", {});
   const rawList = Array.isArray(record?.result) ? record?.result : [];
   return (rawList ?? [])
     .map((item): NeteaseMv | null => {
@@ -627,10 +744,14 @@ export async function getNeteaseMvUrl(
   id: string,
   r = 1080
 ): Promise<string> {
-  const url = isExternal(source)
-    ? `${cleanBaseUrl(source.baseUrl)}/mv/url?id=${encodeURIComponent(id)}&r=${r}`
-    : `${NETEASE_BASE}/api/mv/url?id=${encodeURIComponent(id)}&r=${r}`;
-  const record = asRecord(await getJson(url, headersFor(source)));
+  const record = isExternal(source)
+    ? asRecord(
+        await getJson(
+          `${cleanBaseUrl(source.baseUrl)}/mv/url?id=${encodeURIComponent(id)}&r=${r}`,
+          headersFor(source)
+        )
+      )
+    : await builtinJson("/api/mv/url", { id, r });
   const data = asRecord(record?.data);
   const playUrl = asString(data?.url);
   if (!playUrl) throw new Error("MV 地址不可用(内置源受网易反爬限制,建议自部署源)");
@@ -644,10 +765,11 @@ export async function getNeteaseRadioRecommend(
   source: MusicSourceDescriptor
 ): Promise<MusicSongListSummary[]> {
   try {
-    const url = isExternal(source)
-      ? `${cleanBaseUrl(source.baseUrl)}/dj/recommend`
-      : `${NETEASE_BASE}/api/djradio/recommend`;
-    const record = asRecord(await getJson(url, headersFor(source)));
+    const record = isExternal(source)
+      ? asRecord(
+          await getJson(`${cleanBaseUrl(source.baseUrl)}/dj/recommend`, headersFor(source))
+        )
+      : await builtinJson("/api/djradio/recommend", {});
     if (asNumber(record?.code) === -462) return [];
     const rawList = Array.isArray(record?.djRadios)
       ? record?.djRadios
@@ -682,10 +804,14 @@ export async function getNeteaseRadioPrograms(
   rid: string,
   limit = 100
 ): Promise<MusicSong[]> {
-  const url = isExternal(source)
-    ? `${cleanBaseUrl(source.baseUrl)}/dj/program?rid=${encodeURIComponent(rid)}&limit=${limit}`
-    : `${NETEASE_BASE}/api/dj/program?rid=${encodeURIComponent(rid)}&limit=${limit}`;
-  const record = asRecord(await getJson(url, headersFor(source)));
+  const record = isExternal(source)
+    ? asRecord(
+        await getJson(
+          `${cleanBaseUrl(source.baseUrl)}/dj/program?rid=${encodeURIComponent(rid)}&limit=${limit}`,
+          headersFor(source)
+        )
+      )
+    : await builtinJson("/api/dj/program", { rid, limit, offset: 0, asc: false });
   if (asNumber(record?.code) === -462) return [];
   const programs = Array.isArray(record?.programs) ? record?.programs : [];
   return (programs ?? [])
@@ -763,10 +889,18 @@ export async function getNeteaseArtist(
   source: MusicSourceDescriptor,
   id: string
 ): Promise<NeteaseArtistDetail> {
-  const url = isExternal(source)
-    ? `${cleanBaseUrl(source.baseUrl)}/artists?id=${encodeURIComponent(id)}`
-    : `${NETEASE_BASE}/api/v1/artist/${encodeURIComponent(id)}`;
-  const record = asRecord(await getJson(url, headersFor(source)));
+  // builtin：走 Rust weapi（绕 -462）；external：自部署 NCM REST；Rust 不可用回退直连。
+  let record: Record<string, unknown> | undefined;
+  if (isExternal(source)) {
+    record = asRecord(
+      await getJson(
+        `${cleanBaseUrl(source.baseUrl)}/artists?id=${encodeURIComponent(id)}`,
+        headersFor(source)
+      )
+    );
+  } else {
+    record = await builtinJson(`/api/v1/artist/${encodeURIComponent(id)}`, {});
+  }
   assertNotAntiBot(record);
   const artist = asRecord(record?.artist) ?? {};
   const rawSongs = Array.isArray(record?.hotSongs)
@@ -796,10 +930,14 @@ export async function getNeteaseArtistAlbums(
   id: string,
   limit = 30
 ): Promise<MusicSongListSummary[]> {
-  const url = isExternal(source)
-    ? `${cleanBaseUrl(source.baseUrl)}/artist/album?id=${encodeURIComponent(id)}&limit=${limit}`
-    : `${NETEASE_BASE}/api/artist/albums/${encodeURIComponent(id)}?limit=${limit}`;
-  const record = asRecord(await getJson(url, headersFor(source)));
+  const record = isExternal(source)
+    ? asRecord(
+        await getJson(
+          `${cleanBaseUrl(source.baseUrl)}/artist/album?id=${encodeURIComponent(id)}&limit=${limit}`,
+          headersFor(source)
+        )
+      )
+    : await builtinJson(`/api/artist/albums/${encodeURIComponent(id)}`, { limit });
   assertNotAntiBot(record);
   const rawList = Array.isArray(record?.hotAlbums)
     ? record?.hotAlbums
@@ -868,12 +1006,17 @@ export async function searchNeteaseArtists(
   keyword: string,
   limit = 30
 ): Promise<NeteaseArtist[]> {
-  const url = isExternal(source)
-    ? `${cleanBaseUrl(source.baseUrl)}/cloudsearch?keywords=${encodeURIComponent(
-        keyword
-      )}&type=100&limit=${limit}`
-    : `${NETEASE_BASE}/api/search/get?s=${encodeURIComponent(keyword)}&type=100&limit=${limit}`;
-  const record = asRecord(await getJson(url, headersFor(source)));
+  // builtin 走 weapi 加密 /api/cloudsearch/pc（明文 /api/search/get 已被反爬退化）。
+  const record = isExternal(source)
+    ? asRecord(
+        await getJson(
+          `${cleanBaseUrl(source.baseUrl)}/cloudsearch?keywords=${encodeURIComponent(
+            keyword
+          )}&type=100&limit=${limit}`,
+          headersFor(source)
+        )
+      )
+    : await builtinJson("/api/cloudsearch/pc", { s: keyword, type: 100, limit, total: true });
   assertNotAntiBot(record);
   const result = asRecord(record?.result);
   const rawList = Array.isArray(result?.artists) ? result?.artists : [];
@@ -899,10 +1042,11 @@ export async function getNeteaseAlbum(
   source: MusicSourceDescriptor,
   id: string
 ): Promise<NeteaseAlbumDetail> {
-  const url = isExternal(source)
-    ? `${cleanBaseUrl(source.baseUrl)}/album?id=${encodeURIComponent(id)}`
-    : `${NETEASE_BASE}/api/v1/album/${encodeURIComponent(id)}`;
-  const record = asRecord(await getJson(url, headersFor(source)));
+  const record = isExternal(source)
+    ? asRecord(
+        await getJson(`${cleanBaseUrl(source.baseUrl)}/album?id=${encodeURIComponent(id)}`, headersFor(source))
+      )
+    : await builtinJson(`/api/v1/album/${encodeURIComponent(id)}`, {});
   assertNotAntiBot(record);
   const album = asRecord(record?.album) ?? {};
   const rawSongs = Array.isArray(record?.songs) ? record?.songs : [];
@@ -1357,7 +1501,15 @@ export async function getNeteaseSongDetail(
       );
     } else {
       record = asRecord(
-        await weapiPost("v3/song/detail", { c: JSON.stringify(ids.map((id) => ({ id }))) })
+        await weapiPost("v3/song/detail", {
+          // 源码 song_detail.js 的 c 用数字 id（[{"id":123}]）；过滤非数字防 NaN。
+          c: JSON.stringify(
+            ids
+              .map((id) => Number(id))
+              .filter((id) => Number.isFinite(id))
+              .map((id) => ({ id }))
+          ),
+        })
       );
     }
     if (asNumber(record?.code) === -462) return [];
@@ -1415,14 +1567,19 @@ export async function getNeteaseSongWiki(
 }
 
 /** 首页轮播图（/banner?type=0 → banners[]：pic/typeTitle/url）。失败空。 */
+export interface NeteaseBanner {
+  pic: string;
+  url?: string;
+  typeTitle?: string;
+}
+
 export async function getNeteaseBanners(
   source: MusicSourceDescriptor
-): Promise<{ pic: string; url?: string; typeTitle?: string }[]> {
-  if (!isExternal(source)) return [];
+): Promise<NeteaseBanner[]> {
   try {
-    const record = asRecord(
-      await getJson(`${cleanBaseUrl(source.baseUrl)}/banner?type=0`, headersFor(source))
-    );
+    const record = isExternal(source)
+      ? asRecord(await getJson(`${cleanBaseUrl(source.baseUrl)}/banner?type=0`, headersFor(source)))
+      : await builtinJson("/api/v2/banner/get", { clientType: "pc" });
     if (asNumber(record?.code) === -462) return [];
     const banners = Array.isArray(record?.banners) ? record?.banners : [];
     return ((banners as unknown[]) ?? [])
@@ -1442,24 +1599,75 @@ export async function getNeteaseBanners(
   }
 }
 
-/** 发现页首屏块（/homepage/block/page → data.blocks[]，原样返回让上层挑）。失败空。 */
+/** 发现页首屏分块（移动端 /homepage/block/page）。 */
+export interface NeteaseHomepageBlock {
+  id: string;
+  title: string;
+  playlists: MusicSongListSummary[];
+}
+
+/**
+ * 发现页首屏分块（/homepage/block/page，移动端接口，深层嵌套）：
+ * data.blocks[] → uiElement.subTitle.title 为块标题；creatives[] → resources[] 里
+ * resourceType==="playlist" 的资源解析成歌单卡（id=resourceId、名/封面取 uiElement）。
+ * 只保留含歌单的块。built-in 受 -462 反爬限制返回空；失败空。
+ */
 export async function getNeteaseHomepageBlocks(
   source: MusicSourceDescriptor
-): Promise<Record<string, unknown>[]> {
-  if (!isExternal(source)) return [];
-  try {
-    const record = asRecord(
-      await getJson(`${cleanBaseUrl(source.baseUrl)}/homepage/block/page`, headersFor(source))
-    );
-    if (asNumber(record?.code) === -462) return [];
-    const data = asRecord(record?.data);
-    const blocks = Array.isArray(data?.blocks) ? data?.blocks : [];
-    return ((blocks as unknown[]) ?? [])
-      .map((item) => asRecord(item))
-      .filter((item): item is Record<string, unknown> => !!item);
-  } catch {
-    return [];
-  }
+): Promise<NeteaseHomepageBlock[]> {
+  const record = isExternal(source)
+    ? asRecord(
+        await getJson(
+          `${cleanBaseUrl(source.baseUrl)}/homepage/block/page`,
+          headersFor(source)
+        ).catch(() => undefined)
+      )
+    : await builtinJson("/api/homepage/block/page", { refresh: false });
+  if (!record || asNumber(record?.code) === -462) return [];
+  const data = asRecord(record?.data);
+  const blocks = Array.isArray(data?.blocks) ? data?.blocks : [];
+  return ((blocks as unknown[]) ?? [])
+    .map((item, blockIdx): NeteaseHomepageBlock | null => {
+      const block = asRecord(item);
+      if (!block) return null;
+      const ui = asRecord(block.uiElement);
+      const title =
+        asString(asRecord(ui?.subTitle)?.title) ||
+        asString(asRecord(ui?.mainTitle)?.title) ||
+        "";
+      const creatives = Array.isArray(block.creatives) ? block.creatives : [];
+      const playlists: MusicSongListSummary[] = [];
+      const seen = new Set<string>();
+      for (const cr of (creatives as unknown[]) ?? []) {
+        const creative = asRecord(cr);
+        const resources = Array.isArray(creative?.resources) ? creative?.resources : [];
+        for (const rs of (resources as unknown[]) ?? []) {
+          const res = asRecord(rs);
+          if (!res) continue;
+          const type = asString(res.resourceType);
+          if (type && type !== "playlist") continue;
+          const id = asString(res.resourceId) || asString(asRecord(res.resourceExtInfo)?.id);
+          if (!id || seen.has(id)) continue;
+          const resUi = asRecord(res.uiElement);
+          const name =
+            asString(asRecord(resUi?.mainTitle)?.title) ||
+            asString(asRecord(creative?.uiElement && asRecord(creative.uiElement)?.mainTitle)?.title);
+          if (!name) continue;
+          seen.add(id);
+          playlists.push({
+            id,
+            name,
+            source: "wy",
+            sourceId: source.id,
+            pic: asString(asRecord(resUi?.image)?.imageUrl) || asString(resUi?.imageUrl),
+            playCount: asNumber(asRecord(resUi?.subTitle)?.title) ?? undefined,
+          });
+        }
+      }
+      if (playlists.length === 0) return null;
+      return { id: asString(block.blockCode) || `block-${blockIdx}`, title: title || "推荐", playlists };
+    })
+    .filter((b): b is NeteaseHomepageBlock => !!b);
 }
 
 /** MV 详情（/mv/detail?mvid= → data）。失败抛错。 */
@@ -1475,10 +1683,14 @@ export async function getNeteaseMvDetail(
   playCount?: number;
   durationSec?: number;
 }> {
-  const url = isExternal(source)
-    ? `${cleanBaseUrl(source.baseUrl)}/mv/detail?mvid=${encodeURIComponent(id)}`
-    : `${NETEASE_BASE}/api/mv/detail?mvid=${encodeURIComponent(id)}`;
-  const record = asRecord(await getJson(url, headersFor(source)));
+  const record = isExternal(source)
+    ? asRecord(
+        await getJson(
+          `${cleanBaseUrl(source.baseUrl)}/mv/detail?mvid=${encodeURIComponent(id)}`,
+          headersFor(source)
+        )
+      )
+    : await builtinJson("/api/mv/detail", { mvid: id });
   assertNotAntiBot(record);
   const data = asRecord(record?.data) ?? {};
   const durationMs = asNumber(data.duration);
@@ -1633,7 +1845,7 @@ export async function getNeteaseDjBanner(
 }
 
 /** 推荐电台节目（/personalized/djprogram → result[].program 取所属电台卡）。失败空。 */
-export async function getNeteaseDjCategoryRecommend(
+export async function getNeteaseDjProgramRecommend(
   source: MusicSourceDescriptor
 ): Promise<MusicSongListSummary[]> {
   if (!isExternal(source)) return [];
@@ -1663,10 +1875,10 @@ export async function getNeteaseLyricPlain(
   id: string
 ): Promise<string> {
   try {
-    const url = isExternal(source)
-      ? `${cleanBaseUrl(source.baseUrl)}/lyric?id=${encodeURIComponent(id)}`
-      : `${NETEASE_BASE}/api/song/lyric?id=${encodeURIComponent(id)}&lv=1&kv=1&tv=1`;
-    const record = asRecord(await getJson(url, headersFor(source)));
+    // builtin 走 weapi 加密 /api/song/lyric（明文 GET 已被反爬退化，取不到歌词）。
+    const record = isExternal(source)
+      ? asRecord(await getJson(`${cleanBaseUrl(source.baseUrl)}/lyric?id=${encodeURIComponent(id)}`, headersFor(source)))
+      : await builtinJson("/api/song/lyric", { id, tv: -1, lv: -1, rv: -1, kv: -1, _nmclfl: 1 });
     if (asNumber(record?.code) === -462) return "";
     return asString(asRecord(record?.lrc)?.lyric) || "";
   } catch {

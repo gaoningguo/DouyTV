@@ -1,37 +1,22 @@
 /**
- * 发现类页面的多源聚合层 —— 把「所有启用源」的榜单/歌单/热搜合并去重并标记来源,
- * 详情请求按 summary.sourceId 路由回原源。我们是聚合平台,发现页不应只依赖单一源。
+ * 发现类页面的多源聚合层 —— 把「所有启用源」的榜单/歌单/热搜合并去重并标记来源，
+ * 详情请求按 summary.sourceId 路由回原源。我们是聚合平台，发现页不应只依赖单一源。
  *
- * 各源能力:
- *  - lx-server      : 榜单(getMusicBoards)/歌单广场(getAllMusicSonglists)/标签/热搜(全平台)
- *  - netease-api    : 排行榜(getNeteaseToplists)/推荐歌单(getNeteasePersonalized)/热搜(getNeteaseHotSearch)
- *                     external 真数据、builtin 受 -462 限制时该源贡献空(不报错)
- *  - cyrene/local/plugin : 不参与发现(仅搜索/播放)
+ * 本层为纯编排：各源的发现能力由 discoveryProviders.ts 的 provider 注册表提供，
+ * 这里只遍历「具备该能力的源」、合并去重、按 sourceId 路由详情。新增源只需写 provider。
  */
 import {
-  getAllMusicSonglists,
-  getAllMusicSonglistTags,
-  getMusicBoards,
-  getMusicBoardSongs,
-  getMusicHotSearch,
-  getMusicSonglistDetail,
-} from "./discovery";
-import {
-  getNeteaseHotSearch,
-  getNeteasePersonalized,
-  getNeteasePlaylistSongs,
-  getNeteaseToplists,
-} from "./neteaseApi";
+  discoveryProviderOf,
+  type DiscoveryProvider,
+} from "./discoveryProviders";
 import type {
   MusicDiscoveryBoard,
   MusicHotSearchItem,
-  MusicPlatform,
   MusicSong,
   MusicSongListSummary,
   MusicSongListTags,
   MusicSourceDescriptor,
 } from "./types";
-import { normalizeMusicPlatform } from "./types";
 
 function dedupeBy<T>(items: T[], keyOf: (item: T) => string): T[] {
   const seen = new Set<string>();
@@ -47,28 +32,40 @@ function settledValues<T>(results: PromiseSettledResult<T[]>[]): T[] {
   return results.flatMap((r) => (r.status === "fulfilled" ? r.value : []));
 }
 
-/** 聚合所有启用源的榜单。LX 出多平台榜单;网易出排行榜(承载为 board)。 */
+/** 遍历「具备某能力」的源并收集其 provider，过滤掉不支持该能力的源。 */
+function providersWith<K extends keyof DiscoveryProvider>(
+  sources: MusicSourceDescriptor[],
+  capability: K
+): Array<{ source: MusicSourceDescriptor; provider: DiscoveryProvider }> {
+  const out: Array<{ source: MusicSourceDescriptor; provider: DiscoveryProvider }> = [];
+  for (const source of sources) {
+    const provider = discoveryProviderOf(source);
+    if (provider && provider[capability]) out.push({ source, provider });
+  }
+  return out;
+}
+
+/** 找回产出某 board/summary 的源（按 sourceId），再调它 provider 的详情能力。 */
+function findRouted(
+  sources: MusicSourceDescriptor[],
+  sourceId: string | undefined
+): { source: MusicSourceDescriptor; provider: DiscoveryProvider } | undefined {
+  const source = sourceId ? sources.find((s) => s.id === sourceId) : undefined;
+  if (source) {
+    const provider = discoveryProviderOf(source);
+    if (provider) return { source, provider };
+  }
+  return undefined;
+}
+
+/** 聚合所有启用源的榜单。 */
 export async function getMusicBoardsAggregated(
   sources: MusicSourceDescriptor[]
 ): Promise<MusicDiscoveryBoard[]> {
   const results = await Promise.allSettled(
-    sources.map(async (source): Promise<MusicDiscoveryBoard[]> => {
-      if (source.kind === "lx-server") {
-        const data = await getMusicBoards(source, "kw");
-        return data.list.map((board) => ({ ...board, sourceId: source.id }));
-      }
-      if (source.kind === "netease-api") {
-        const toplists = await getNeteaseToplists(source);
-        return toplists.map((item) => ({
-          id: item.id,
-          name: item.name,
-          source: "wy" as MusicPlatform,
-          cover: item.pic,
-          sourceId: source.id,
-        }));
-      }
-      return [];
-    })
+    providersWith(sources, "boards").map(({ source, provider }) =>
+      provider.boards!(source)
+    )
   );
   return dedupeBy(
     settledValues(results),
@@ -82,20 +79,14 @@ export async function getBoardSongsRouted(
   board: MusicDiscoveryBoard,
   page = 1
 ): Promise<MusicSong[]> {
-  const source =
-    sources.find((s) => s.id === board.sourceId) ??
-    sources.find((s) => s.kind === "lx-server");
-  if (!source) return [];
-  if (source.kind === "netease-api") {
-    // 网易榜单本质是歌单,详情走 playlist。
-    return getNeteasePlaylistSongs(source, board.id, 100);
-  }
-  const data = await getMusicBoardSongs(source, board.source, board.id, page);
-  return data.list;
+  const routed =
+    findRouted(sources, board.sourceId) ??
+    providersWith(sources, "boardSongs")[0];
+  if (!routed?.provider.boardSongs) return [];
+  return routed.provider.boardSongs(routed.source, board, page);
 }
-// AGG_PART2
 
-/** 聚合所有启用源的歌单广场。LX 出多平台歌单;网易出推荐歌单。 */
+/** 聚合所有启用源的歌单广场。 */
 export async function getSonglistsAggregated(
   sources: MusicSourceDescriptor[],
   tagId = "",
@@ -103,18 +94,9 @@ export async function getSonglistsAggregated(
   page = 1
 ): Promise<MusicSongListSummary[]> {
   const results = await Promise.allSettled(
-    sources.map(async (source): Promise<MusicSongListSummary[]> => {
-      if (source.kind === "lx-server") {
-        const data = await getAllMusicSonglists(source, tagId, sortId, page);
-        return data.list.map((item) => ({ ...item, sourceId: source.id }));
-      }
-      if (source.kind === "netease-api") {
-        // 网易推荐歌单仅首页(无标签分页);仅第一页贡献,避免翻页重复。
-        if (page > 1) return [];
-        return getNeteasePersonalized(source, 24);
-      }
-      return [];
-    })
+    providersWith(sources, "songlists").map(({ source, provider }) =>
+      provider.songlists!(source, tagId, sortId, page)
+    )
   );
   return dedupeBy(
     settledValues(results),
@@ -122,13 +104,15 @@ export async function getSonglistsAggregated(
   );
 }
 
-/** 聚合所有 LX 源的歌单标签(网易推荐歌单无标签维度,不参与)。 */
+/** 聚合所有启用源的歌单标签。 */
 export async function getSonglistTagsAggregated(
   sources: MusicSourceDescriptor[]
 ): Promise<MusicSongListTags> {
-  const lx = sources.filter((s) => s.kind === "lx-server");
-  if (lx.length === 0) return { groups: [], hotTags: [], sortList: [] };
-  const results = await Promise.allSettled(lx.map((s) => getAllMusicSonglistTags(s)));
+  const entries = providersWith(sources, "tags");
+  if (entries.length === 0) return { groups: [], hotTags: [], sortList: [] };
+  const results = await Promise.allSettled(
+    entries.map(({ source, provider }) => provider.tags!(source))
+  );
   const tags = results.flatMap((r) => (r.status === "fulfilled" ? [r.value] : []));
   return {
     groups: tags.flatMap((t) => t.groups),
@@ -143,17 +127,11 @@ export async function getSonglistDetailRouted(
   summary: MusicSongListSummary,
   page = 1
 ): Promise<MusicSong[]> {
-  const source =
-    (summary.sourceId && sources.find((s) => s.id === summary.sourceId)) ||
-    sources.find((s) => s.kind === "lx-server") ||
-    sources.find((s) => s.kind === "netease-api");
-  if (!source) return [];
-  if (source.kind === "netease-api") {
-    return getNeteasePlaylistSongs(source, summary.id, 100);
-  }
-  const platform = normalizeMusicPlatform(String(summary.source)) || "wy";
-  const detail = await getMusicSonglistDetail(source, platform, summary.id, page);
-  return detail.list;
+  const routed =
+    findRouted(sources, summary.sourceId) ??
+    providersWith(sources, "songlistDetail")[0];
+  if (!routed?.provider.songlistDetail) return [];
+  return routed.provider.songlistDetail(routed.source, summary, page);
 }
 
 /** 聚合所有启用源的热搜关键词。 */
@@ -161,16 +139,11 @@ export async function getHotSearchAggregated(
   sources: MusicSourceDescriptor[]
 ): Promise<MusicHotSearchItem[]> {
   const results = await Promise.allSettled(
-    sources.map(async (source): Promise<MusicHotSearchItem[]> => {
-      if (source.kind === "lx-server") {
-        return getMusicHotSearch(source, "mg");
-      }
-      if (source.kind === "netease-api") {
-        const words = await getNeteaseHotSearch(source, 10);
-        return words.map((keyword) => ({ keyword, name: keyword, source: "wy" }));
-      }
-      return [];
-    })
+    providersWith(sources, "hotSearch").map(({ source, provider }) =>
+      provider.hotSearch!(source)
+    )
   );
-  return dedupeBy(settledValues(results), (item) => item.keyword.trim().toLowerCase());
+  return dedupeBy(settledValues(results), (item) =>
+    item.keyword.trim().toLowerCase()
+  );
 }

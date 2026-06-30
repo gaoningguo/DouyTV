@@ -60,6 +60,10 @@ base64 = { version = "0.22", default-features = false, features = ["std"] }
 # 纯 Rust 实现,无 encoding_rs 依赖。
 md-5 = { version = "0.10", default-features = false }
 
+# 网易云内置源加密(netease.rs)—— weapi RSA 无填充模幂用大整数。
+# num-bigint 纯 Rust,无 encoding_rs 依赖。
+num-bigint = { version = "0.4", default-features = false }
+
 # AmateurTV / a0s.net 系平台 SAMPLE-AES 解密用 —— 标准 AES-128-CBC,无 padding。
 # 跟 reqwest 的 aws-lc-rs / rustls 不冲突,纯 software 实现。
 aes = { version = "0.8", default-features = false }

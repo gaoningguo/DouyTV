@@ -41,9 +41,23 @@ interface DesktopLyricStyle {
   fontSize: number;
   color: string;
   strokeColor: string;
+  idleColor: string;
+  fontWeight: number;
+  bgOpacity: number;
+  karaoke: boolean;
+  showTrans: boolean;
 }
 
-const DEFAULT_STYLE: DesktopLyricStyle = { fontSize: 30, color: "#FF6B35", strokeColor: "#0E0F11" };
+const DEFAULT_STYLE: DesktopLyricStyle = {
+  fontSize: 30,
+  color: "#FF6B35",
+  strokeColor: "#0E0F11",
+  idleColor: "#FFFFFF",
+  fontWeight: 800,
+  bgOpacity: 0,
+  karaoke: true,
+  showTrans: true,
+};
 
 export function DesktopLyric() {
   const rootRef = useRef<HTMLDivElement>(null);
@@ -60,6 +74,8 @@ export function DesktopLyric() {
     playing: false,
   });
   const lineRef = useRef<DesktopLyricPayload>({});
+  // 扫光循环里要读最新 karaoke 开关（循环只建一次，不能闭包捕获 state）。
+  const karaokeRef = useRef<boolean>(DEFAULT_STYLE.karaoke);
 
   // 1) 暴力清透明背景（含父链）。
   useLayoutEffect(() => {
@@ -109,11 +125,20 @@ export function DesktopLyric() {
         });
         unlistenStyle = await listen<Partial<DesktopLyricStyle>>("desktop-lyric-style", (event) => {
           const s = event.payload || {};
-          setStyle((prev) => ({
-            fontSize: typeof s.fontSize === "number" ? s.fontSize : prev.fontSize,
-            color: typeof s.color === "string" ? s.color : prev.color,
-            strokeColor: typeof s.strokeColor === "string" ? s.strokeColor : prev.strokeColor,
-          }));
+          setStyle((prev) => {
+            const next: DesktopLyricStyle = {
+              fontSize: typeof s.fontSize === "number" ? s.fontSize : prev.fontSize,
+              color: typeof s.color === "string" ? s.color : prev.color,
+              strokeColor: typeof s.strokeColor === "string" ? s.strokeColor : prev.strokeColor,
+              idleColor: typeof s.idleColor === "string" ? s.idleColor : prev.idleColor,
+              fontWeight: typeof s.fontWeight === "number" ? s.fontWeight : prev.fontWeight,
+              bgOpacity: typeof s.bgOpacity === "number" ? s.bgOpacity : prev.bgOpacity,
+              karaoke: typeof s.karaoke === "boolean" ? s.karaoke : prev.karaoke,
+              showTrans: typeof s.showTrans === "boolean" ? s.showTrans : prev.showTrans,
+            };
+            karaokeRef.current = next.karaoke;
+            return next;
+          });
         });
         if (!disposed) await emit("desktop-lyric-ready", {});
       } catch {
@@ -128,6 +153,9 @@ export function DesktopLyric() {
   }, []);
 
   // 3) setInterval 60fps 本地插值扫光（规避后台 RAF 冻结）。
+  //    karaoke=true：填充边沿按"逐字"推进——已唱词整宽 + 当前词按词内进度部分宽，
+  //    映射到字符位置（fill 比例 = 已唱字符数 / 总字符数），听感是逐字点亮。
+  //    karaoke=false：整行按首尾时间线性扫光（旧行为）。
   useEffect(() => {
     const timer = window.setInterval(() => {
       const { time, at, playing } = anchorRef.current;
@@ -136,11 +164,31 @@ export function DesktopLyric() {
       const fill = fillRef.current;
       if (fill) {
         let sweep = 0;
-        if (current.words && current.words.length > 0) {
-          const first = current.words[0].start;
-          const last = current.words[current.words.length - 1].end;
-          const span = Math.max(0.001, last - first);
-          sweep = Math.min(1, Math.max(0, (now - first) / span));
+        const words = current.words;
+        if (words && words.length > 0) {
+          if (karaokeRef.current) {
+            // 逐字：累计已唱字符比例。
+            const total = words.reduce((s, w) => s + Math.max(1, w.text.length), 0);
+            let sungChars = 0;
+            for (const w of words) {
+              const len = Math.max(1, w.text.length);
+              if (now >= w.end) {
+                sungChars += len;
+              } else if (now >= w.start) {
+                const wp = Math.min(1, Math.max(0, (now - w.start) / Math.max(0.001, w.end - w.start)));
+                sungChars += len * wp;
+                break;
+              } else {
+                break;
+              }
+            }
+            sweep = Math.min(1, sungChars / Math.max(1, total));
+          } else {
+            const first = words[0].start;
+            const last = words[words.length - 1].end;
+            const span = Math.max(0.001, last - first);
+            sweep = Math.min(1, Math.max(0, (now - first) / span));
+          }
         } else if (current.lineStart !== undefined) {
           const end = current.lineEnd ?? current.lineStart + 4;
           const span = Math.max(0.001, end - current.lineStart);
@@ -190,6 +238,9 @@ export function DesktopLyric() {
     "--dl-font-size": `${style.fontSize}px`,
     "--dl-color": style.color,
     "--dl-stroke": style.strokeColor,
+    "--dl-idle": style.idleColor,
+    "--dl-weight": String(style.fontWeight),
+    "--dl-bg": `rgba(14,15,17,${style.bgOpacity})`,
   } as CSSProperties;
 
   return (
@@ -207,7 +258,7 @@ export function DesktopLyric() {
           {text}
         </span>
       </div>
-      {line.trans && <div className="desktop-lyric-trans">{line.trans}</div>}
+      {style.showTrans && line.trans && <div className="desktop-lyric-trans">{line.trans}</div>}
 
       {/* 悬浮控制条：hover 才显示。锁定后整窗鼠标穿透，无法 hover，故锁定按钮放在解锁路径里 */}
       <div className={hovered ? "desktop-lyric-bar is-show" : "desktop-lyric-bar"}>

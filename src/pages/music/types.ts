@@ -3,6 +3,8 @@ export type MusicView =
   | "recommend"
   | "toplist"
   | "songlists"
+  | "playlist-square"
+  | "new-albums"
   | "artists"
   | "mv"
   | "radio"

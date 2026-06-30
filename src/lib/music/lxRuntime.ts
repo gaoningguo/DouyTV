@@ -416,7 +416,11 @@ async function loadScript(cacheKey: string, scriptContent: string): Promise<Sand
 
 /** 该脚本是否「需要运行时执行」(注册了 request 处理器,且没法当静态模板源)。 */
 export function canRunLxScript(scriptContent: string): boolean {
-  return /lx\.on\s*\(|EVENT_NAMES\.request|globalThis\.lx|window\.lx/.test(scriptContent);
+  // 覆盖多种 handler 注册写法：lx.on(/on(/解构 on、EVENT_NAMES.request、
+  // globalThis.lx/window.lx 引用、send('inited')、musicUrl action 等洛雪沙箱标记。
+  return /(?:lx|globalThis|window)\.on\s*\(|(?:^|[^.\w])on\s*\(\s*(?:EVENT_NAMES|['"]request['"])|EVENT_NAMES\s*\.\s*request|globalThis\.lx|window\.lx|\.send\s*\(\s*['"]?(?:inited|EVENT_NAMES)|musicUrl/.test(
+    scriptContent
+  );
 }
 
 /** 把酷狗 id(hash:albumId) / 普通 id 还原成洛雪 handler 期望的 musicInfo。 */
@@ -470,6 +474,47 @@ export async function getLxRuntimeMusicUrl(
       source,
       action: "musicUrl",
       info: { musicInfo: buildMusicInfo(source, songId), type: quality },
+    },
+    "*"
+  );
+
+  const result = await resultPromise;
+  const url = extractUrlFromResult(result);
+  if (!url) throw new Error("洛雪脚本未返回播放地址");
+  return url;
+}
+
+/**
+ * 同上，但直接传入完整 musicInfo（musicSdk 列表层歌曲的 raw 即洛雪脚本期望的 musicInfo，
+ * 含各平台原生 id 编码 songmid/hash/copyrightId 等，无需 buildMusicInfo 重构）。30s 超时。
+ */
+export async function getLxRuntimeMusicUrlByInfo(
+  cacheKey: string,
+  scriptContent: string,
+  source: string,
+  musicInfo: Record<string, unknown>,
+  quality: string
+): Promise<string> {
+  const sb = await loadScript(cacheKey, scriptContent);
+  const requestKey = `req_${++sb.reqCounter}_${Date.now()}`;
+
+  const resultPromise = new Promise<unknown>((resolve, reject) => {
+    sb.pending.set(requestKey, { resolve, reject });
+    setTimeout(() => {
+      if (sb.pending.has(requestKey)) {
+        sb.pending.delete(requestKey);
+        reject(new Error("洛雪脚本解析超时"));
+      }
+    }, 30000);
+  });
+
+  sb.iframe.contentWindow?.postMessage(
+    {
+      type: "lx-send-request",
+      requestKey,
+      source,
+      action: "musicUrl",
+      info: { musicInfo, type: quality },
     },
     "*"
   );

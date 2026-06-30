@@ -22,9 +22,23 @@ import {
   getNeteaseAlbum,
   getNeteaseArtist,
   getNeteaseArtistAlbums,
+  getNeteaseArtistDesc,
+  getNeteaseArtistAllSongs,
+  getNeteaseArtistTopSongs,
+  getNeteaseSimiArtists,
   getNeteaseHotSearch,
+  getNeteaseDefaultKeyword,
   getNeteaseSearchSuggest,
+  getLxTipSearch,
+  getLxAlbumSongs,
+  getOmniDouyinSongs,
+  searchLxArtist,
+  getLxArtistDetail,
+  getLxArtistSongs,
+  getLxArtistAlbums,
   getNeteaseMvUrl,
+  getNeteaseBanners,
+  getNeteaseHomepageBlocks,
   getNeteaseNewSongRecommend,
   fetchNeteaseLyricByMatch,
   getNeteasePlaylistSongs,
@@ -35,6 +49,7 @@ import {
   resolveNeteaseArtistId,
   isMusicPreviewError,
   musicSongKey,
+  normalizeMusicPlatform,
   resolveMusicSource,
   resolveMusicSourceWithFallback,
   prefetchMusicSource,
@@ -44,6 +59,7 @@ import {
   waitForUsableMusicAudio,
   type MusicDiscoveryBoard,
   type MusicHotSearchItem,
+  type MusicPlatform,
   type MusicPlayMode,
   type MusicQuality,
   type MusicSong,
@@ -51,6 +67,8 @@ import {
   type MusicSongListTag,
   type MusicSourceDescriptor,
   type NeteaseMv,
+  type NeteaseBanner,
+  type NeteaseHomepageBlock,
 } from "@/lib/music";
 import { wrapImage, isTauri } from "@/lib/proxy";
 import { getCoverColor } from "@/lib/music/coverColor";
@@ -93,7 +111,7 @@ import { AddToPlaylistDialog } from "./music/components/AddToPlaylistDialog";
 import { DiscoverView } from "./music/views/DiscoverView";
 import { ToplistView } from "./music/views/ToplistView";
 import { RecommendView } from "./music/views/RecommendView";
-import { MvView, RadioView, ArtistsView } from "./music/views/BrowseViews";
+import { MvView, RadioView, ArtistsView, PlaylistSquareView, NewAlbumsView } from "./music/views/BrowseViews";
 import { LocalView } from "./music/views/shared";
 import { SonglistsView } from "./music/views/SonglistsView";
 import { SearchView } from "./music/views/SearchView";
@@ -103,6 +121,14 @@ import { SonglistView } from "./music/views/SonglistView";
 import { AlbumView } from "./music/views/AlbumView";
 import { ArtistView } from "./music/views/ArtistView";
 import { PlayerView } from "./music/views/PlayerView";
+
+// LX 歌手详情是原始记录，按字段尽力取字符串/数字（避免引入 utils 的内部 helper）。
+function asMusicString(value: unknown): string | undefined {
+  return typeof value === "string" && value ? value : undefined;
+}
+function asMusicNumber(value: unknown): number | undefined {
+  return typeof value === "number" && Number.isFinite(value) ? value : undefined;
+}
 
 export default function Music() {
   // 双 deck：两个真实 <audio>，用于真·重叠 crossfade（两首歌同时出声交叉淡变）。
@@ -169,7 +195,10 @@ export default function Music() {
     const artist = query.get("artist") || "";
     // 真专辑 id（来自歌手页/搜索的真接口）；无 id 的旧入口走文本派生回退。
     const id = query.get("id") || "";
-    return { name: decodeURIComponent(match[1]), artist, id };
+    // LX 源专辑路由：src=源 id、platform=平台、albumId=该平台专辑 id（走 getLxAlbumSongs）。
+    const src = query.get("src") || "";
+    const platform = query.get("platform") || "";
+    return { name: decodeURIComponent(match[1]), artist, id, src, platform };
   }, [location.pathname, location.search]);
   const artistParams = useMemo(() => {
     const match = location.pathname.match(/^\/music\/artist\/([^/]+)/);
@@ -191,6 +220,8 @@ export default function Music() {
   const [recommendedKeywords, setRecommendedKeywords] = useState<string[]>([]);
   // 搜索实时联想（网易 /search/suggest）：输入时防抖拉取，展示在近期搜索之上。
   const [searchSuggestions, setSearchSuggestions] = useState<string[]>([]);
+  // 网易默认搜索词（/search/default）：作搜索框 placeholder，回车直接搜它。
+  const [defaultKeyword, setDefaultKeyword] = useState("");
   const searchInputRef = useRef<HTMLInputElement>(null);
   const [discoveryLoading, setDiscoveryLoading] = useState(false);
   const [boardLoading, setBoardLoading] = useState(false);
@@ -220,6 +251,10 @@ export default function Music() {
   const [chartCards, setChartCards] = useState<ChartCard[]>([]);
   const [hotSearch, setHotSearch] = useState<MusicHotSearchItem[]>([]);
   const [songlists, setSonglists] = useState<MusicSongListSummary[]>([]);
+  // 首页轮播图（网易 /banner）：仅网易源出数据，空数组时 DiscoverView 不渲染。
+  const [banners, setBanners] = useState<NeteaseBanner[]>([]);
+  // 发现页首屏分块（网易移动端 /homepage/block/page）：仅外部网易源出数据，空时不渲染。
+  const [homepageBlocks, setHomepageBlocks] = useState<NeteaseHomepageBlock[]>([]);
   const [songTags, setSongTags] = useState<MusicSongListTag[]>([]);
   const [songSorts, setSongSorts] = useState<MusicSongListTag[]>([]);
   const [selectedTag, setSelectedTag] = useState("");
@@ -240,7 +275,13 @@ export default function Music() {
   const [albumArtist, setAlbumArtist] = useState("");
   const [artistSongs, setArtistSongs] = useState<MusicSong[]>([]);
   const [artistAlbums, setArtistAlbums] = useState<
-    Array<{ id?: string; name: string; cover?: string }>
+    Array<{
+      id?: string;
+      name: string;
+      cover?: string;
+      // LX 专辑卡：携带源 id + 平台，点进去走 getLxAlbumSongs 路由。
+      lx?: { src: string; platform: MusicPlatform };
+    }>
   >([]);
   const [artistSimilar, setArtistSimilar] = useState<
     Array<{ name: string; cover?: string; count: number; song: MusicSong }>
@@ -509,12 +550,18 @@ export default function Music() {
     return enabledSources.find((source) => source.kind === "lx-server");
   }, [activeSource, enabledSources]);
 
-  // 发现类页面是聚合的:只要有任一「发现能力源」(LX 或网易)就出数据。
+  // 发现类页面是聚合的:有发现能力源就出数据。能力源 = LX Server / 网易 /
+  // OmniParse(cyrene omni 模式有 /search+/toplists)。洛雪 runtime、tunehub 只取直链,不算。
   const discoveryCapableSource = useMemo(
     () =>
       discoverySource ??
       enabledSources.find(
-        (source) => source.kind === "lx-server" || source.kind === "netease-api"
+        (source) =>
+          source.kind === "lx-server" ||
+          source.kind === "netease-api" ||
+          (source.kind === "cyrene-aggregate" &&
+            source.cyreneMode === "omni" &&
+            !!source.baseUrl)
       ),
     [discoverySource, enabledSources]
   );
@@ -551,6 +598,47 @@ export default function Music() {
     if (view === "recommend") void loadNeteaseRecommend();
   }, [view, loadNeteaseRecommend]);
 
+  // 首页轮播图（网易 /banner）：有网易源时取，无源/失败留空（DiscoverView 自行不渲染）。
+  useEffect(() => {
+    if (!extrasSource) {
+      setBanners([]);
+      return;
+    }
+    let cancelled = false;
+    (async () => {
+      try {
+        const list = await getNeteaseBanners(extrasSource);
+        if (!cancelled) setBanners(list);
+      } catch {
+        if (!cancelled) setBanners([]);
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [extrasSource]);
+
+  // 发现页首屏分块（网易移动端 /homepage/block/page）：仅外部自部署网易源可用，
+  // 内置源受 -462 反爬限制返回空（不渲染）；失败留空。
+  useEffect(() => {
+    if (!extrasSource) {
+      setHomepageBlocks([]);
+      return;
+    }
+    let cancelled = false;
+    (async () => {
+      try {
+        const blocks = await getNeteaseHomepageBlocks(extrasSource);
+        if (!cancelled) setHomepageBlocks(blocks);
+      } catch {
+        if (!cancelled) setHomepageBlocks([]);
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [extrasSource]);
+
   // 「网易热搜」改用真接口（/search/hot/detail，对齐 SPlayer searchHot）填充搜索面板推荐区。
   // 不再自造客户端打分引擎——照参考项目实现；无网易源时留空，由下方 LX 热门搜索兜底。
   useEffect(() => {
@@ -576,24 +664,56 @@ export default function Music() {
   // 仅在搜索面板开启 + 有网易源时拉；空关键词清空。
   useEffect(() => {
     const q = keyword.trim();
-    if (!extrasSource || !searchPanelOpen || q.length < 1) {
+    if ((!extrasSource && !discoverySource) || !searchPanelOpen || q.length < 1) {
       setSearchSuggestions([]);
       return;
     }
     let cancelled = false;
     const timer = window.setTimeout(async () => {
-      try {
-        const words = await getNeteaseSearchSuggest(extrasSource, q);
-        if (!cancelled) setSearchSuggestions(words.slice(0, 10));
-      } catch {
-        if (!cancelled) setSearchSuggestions([]);
+      // 网易 /search/suggest + LX tip 搜索合并，去重保序。
+      const [neteaseRes, lxRes] = await Promise.allSettled([
+        extrasSource ? getNeteaseSearchSuggest(extrasSource, q) : Promise.resolve([]),
+        discoverySource ? getLxTipSearch(discoverySource, "wy", q) : Promise.resolve([]),
+      ]);
+      if (cancelled) return;
+      const merged: string[] = [];
+      const seen = new Set<string>();
+      for (const res of [neteaseRes, lxRes]) {
+        if (res.status !== "fulfilled") continue;
+        for (const word of res.value) {
+          const key = word.trim().toLowerCase();
+          if (!key || seen.has(key)) continue;
+          seen.add(key);
+          merged.push(word);
+        }
       }
+      setSearchSuggestions(merged.slice(0, 10));
     }, 300);
     return () => {
       cancelled = true;
       window.clearTimeout(timer);
     };
-  }, [keyword, extrasSource, searchPanelOpen]);
+  }, [keyword, extrasSource, discoverySource, searchPanelOpen]);
+
+  // 搜索框默认词（网易 /search/default）：作为搜索框 placeholder 占位提示。
+  useEffect(() => {
+    if (!extrasSource) {
+      setDefaultKeyword("");
+      return;
+    }
+    let cancelled = false;
+    (async () => {
+      try {
+        const word = await getNeteaseDefaultKeyword(extrasSource);
+        if (!cancelled) setDefaultKeyword(word);
+      } catch {
+        if (!cancelled) setDefaultKeyword("");
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [extrasSource]);
 
   const lyricLines = useMemo(
     () => parseLyric({ lyric: lyricText, tlyric: tlyricText, yrc: yrcText, romalrc: romaText }),
@@ -845,23 +965,34 @@ export default function Music() {
       setResolving(false);
       pendingAutoPlayRef.current = false;
 
-      // 3) 收尾：全平台都是试听 → 不弹框，自动播下一首（带探底保护）
+      // 3) 收尾：到这里说明该歌在「所有候选平台」都拿不到可播放直链
+      //    （试听片段 / 灰曲解灰失败 / 网络错误皆然）。按用户期望：一个平台补不上
+      //    换下一个平台（上面 step 1/2 已遍历），全平台都没有 → 自动跳下一首。
+      //    用 previewSkipChainRef 做探底保护：整个队列转一圈都不行才停下提示，避免死循环。
       const nextQueue = queueRef.current;
       const onlyPreview = sawPreviewOnly && !sawRealError;
-      if (onlyPreview && nextQueue.length > 1) {
+      if (nextQueue.length > 1) {
         previewSkipChainRef.current += 1;
         if (previewSkipChainRef.current <= nextQueue.length) {
-          setError(`「${song.title}」各平台均为试听，已自动跳过`);
+          setError(
+            onlyPreview
+              ? `「${song.title}」各平台均为试听，已自动跳过`
+              : `「${song.title}」各平台均无法播放，已自动跳过`
+          );
           await playByQueueOffsetRef.current?.(1);
           return;
         }
-        // 整个队列都试听过一遍了，停下来给个轻提示，不再继续跳
+        // 整个队列都转过一遍仍无可播放的，停下来给个轻提示，不再继续跳。
         previewSkipChainRef.current = 0;
-        setError("队列中的歌曲在当前源下都只有试听片段");
+        setError(
+          onlyPreview
+            ? "队列中的歌曲在当前源下都只有试听片段"
+            : "队列中的歌曲都无法获取播放地址"
+        );
         return;
       }
 
-      // 4) 真正的失败（或单首试听且无下一首）：保留原有提示
+      // 4) 队列只有这一首且失败：保留原有提示（试听不弹框，真错误弹框）。
       const message =
         onlyPreview
           ? "当前源下该歌曲只有试听片段"
@@ -1228,6 +1359,23 @@ export default function Music() {
       setSearching(true);
       setError("");
       try {
+        // 抖音分享链接/文案：有 Cyrene 聚合源时解析 BGM 直链入结果（OmniParse /douyin）。
+        if (/douyin\.com|v\.douyin/i.test(q)) {
+          const cyrene = enabledSources.find((s) => s.kind === "cyrene-aggregate");
+          if (cyrene) {
+            const dySongs = await getOmniDouyinSongs(cyrene, q);
+            if (dySongs.length > 0) {
+              searchCandidatesRef.current = mergeSongCandidates(new Map(), dySongs);
+              setResults(dySongs);
+              setPage(1);
+              setHasMore(false);
+              setView("search");
+              setSearchPanelOpen(false);
+              setSearching(false);
+              return;
+            }
+          }
+        }
         const response =
           activeSourceId === "all" || !activeSource
             ? await searchMusicSources(enabledSources, q, nextPage, 24)
@@ -1491,14 +1639,20 @@ export default function Music() {
   }, [songlistParams?.source, songlistParams?.id, enabledSources.length]);
 
   const openAlbum = useCallback(
-    (album: string, artist?: string, id?: string) => {
+    (album: string, artist?: string, id?: string, lx?: { src: string; platform: string; albumId: string }) => {
       const name = (album || "").trim();
-      if (!name && !id) return;
+      if (!name && !id && !lx?.albumId) return;
       const query = new URLSearchParams();
       if (artist) query.set("artist", artist);
       if (id) query.set("id", id);
+      // LX 专辑：带源 id + 平台 + 平台专辑 id，album effect 走 getLxAlbumSongs 路由。
+      if (lx?.src && lx.platform && lx.albumId) {
+        query.set("src", lx.src);
+        query.set("platform", lx.platform);
+        query.set("id", lx.albumId);
+      }
       const qs = query.toString();
-      navigate(`/music/album/${encodeURIComponent(name || id || "")}${qs ? `?${qs}` : ""}`);
+      navigate(`/music/album/${encodeURIComponent(name || id || lx?.albumId || "")}${qs ? `?${qs}` : ""}`);
     },
     [navigate]
   );
@@ -1514,6 +1668,29 @@ export default function Music() {
     setAlbumRestricted(false);
     setAlbumLoading(true);
     (async () => {
+      // LX 专辑路由：来自带 albumId 的 LX 歌曲点专辑名 → getLxAlbumSongs（按源+平台拉曲目）。
+      if (albumParams.src && albumParams.platform && albumParams.id) {
+        const lxSource = enabledSources.find(
+          (s) => s.id === albumParams.src && s.kind === "lx-server"
+        );
+        if (lxSource) {
+          try {
+            const platform = normalizeMusicPlatform(albumParams.platform) || "kw";
+            const songs = await getLxAlbumSongs(lxSource, platform, albumParams.id);
+            if (cancelled) return;
+            if (songs.length > 0) {
+              setAlbumSongs(songs);
+              setAlbumArtist(albumParams.artist || mostCommonArtist(songs));
+              setAlbumMeta({ cover: songs[0]?.cover });
+              setAlbumLoading(false);
+              return;
+            }
+          } catch {
+            if (cancelled) return;
+            // LX 专辑取不到 → 落到下方文本派生回退。
+          }
+        }
+      }
       // 有真专辑 id + 网易源 → 真接口 /album?id=（对齐 SPlayer album.ts）。
       if (albumParams.id && extrasSource) {
         try {
@@ -1583,7 +1760,7 @@ export default function Music() {
       cancelled = true;
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [albumParams?.name, albumParams?.artist, albumParams?.id, extrasSource, enabledSources.length]);
+  }, [albumParams?.name, albumParams?.artist, albumParams?.id, albumParams?.src, albumParams?.platform, extrasSource, enabledSources.length]);
 
   // 跳真歌手页（带真 id）：来自歌手广场/搜索/专辑详情的真接口数据。
   const openArtistById = useCallback(
@@ -1634,7 +1811,35 @@ export default function Music() {
             getNeteaseArtistAlbums(extrasSource, artistParams.id, 24).catch(() => []),
           ]);
           if (cancelled) return;
-          setArtistSongs(detail.songs);
+          // 热门 50 首先上屏；随后异步补全部作品(/artist/songs 分页)去重合并，
+          // 取不到则保留热门(也兜底 /artist/top/song)。
+          setArtistSongs(detail.songs.length > 0 ? detail.songs : []);
+          void (async () => {
+            try {
+              let all = await getNeteaseArtistAllSongs(extrasSource, artistParams.id, {
+                limit: 100,
+              });
+              if (all.list.length === 0 && detail.songs.length === 0) {
+                const top = await getNeteaseArtistTopSongs(extrasSource, artistParams.id);
+                all = { list: top, total: top.length, hasMore: false };
+              }
+              if (cancelled || all.list.length === 0) return;
+              setArtistSongs((prev) => {
+                const seen = new Set(prev.map((s) => musicSongKey(s)));
+                const merged = [...prev];
+                all.list.forEach((s) => {
+                  const key = musicSongKey(s);
+                  if (!seen.has(key)) {
+                    seen.add(key);
+                    merged.push(s);
+                  }
+                });
+                return merged;
+              });
+            } catch {
+              /* 全部歌曲取不到不影响热门列表 */
+            }
+          })();
           setArtistMeta({
             cover: detail.artist.cover,
             briefDesc: detail.artist.briefDesc,
@@ -1648,8 +1853,42 @@ export default function Music() {
               cover: album.pic,
             }))
           );
-          // 相似歌手：从相似歌曲聚合（匿名相似歌手接口需登录，照参考用 simi/song 派生）。
+          // 完整简介：真接口 /artist/desc（含 briefDesc + 分段），取不到保留 detail 的 briefDesc。
           try {
+            const desc = await getNeteaseArtistDesc(extrasSource, artistParams.id);
+            if (!cancelled) {
+              const full =
+                desc.briefDesc ||
+                desc.sections.map((s) => s.txt).filter(Boolean).join("\n\n");
+              if (full) {
+                setArtistMeta((prev) => (prev ? { ...prev, briefDesc: full } : prev));
+              }
+            }
+          } catch {
+            /* 简介取不到不影响主体 */
+          }
+          // 相似歌手：优先真接口 /simi/artist；取不到再从相似歌曲派生（匿名兜底）。
+          try {
+            const realSimi = await getNeteaseSimiArtists(extrasSource, artistParams.id);
+            if (!cancelled && realSimi.length > 0) {
+              setArtistSimilar(
+                realSimi.slice(0, 8).map((a) => ({
+                  name: a.name,
+                  cover: a.cover,
+                  count: 0,
+                  song: {
+                    id: a.id,
+                    sourceId: extrasSource.id,
+                    sourceName: extrasSource.name,
+                    title: a.name,
+                    artist: a.name,
+                    platform: "wy" as const,
+                  },
+                }))
+              );
+              setArtistLoading(false);
+              return;
+            }
             const simi = await getNeteaseSimiSongs(extrasSource, detail.songs[0]?.id || artistParams.id);
             if (!cancelled) {
               const bySimilar = new Map<
@@ -1679,6 +1918,59 @@ export default function Music() {
         } catch (artistError) {
           if (cancelled) return;
           if (isNeteaseAntiBotError(artistError)) setArtistRestricted(true);
+        }
+      }
+      // LX 歌手真接口（仅 tx/wy 有歌手维度）：按名解析歌手 id → 详情 + 全部歌曲 + 专辑。
+      // 网易源缺席或受限时走这条；拿到歌曲即上屏并提前返回，否则落到下方搜索派生。
+      const lxArtistSource = enabledSources.find(
+        (s) => s.kind === "lx-server" && s.enabled
+      );
+      if (lxArtistSource) {
+        try {
+          const found =
+            (await searchLxArtist(lxArtistSource, "wy", artistParams.name))[0] ||
+            (await searchLxArtist(lxArtistSource, "tx", artistParams.name))[0];
+          if (found) {
+            const [detail, songs, albums] = await Promise.all([
+              getLxArtistDetail(lxArtistSource, found.platform, found.id).catch(
+                () => ({}) as Record<string, unknown>
+              ),
+              getLxArtistSongs(lxArtistSource, found.platform, found.id).catch(
+                () => [] as MusicSong[]
+              ),
+              getLxArtistAlbums(lxArtistSource, found.platform, found.id).catch(
+                () => ({ list: [], total: 0, page: 1 })
+              ),
+            ]);
+            if (cancelled) return;
+            if (songs.length > 0) {
+              setArtistSongs(songs);
+              const cover =
+                asMusicString(detail.avatar) ||
+                asMusicString(detail.pic) ||
+                found.pic ||
+                songs[0]?.cover;
+              setArtistMeta({
+                cover,
+                briefDesc: asMusicString(detail.desc) || undefined,
+                musicSize: asMusicNumber(detail.musicSize),
+                albumSize: asMusicNumber(detail.albumSize),
+              });
+              setArtistAlbums(
+                albums.list.slice(0, 24).map((album) => ({
+                  id: album.id,
+                  name: album.name,
+                  cover: album.pic,
+                  // LX 专辑卡携带源+平台，点进去走 getLxAlbumSongs 路由。
+                  lx: { src: lxArtistSource.id, platform: found.platform },
+                }))
+              );
+              setArtistLoading(false);
+              return;
+            }
+          }
+        } catch {
+          /* LX 歌手取不到 → 落到下方搜索派生回退 */
         }
       }
       try {
@@ -2228,7 +2520,7 @@ export default function Music() {
                         void doSearch(1, keyword);
                       }
                     }}
-                    placeholder="搜索歌曲、歌手、歌单"
+                    placeholder={defaultKeyword ? `搜索：${defaultKeyword}` : "搜索歌曲、歌手、歌单"}
                     className="search-field-input min-w-0 flex-1 bg-transparent text-sm text-cream placeholder:text-cream-faint"
                   />
                   {keyword && (
@@ -2444,6 +2736,7 @@ export default function Music() {
             abLoop={abLoop}
             onAbLoop={cycleAbLoop}
             extrasSource={extrasSource}
+            lxSource={discoverySource}
             onPlaySong={(song) => void playSong(song, [song])}
             onOpenPlaylist={(summary) => void openNeteasePlaylist(summary)}
           />
@@ -2484,7 +2777,14 @@ export default function Music() {
                   onFavorite={toggleFavorite}
                   onQueue={appendToQueue}
                   onAddToPlaylist={setAddToPlaylistSong}
-                  onOpenAlbum={(album, artist, id) => openAlbum(album, artist, id)}
+                  onOpenAlbum={(album, artist, id, lx) =>
+                    openAlbum(
+                      album,
+                      artist,
+                      id,
+                      lx ? { src: lx.src, platform: lx.platform, albumId: id || "" } : undefined
+                    )
+                  }
                   onOpenArtist={(artist) => openArtist(artist)}
                 />
               ) : view === "album" ? (
@@ -2565,6 +2865,8 @@ export default function Music() {
                   isPlaying={isPlaying}
                   resolving={resolving}
                   hotSearch={hotSearch}
+                  banners={banners}
+                  homepageBlocks={homepageBlocks}
                   boards={boards}
                   selectedBoard={selectedBoard}
                   boardSongs={boardSongs}
@@ -2604,6 +2906,14 @@ export default function Music() {
                   onQueue={appendToQueue}
                   onAddToPlaylist={setAddToPlaylistSong}
                   onOpenAlbum={(album, artist) => openAlbum(album, artist)}
+                  onOpenAlbumSong={(song) => {
+                    // LX 源歌曲带 albumId+platform → 走 getLxAlbumSongs 路由；否则按文本派生。
+                    const lx =
+                      song.sourceId && song.albumId && song.platform
+                        ? { src: song.sourceId, platform: song.platform, albumId: song.albumId }
+                        : undefined;
+                    openAlbum(song.album || "", song.artist, undefined, lx);
+                  }}
                   onOpenArtist={(artist) => openArtist(artist)}
                   onClose={() => {
                     setKeyword("");
@@ -2683,6 +2993,18 @@ export default function Music() {
                 <MvView source={extrasSource} onPlay={(mv) => void playMv(mv)} />
               ) : view === "radio" ? (
                 <RadioView source={extrasSource} onOpenRadio={(radio) => void openRadio(radio)} />
+              ) : view === "playlist-square" ? (
+                <PlaylistSquareView
+                  source={extrasSource}
+                  onOpenSonglist={(item) => void openSonglist(item)}
+                />
+              ) : view === "new-albums" ? (
+                <NewAlbumsView
+                  source={extrasSource}
+                  onOpenAlbum={(item) =>
+                    openAlbum(item.name, item.author, item.id)
+                  }
+                />
               ) : view === "local" ? (
                 <LocalView
                   currentSong={currentSong}

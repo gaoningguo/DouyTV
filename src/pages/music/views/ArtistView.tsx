@@ -9,8 +9,10 @@ import {
 } from "@/components/Icon";
 import { type MusicSong } from "@/lib/music";
 import { wrapImage } from "@/lib/proxy";
-import { EmptyBlock, SectionHeader } from "../components/ui";
+import { EmptyBlock, FilterChip, SectionHeader } from "../components/ui";
 import { SongList } from "../components/SongList";
+
+type AlbumSort = "default" | "name";
 
 export function ArtistView({
   name,
@@ -34,7 +36,13 @@ export function ArtistView({
 }: {
   name: string;
   songs: MusicSong[];
-  albums: Array<{ id?: string; name: string; cover?: string }>;
+  albums: Array<{
+    id?: string;
+    name: string;
+    cover?: string;
+    /** LX 歌手专辑卡携带源+平台，点进去走 getLxAlbumSongs 路由。 */
+    lx?: { src: string; platform: string };
+  }>;
   similar: Array<{ name: string; cover?: string; count: number; song: MusicSong }>;
   loading: boolean;
   meta?: { cover?: string; briefDesc?: string; musicSize?: number; albumSize?: number } | null;
@@ -48,10 +56,17 @@ export function ArtistView({
   onFavorite: (song: MusicSong) => void;
   onQueue: (song: MusicSong) => void;
   onAddToPlaylist: (song: MusicSong) => void;
-  onOpenAlbum: (album: string, artist?: string, id?: string) => void;
+  onOpenAlbum: (
+    album: string,
+    artist?: string,
+    id?: string,
+    lx?: { src: string; platform: string; albumId: string }
+  ) => void;
   onOpenArtist: (artist: string) => void;
 }) {
   const [showAllSongs, setShowAllSongs] = useState(false);
+  const [showFullDesc, setShowFullDesc] = useState(false);
+  const [albumSort, setAlbumSort] = useState<AlbumSort>("default");
   const heroSong = songs.find((song) => song.cover) ?? songs[0];
   const heroCover = meta?.cover
     ? wrapImage(meta.cover)
@@ -59,6 +74,10 @@ export function ArtistView({
       ? wrapImage(heroSong.cover)
       : undefined;
   const visibleSongs = showAllSongs ? songs : songs.slice(0, 8);
+  const sortedAlbums =
+    albumSort === "name"
+      ? [...albums].sort((a, b) => a.name.localeCompare(b.name, "zh-Hans-CN"))
+      : albums;
   return (
     <div className="music-album-page space-y-10 pb-4">
       {restricted && (
@@ -108,9 +127,22 @@ export function ArtistView({
                 )}
               </div>
               {meta?.briefDesc && (
-                <p className="mt-3 line-clamp-2 max-w-xl text-sm text-cream-faint">
-                  {meta.briefDesc}
-                </p>
+                <div className="mt-3 max-w-xl">
+                  <p
+                    className={`text-sm text-cream-faint ${showFullDesc ? "" : "line-clamp-2"}`}
+                  >
+                    {meta.briefDesc}
+                  </p>
+                  {meta.briefDesc.length > 80 && (
+                    <button
+                      type="button"
+                      onClick={() => setShowFullDesc((value) => !value)}
+                      className="mt-1 font-mono text-[10px] uppercase tracking-[0.18em] text-cream-dim transition-colors hover:text-ember"
+                    >
+                      {showFullDesc ? "收起简介" : "展开简介"}
+                    </button>
+                  )}
+                </div>
               )}
               <div className="mt-6 flex flex-wrap items-center gap-3">
                 <button
@@ -201,13 +233,37 @@ export function ArtistView({
 
       {albums.length > 0 && (
         <section>
-          <SectionHeader title="专辑与发行" meta={`${albums.length} 张`} />
+          <SectionHeader
+            title="专辑与发行"
+            meta={`${albums.length} 张`}
+            action={
+              albums.length > 1 ? (
+                <div className="flex items-center gap-2">
+                  <FilterChip active={albumSort === "default"} onClick={() => setAlbumSort("default")}>
+                    最新
+                  </FilterChip>
+                  <FilterChip active={albumSort === "name"} onClick={() => setAlbumSort("name")}>
+                    按名称
+                  </FilterChip>
+                </div>
+              ) : undefined
+            }
+          />
           <div className="grid grid-cols-2 gap-6 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-6">
-            {albums.map((album) => (
+            {sortedAlbums.map((album) => (
               <button
                 key={album.id || album.name}
                 type="button"
-                onClick={() => onOpenAlbum(album.name, name, album.id)}
+                onClick={() =>
+                  onOpenAlbum(
+                    album.name,
+                    name,
+                    album.id,
+                    album.lx && album.id
+                      ? { src: album.lx.src, platform: album.lx.platform, albumId: album.id }
+                      : undefined
+                  )
+                }
                 className="group text-left"
               >
                 <div className="music-ob-album-cover">

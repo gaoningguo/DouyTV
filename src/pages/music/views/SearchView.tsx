@@ -7,6 +7,7 @@ import {
 } from "@/components/Icon";
 import {
   searchNeteasePlaylists,
+  searchLxSonglists,
   type MusicSong,
   type MusicSongListSummary,
   type MusicSourceDescriptor,
@@ -33,6 +34,7 @@ export function SearchView({
   onQueue,
   onAddToPlaylist,
   onOpenAlbum,
+  onOpenAlbumSong,
   onOpenArtist,
   onClose,
   extrasSource,
@@ -54,6 +56,7 @@ export function SearchView({
   onQueue: (song: MusicSong) => void;
   onAddToPlaylist: (song: MusicSong) => void;
   onOpenAlbum: (album: string, artist?: string) => void;
+  onOpenAlbumSong?: (song: MusicSong) => void;
   onOpenArtist: (artist: string) => void;
   onClose: () => void;
   extrasSource: MusicSourceDescriptor | null;
@@ -62,8 +65,14 @@ export function SearchView({
   type CategoryType = "all" | "songs" | "artists" | "albums" | "playlists";
   const [category, setCategory] = useState<CategoryType>("all");
   const [playlists, setPlaylists] = useState<MusicSongListSummary[]>([]);
+  const [lxPlaylists, setLxPlaylists] = useState<MusicSongListSummary[]>([]);
   const trimmed = keyword.trim();
   const hasResults = results.length > 0;
+
+  const lxSource = useMemo(
+    () => sources.find((s) => s.kind === "lx-server" && s.enabled) ?? null,
+    [sources]
+  );
 
   // 网易歌单搜索（仅外部自部署网易源可用；其它源静默无结果）。
   useEffect(() => {
@@ -80,6 +89,22 @@ export function SearchView({
       cancelled = true;
     };
   }, [trimmed, extrasSource]);
+
+  // LX 歌单搜索（存在已启用的 lx-server 源时可用；失败静默降级为空）。
+  useEffect(() => {
+    if (!lxSource || !trimmed) {
+      setLxPlaylists([]);
+      return;
+    }
+    let cancelled = false;
+    (async () => {
+      const { list } = await searchLxSonglists(lxSource, "wy", trimmed, 1);
+      if (!cancelled) setLxPlaylists(list);
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [trimmed, lxSource]);
 
   const topSong = results[0];
   const topArtist = useMemo(() => mostCommonArtist(results), [results]);
@@ -116,10 +141,20 @@ export function SearchView({
     return Array.from(map.values()).sort((a, b) => b.count - a.count);
   }, [results]);
 
+  // 合并网易外部源歌单与 LX 歌单，按 id 去重展示。
+  const mergedPlaylists = useMemo(() => {
+    const map = new Map<string, MusicSongListSummary>();
+    [...playlists, ...lxPlaylists].forEach((pl) => {
+      const key = `${pl.source}:${pl.id}`;
+      if (!map.has(key)) map.set(key, pl);
+    });
+    return Array.from(map.values());
+  }, [playlists, lxPlaylists]);
+
   const showSongs = category === "all" || category === "songs";
   const showArtists = (category === "all" || category === "artists") && artists.length > 0;
   const showAlbums = (category === "all" || category === "albums") && albums.length > 0;
-  const showPlaylists = (category === "all" || category === "playlists") && playlists.length > 0;
+  const showPlaylists = (category === "all" || category === "playlists") && mergedPlaylists.length > 0;
   const songList = category === "songs" ? results : results.slice(0, 8);
 
   const CATEGORIES: Array<{ id: CategoryType; label: string }> = [
@@ -127,7 +162,7 @@ export function SearchView({
     { id: "songs", label: "歌曲" },
     { id: "artists", label: "艺人" },
     { id: "albums", label: "专辑" },
-    ...(playlists.length > 0
+    ...(mergedPlaylists.length > 0
       ? [{ id: "playlists" as CategoryType, label: "歌单" }]
       : []),
   ];
@@ -263,6 +298,7 @@ export function SearchView({
                 onFavorite={onFavorite}
                 onQueue={onQueue}
                 onAddToPlaylist={onAddToPlaylist}
+                onOpenAlbumSong={onOpenAlbumSong}
               />
             </div>
           )}
@@ -340,14 +376,14 @@ export function SearchView({
             </div>
           )}
 
-          {/* 歌单（网易外部源） */}
+          {/* 歌单（网易外部源 + LX 歌单） */}
           {showPlaylists && (
             <div className="col-span-12">
               <h2 className="mb-5 font-display text-lg font-bold">歌单</h2>
               <div className="grid grid-cols-2 gap-6 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-6">
-                {playlists.slice(0, category === "playlists" ? 24 : 6).map((pl) => (
+                {mergedPlaylists.slice(0, category === "playlists" ? 24 : 6).map((pl) => (
                   <button
-                    key={pl.id}
+                    key={`${pl.source}:${pl.id}`}
                     type="button"
                     onClick={() => onOpenPlaylist(pl)}
                     className="group text-left"

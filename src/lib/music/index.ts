@@ -8,12 +8,17 @@ import {
   resolveNeteaseApi,
   isExternalNetease,
   resolveNeteaseUnblockMatch,
+  getNeteaseSongCopyrightRcmd,
+  fetchNeteaseLyric,
 } from "./neteaseApi";
 import { searchCyrene, resolveCyrene } from "./cyreneApi";
+import { getLxRuntimeMusicUrlByInfo } from "./lxRuntime";
+import { searchMusicSdk } from "./musicSdkSource";
 import { unblockMatch, type UnblockSource } from "./unblock";
 import { parseLxScript, looksLikeLxSource, type LxSourceParsed } from "./lxSource";
 import { isMusicPreviewError } from "./playback";
 import type {
+  MusicLyricResult,
   MusicPlayResult,
   MusicQuality,
   MusicSearchResult,
@@ -34,6 +39,8 @@ export * from "./localMusicDb";
 export * from "./lxSource";
 export * from "./lxRuntime";
 export * from "./cyreneConfig";
+export * from "./musicSdkSource";
+export { registerMusicUrlResolver } from "./sdk/index-sdk";
 
 const DEFAULT_LIMIT = 30;
 
@@ -56,9 +63,11 @@ export function normalizeMusicSourceDescriptor(
           : "网易云(内置)"
         : kind === "cyrene-aggregate"
           ? "Cyrene 聚合源"
-          : kind === "local"
-            ? "本地音乐"
-            : "音乐插件");
+          : kind === "musicsdk"
+            ? "内置音乐(多平台)"
+            : kind === "local"
+              ? "本地音乐"
+              : "音乐插件");
   const id =
     input.id?.trim() ||
     `music-${stableId(`${kind}:${name}:${input.baseUrl ?? input.code ?? now}`)}`;
@@ -81,11 +90,15 @@ export function normalizeMusicSourceDescriptor(
         : undefined,
     defaultPlatform:
       input.defaultPlatform ??
-      (kind === "lx-server" ? "all" : kind === "netease-api" ? "wy" : undefined),
+      (kind === "lx-server" || kind === "musicsdk"
+        ? "all"
+        : kind === "netease-api"
+          ? "wy"
+          : undefined),
     platforms:
       input.platforms && input.platforms.length > 0
         ? input.platforms
-        : kind === "lx-server"
+        : kind === "lx-server" || kind === "musicsdk"
           ? MUSIC_PLATFORMS.map((item) => item.id)
           : undefined,
     headers: input.headers,
@@ -123,6 +136,10 @@ export async function searchMusicSource(
       return searchNeteaseApi(source, keyword, page, limit);
     case "cyrene-aggregate":
       return searchCyrene(source, keyword, page, limit);
+    case "musicsdk": {
+      const list = await searchMusicSdk(source, keyword, page, limit);
+      return { list, page, limit, hasMore: list.length >= limit };
+    }
     case "local":
       // 本地音乐不按关键词搜索;曲库由 LocalView/musicLocal store 直接提供。
       return { list: [], page, limit, hasMore: false };
@@ -205,7 +222,91 @@ async function resolveNeteaseGray(
     );
     if (result) return result.url;
   }
+  // 3) 外部网易源的版权推荐换可播版本（/song/copyright/rcmd）。
+  if (external) {
+    const rcmd = await getNeteaseSongCopyrightRcmd(external, neteaseId);
+    if (rcmd) return rcmd;
+  }
   return undefined;
+}
+
+/**
+ * musicSdk 歌曲的播放解析：musicSdk 只出列表，不含直链解析（同 lx-music-desktop）。
+ * 按歌曲平台路由到一个已启用的播放源取直链：
+ *   1) 洛雪 runtime 脚本（cyrene lx runtime）——把 SDK 原始 musicInfo（song.raw）交脚本算签名；
+ *   2) OmniParse（cyrene omni）——按平台走 /song 等；
+ *   3) 自部署网易（external，仅 wy）——直接 song/url/v1；
+ *   4) wy 平台再不行走 UNM 解灰。
+ * 全失败抛错，提示添加播放源。
+ */
+async function resolveMusicSdkSong(
+  song: Parameters<typeof resolveLxServer>[1],
+  quality: MusicQuality,
+  options: ResolveOptions
+): Promise<MusicPlayResult> {
+  const platform = String(song.platform || "");
+  const all = options.unblock?.allSources ?? [];
+
+  // 1) 洛雪 runtime 脚本：把 SDK 原始 musicInfo 交脚本取链（各平台 id 编码脚本自己认）。
+  const lxRuntime = all.find(
+    (s) =>
+      s.enabled &&
+      s.kind === "cyrene-aggregate" &&
+      s.cyreneMode === "lx" &&
+      s.lxMode === "runtime" &&
+      s.code
+  );
+  if (lxRuntime && (song.raw || song.id)) {
+    try {
+      const cacheKey = `${lxRuntime.id}:${lxRuntime.updatedAt ?? 0}`;
+      const info =
+        song.raw && typeof song.raw === "object"
+          ? (song.raw as Record<string, unknown>)
+          : { songmid: song.id };
+      const direct = await getLxRuntimeMusicUrlByInfo(
+        cacheKey,
+        lxRuntime.code as string,
+        platform,
+        info,
+        String(quality)
+      );
+      if (direct) return { url: direct, directUrl: direct, quality, headers: lxRuntime.headers };
+    } catch {
+      /* 落到下一个解析源 */
+    }
+  }
+
+  // 2) OmniParse（omni）：按平台走 /song 等。复用 resolveCyrene，传入带平台的歌曲。
+  const omni = all.find(
+    (s) => s.enabled && s.kind === "cyrene-aggregate" && (s.cyreneMode ?? "omni") === "omni"
+  );
+  if (omni) {
+    try {
+      return await resolveCyrene(omni, song, quality);
+    } catch {
+      /* 落到下一个解析源 */
+    }
+  }
+
+  // 3) wy 平台：自部署网易直链 / UNM 解灰兜底。
+  if (platform === "wy") {
+    const external = all.find((s) => s.enabled && isExternalNetease(s));
+    if (external) {
+      try {
+        return await resolveNeteaseApi(external, song, quality);
+      } catch {
+        /* 落到解灰 */
+      }
+    }
+    const grayUrl = options.unblock
+      ? await resolveNeteaseGray(song, options.unblock)
+      : undefined;
+    if (grayUrl) return { url: grayUrl, directUrl: grayUrl, quality };
+  }
+
+  throw new Error(
+    "未配置可解析该平台的播放源。请在「音乐源」添加并启用 洛雪脚本 / OmniParse（网易曲也可用自部署网易源）。"
+  );
 }
 
 export async function resolveMusicSource(
@@ -231,8 +332,26 @@ export async function resolveMusicSource(
         ? await resolveNeteaseGray(song, options.unblock)
         : undefined;
       if (!grayUrl) throw error;
-      result = { url: grayUrl, directUrl: grayUrl, quality };
+      // 解灰只换了可播直链；歌词仍取网易（resolveNeteaseApi 抛错前没把歌词带出来），
+      // 这里补一次，避免「能播放但播放页无歌词」。
+      const lyric: MusicLyricResult = await fetchNeteaseLyric(
+        source,
+        String(song.id)
+      ).catch(() => ({ lyric: "" }));
+      result = {
+        url: grayUrl,
+        directUrl: grayUrl,
+        quality,
+        lyric: lyric.lyric,
+        tlyric: lyric.tlyric,
+        yrc: lyric.yrc,
+        romalrc: lyric.romalrc,
+      };
     }
+  } else if (source.kind === "musicsdk") {
+    // musicSdk 是纯列表源，自身不解析直链：按歌曲平台路由到已启用的播放源
+    // （洛雪 runtime / OmniParse / 自部署网易 / UNM 解灰）。无可用解析源则抛错。
+    result = await resolveMusicSdkSong(song, quality, options);
   } else {
     result =
       source.kind === "lx-server"
@@ -407,6 +526,20 @@ export function createBuiltinNeteaseSource(): MusicSourceDescriptor {
     kind: "netease-api",
     neteaseMode: "builtin",
     description: "前端直连 music.163.com · 免部署",
+  });
+}
+
+/**
+ * 内置 musicSdk 源（六平台 kw/kg/tx/wy/mg/bd 列表层，免配置）。
+ * 对齐 lx-music-desktop：发现/搜索/榜单/歌单/歌词开箱即用，
+ * 播放取直链需另启用解析源（洛雪脚本 / OmniParse），见 registerMusicUrlResolver。
+ */
+export function createMusicSdkSource(): MusicSourceDescriptor {
+  return normalizeMusicSourceDescriptor({
+    id: "music-sdk-builtin",
+    name: "内置音乐(多平台)",
+    kind: "musicsdk",
+    description: "六平台搜索/发现/歌单 · 免部署 · 播放需配解析源",
   });
 }
 

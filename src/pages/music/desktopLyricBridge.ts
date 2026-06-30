@@ -67,9 +67,13 @@ export interface DesktopLyricStylePayload {
   fontSize: number;
   color: string;
   strokeColor: string;
+  bold?: boolean;
+  karaoke?: boolean;
+  showTrans?: boolean;
+  bgOpacity?: number;
 }
 
-/** 推送桌面歌词外观（字号/主色/描边色）。通过独立 event 发，DesktopLyric 监听后应用。 */
+/** 推送桌面歌词外观（字号/主色/描边色/字重/逐字填色/翻译/背景板）。独立 event 发，DesktopLyric 监听后应用。 */
 export async function pushDesktopLyricStyle(style: DesktopLyricStylePayload): Promise<void> {
   if (!isTauri) return;
   try {

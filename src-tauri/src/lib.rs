@@ -16,6 +16,7 @@ mod fc2_ws;
 mod mfc_ws;
 mod mouflon;
 mod music_unblock;
+mod netease;
 mod sample_aes_proxy;
 mod stream_proxy;
 mod ts_mp4;
@@ -237,6 +238,73 @@ async fn script_http_h2(req: HttpRequest) -> Result<HttpResponse, String> {
         headers,
         body,
     })
+}
+
+#[derive(Debug, Serialize)]
+pub struct HttpBytesResponse {
+    pub url: String,
+    pub status: u16,
+    pub headers: HashMap<String, String>,
+    /// 响应体原始字节的 base64 编码。前端按 content-type 里的 charset 用
+    /// TextDecoder 解码（GBK/GB18030 等),或当二进制(epub/图片)直接使用。
+    pub body_base64: String,
+}
+
+/// 与 `script_http` 同源,但**不做** UTF-8 lossy 解码 —— 返回原始字节的 base64。
+///
+/// **为什么需要**:`script_http` 用 `read_to_string` 把 body 当 UTF-8 读,
+/// 国内多数 Legado 小说源返回 GBK/GB18030,lossy 解码会把正文糊成乱码;
+/// epub 这类二进制更是直接报废。本命令把字节原样带回前端,由前端按
+/// content-type charset(TextDecoder 支持 gbk/gb18030)解码,或当二进制用。
+#[tauri::command]
+async fn script_http_bytes(req: HttpRequest) -> Result<HttpBytesResponse, String> {
+    tauri::async_runtime::spawn_blocking(move || -> Result<HttpBytesResponse, String> {
+        use base64::Engine;
+        let timeout = std::time::Duration::from_millis(req.timeout_ms.unwrap_or(30_000));
+        let agent = agent_for(req.proxy_url.as_deref())?;
+
+        let mut request = agent.request(&req.method, &req.url).timeout(timeout);
+        let merged_cookie = merge_cookie_header(&req.url, &req.headers);
+        for (k, v) in &req.headers {
+            if k.eq_ignore_ascii_case("cookie") && merged_cookie.is_some() {
+                continue;
+            }
+            request = request.set(k, v);
+        }
+        if let Some(c) = merged_cookie.as_deref() {
+            request = request.set("Cookie", c);
+        }
+
+        let response = match req.body {
+            Some(body) if !body.is_empty() => request.send_string(&body),
+            _ => request.call(),
+        }
+        .map_err(|e| format!("{e}"))?;
+
+        let url = response.get_url().to_string();
+        let status = response.status();
+        let mut headers = HashMap::new();
+        for name in response.headers_names() {
+            if let Some(value) = response.header(&name) {
+                headers.insert(name, value.to_string());
+            }
+        }
+        let mut bytes: Vec<u8> = Vec::new();
+        response
+            .into_reader()
+            .take(32 * 1024 * 1024)
+            .read_to_end(&mut bytes)
+            .map_err(|e| format!("body read error: {e}"))?;
+        let body_base64 = base64::engine::general_purpose::STANDARD.encode(&bytes);
+        Ok(HttpBytesResponse {
+            url,
+            status,
+            headers,
+            body_base64,
+        })
+    })
+    .await
+    .map_err(|e| format!("{e}"))?
 }
 
 #[derive(Debug, Serialize)]
@@ -2639,13 +2707,15 @@ async fn open_desktop_lyric(app: tauri::AppHandle) -> Result<bool, String> {
             return Ok(true);
         }
 
-        let builder = WebviewWindowBuilder::new(
+        let lyric_w = 820.0_f64;
+        let lyric_h = 150.0_f64;
+        let mut builder = WebviewWindowBuilder::new(
             &app,
             "desktop-lyric",
             WebviewUrl::App("index.html#/music/desktop-lyric".into()),
         )
         .title("桌面歌词")
-        .inner_size(820.0, 150.0)
+        .inner_size(lyric_w, lyric_h)
         .min_inner_size(360.0, 80.0)
         .focused(false)
         .decorations(false)
@@ -2655,6 +2725,18 @@ async fn open_desktop_lyric(app: tauri::AppHandle) -> Result<bool, String> {
         .skip_taskbar(true)
         .resizable(true)
         .shadow(false);
+
+        // 初始位置：屏幕中间偏下（底部留约 1/8 屏高的边距）。
+        if let Some(main_win) = app.get_webview_window("main") {
+            if let Ok(Some(monitor)) = main_win.current_monitor() {
+                let scale = monitor.scale_factor();
+                let size = monitor.size().to_logical::<f64>(scale);
+                let pos = monitor.position().to_logical::<f64>(scale);
+                let x = pos.x + (size.width - lyric_w) / 2.0;
+                let y = pos.y + size.height - lyric_h - size.height / 8.0;
+                builder = builder.position(x.max(pos.x), y.max(pos.y));
+            }
+        }
 
         let win = builder
             .build()
@@ -3229,6 +3311,7 @@ pub fn run() {
         .invoke_handler(tauri::generate_handler![
             script_http,
             script_http_h2,
+            script_http_bytes,
             scan_local_videos,
             scan_music_folder,
             list_music_files,
@@ -3252,7 +3335,8 @@ pub fn run() {
             fc2_diagnose,
             mfc_list_online,
             mfc_diagnose,
-            music_unblock::music_unblock
+            music_unblock::music_unblock,
+            netease::netease_request
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

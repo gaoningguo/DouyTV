@@ -127,20 +127,26 @@ export function AlbumView({
         </div>
       </section>
 
-      <section className="music-panel">
-        <SongList
-          songs={songs}
-          activeSong={currentSong}
-          activePlaying={isPlaying}
-          loading={loading}
-          emptyText="没有找到该专辑的曲目"
-          isFavorite={isFavorite}
-          onPlay={onPlay}
-          onFavorite={onFavorite}
-          onQueue={onQueue}
-          onAddToPlaylist={onAddToPlaylist}
+      <div className="space-y-3">
+        <SectionHeader
+          title="曲目列表"
+          meta={songs.length > 0 ? `${songs.length} 首${totalSec > 0 ? ` · ${formatDuration(totalSec)}` : ""}` : undefined}
         />
-      </section>
+        <section className="music-panel">
+          <SongList
+            songs={songs}
+            activeSong={currentSong}
+            activePlaying={isPlaying}
+            loading={loading}
+            emptyText="没有找到该专辑的曲目"
+            isFavorite={isFavorite}
+            onPlay={onPlay}
+            onFavorite={onFavorite}
+            onQueue={onQueue}
+            onAddToPlaylist={onAddToPlaylist}
+          />
+        </section>
+      </div>
 
       {relatedWorks.length > 0 && (
         <section>

@@ -113,6 +113,18 @@ export function MusicSidebar({
             onClick={() => onView("songlists")}
           />
           <SidebarItem
+            icon={<IconList size={16} />}
+            label="网易歌单"
+            active={view === "playlist-square"}
+            onClick={() => onView("playlist-square")}
+          />
+          <SidebarItem
+            icon={<IconAlbum size={16} />}
+            label="新碟上架"
+            active={view === "new-albums"}
+            onClick={() => onView("new-albums")}
+          />
+          <SidebarItem
             icon={<IconArtist size={16} />}
             label="歌手"
             active={view === "artists" || view === "artist"}

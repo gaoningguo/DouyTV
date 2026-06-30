@@ -143,25 +143,11 @@ export function parseLxScript(scriptContent: string): LxSourceParsed | null {
         /\/url\/\{?[a-zA-Z]+\}?\/\{?[a-zA-Z]+\}?\/\{?[a-zA-Z]+\}?/,
       ]) || DEFAULT_URL_TEMPLATE;
 
-    // 模式判定（对齐 CyreneMusic「所有洛雪源都走沙箱执行」）：
-    // 只要脚本注册了 request 处理器（可执行），就优先 runtime 模式——很多源即便
-    // 有静态 apiUrl，也需要在脚本里算签名/MD5，当成静态模板会取不到链接而失败。
-    // 只有「不可执行但有静态 apiUrl」的纯模板源才走 template。
-    if (canRunLxScript(scriptContent)) {
-      return {
-        name,
-        version,
-        author,
-        description,
-        homepage,
-        apiUrl,
-        apiKey,
-        urlPathTemplate,
-        mode: "runtime",
-        code: scriptContent,
-      };
-    }
-    if (!apiUrl) return null;
+    // 模式判定（对齐 CyreneMusic：所有洛雪源一律走 iframe 沙箱执行，parseScript 永不返回 null）：
+    //  - 默认 runtime（带 code 走沙箱执行脚本算签名取链）——这是洛雪源的常态；
+    //  - 仅「明确不可执行（纯静态模板，无 JS 处理器）但有 apiUrl」才用 template 静态拼接。
+    // 关键：绝不因「抽不到 apiUrl」返回 null，否则会导致可执行脚本导入直接失败。
+    const pureTemplate = !!apiUrl && !canRunLxScript(scriptContent);
     return {
       name,
       version,
@@ -171,7 +157,8 @@ export function parseLxScript(scriptContent: string): LxSourceParsed | null {
       apiUrl,
       apiKey,
       urlPathTemplate,
-      mode: "template",
+      mode: pureTemplate ? "template" : "runtime",
+      code: scriptContent,
     };
   } catch {
     return null;

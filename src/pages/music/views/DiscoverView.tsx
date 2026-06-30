@@ -18,6 +18,8 @@ import {
   type MusicSong,
   type MusicSongListSummary,
   type MusicSourceDescriptor,
+  type NeteaseBanner,
+  type NeteaseHomepageBlock,
 } from "@/lib/music";
 import { wrapImage } from "@/lib/proxy";
 import { type ChartCard } from "../types";
@@ -41,6 +43,8 @@ interface DiscoverViewProps {
   chartCards: ChartCard[];
   favorites: MusicSong[];
   songlists: MusicSongListSummary[];
+  banners: NeteaseBanner[];
+  homepageBlocks: NeteaseHomepageBlock[];
   onSearch: (keyword: string) => void;
   onReload: () => void;
   onBoard: (board: MusicDiscoveryBoard) => void;
@@ -69,6 +73,8 @@ export function DiscoverView({
   chartCards,
   favorites,
   songlists,
+  banners,
+  homepageBlocks,
   onSearch,
   onReload,
   onBoard,
@@ -118,6 +124,32 @@ export function DiscoverView({
 
   return (
     <div className="music-obsidian-home space-y-12 pb-4">
+      {/* 官方 Banner 轮播（网易 /banner，横滑）。仅在有数据时显示。 */}
+      {banners.length > 0 && (
+        <div className="flex gap-4 overflow-x-auto scrollbar-hide pb-1">
+          {banners.map((banner, index) => (
+            <button
+              key={`${banner.pic}:${index}`}
+              type="button"
+              onClick={() => banner.url && window.open(banner.url, "_blank")}
+              className="relative shrink-0 overflow-hidden rounded-xl tap"
+              style={{ width: "min(100%, 520px)", aspectRatio: "3.2 / 1" }}
+              title={banner.typeTitle || "Banner"}
+            >
+              <img
+                src={wrapImage(banner.pic)}
+                alt=""
+                className="h-full w-full object-cover"
+              />
+              {banner.typeTitle && (
+                <span className="absolute bottom-2 right-2 rounded px-1.5 py-0.5 text-[10px] font-bold text-cream" style={{ background: "rgba(0,0,0,0.55)" }}>
+                  {banner.typeTitle}
+                </span>
+              )}
+            </button>
+          ))}
+        </div>
+      )}
       {/* 顶部三栏 Hero：黑胶 + 推荐歌单 Banner + 我喜欢网格（借鉴 Tabos fm-home-hero） */}
       <DiscoverHero
         heroSong={heroSong}
@@ -419,6 +451,26 @@ export function DiscoverView({
           </div>
         </section>
       )}
+
+      {/* 网易首页分块 —— /homepage/block/page 解析出的每个推荐块（仅自部署网易源出数据） */}
+      {homepageBlocks.map((block) => (
+        <section key={block.id} className="space-y-4">
+          <h2 className="font-display text-lg font-extrabold text-cream">
+            {aggregateMusicLabel(block.title, "推荐")}
+          </h2>
+          <div className="flex gap-4 overflow-x-auto scrollbar-hide pb-1">
+            {block.playlists.map((item) => (
+              <VideoCard
+                key={`${item.source}:${item.id}`}
+                cover={item.pic}
+                title={aggregateMusicLabel(item.name, "推荐歌单")}
+                subtitle={aggregatePlaylistMeta(item)}
+                onClick={() => onOpenSonglist(item)}
+              />
+            ))}
+          </div>
+        </section>
+      ))}
 
       {/* 完整榜单列表 —— 选中榜单的详细曲目 */}
       <section className="space-y-4">

@@ -16,27 +16,49 @@ export interface MusicUserPlaylistSong extends MusicSong {
   addedAt: number;
 }
 
-/** 桌面歌词外观（对齐 CyreneMusic：字号 / 主色 / 描边色）。 */
+/** 桌面歌词外观（字号 / 主色（已唱）/ 描边色 / 未唱底色 / 字重 / 背景板透明度 / 逐字填色 / 显示翻译）。 */
 export interface DesktopLyricStyle {
   fontSize: number;
+  /** 已唱（填充）文字色。 */
   color: string;
   strokeColor: string;
+  /** 未唱（底层）文字色。 */
+  idleColor: string;
+  /** 字重（400~900）。 */
+  fontWeight: number;
+  /** 背景板透明度 0~1（0=全透明无底板）。 */
+  bgOpacity: number;
+  /** 逐字卡拉OK填色（true=按词时间逐字填，false=整行线性扫光）。 */
+  karaoke: boolean;
+  /** 是否显示翻译行。 */
+  showTrans: boolean;
 }
 
 export const DEFAULT_DESKTOP_LYRIC_STYLE: DesktopLyricStyle = {
   fontSize: 30,
   color: "#FF6B35",
   strokeColor: "#0E0F11",
+  idleColor: "#FFFFFF",
+  fontWeight: 800,
+  bgOpacity: 0,
+  karaoke: true,
+  showTrans: true,
 };
 
 function normalizeDesktopLyricStyle(input?: Partial<DesktopLyricStyle>): DesktopLyricStyle {
   if (!input || typeof input !== "object") return { ...DEFAULT_DESKTOP_LYRIC_STYLE };
-  const size = typeof input.fontSize === "number" ? input.fontSize : DEFAULT_DESKTOP_LYRIC_STYLE.fontSize;
+  const d = DEFAULT_DESKTOP_LYRIC_STYLE;
+  const num = (v: unknown, lo: number, hi: number, fallback: number) =>
+    typeof v === "number" && Number.isFinite(v) ? Math.min(hi, Math.max(lo, v)) : fallback;
   return {
-    fontSize: Math.min(80, Math.max(18, size)),
-    color: typeof input.color === "string" ? input.color : DEFAULT_DESKTOP_LYRIC_STYLE.color,
-    strokeColor:
-      typeof input.strokeColor === "string" ? input.strokeColor : DEFAULT_DESKTOP_LYRIC_STYLE.strokeColor,
+    fontSize: num(input.fontSize, 18, 80, d.fontSize),
+    color: typeof input.color === "string" ? input.color : d.color,
+    strokeColor: typeof input.strokeColor === "string" ? input.strokeColor : d.strokeColor,
+    idleColor: typeof input.idleColor === "string" ? input.idleColor : d.idleColor,
+    fontWeight: num(input.fontWeight, 400, 900, d.fontWeight),
+    bgOpacity: num(input.bgOpacity, 0, 1, d.bgOpacity),
+    karaoke: typeof input.karaoke === "boolean" ? input.karaoke : d.karaoke,
+    showTrans: typeof input.showTrans === "boolean" ? input.showTrans : d.showTrans,
   };
 }
 

@@ -449,6 +449,48 @@ export async function getLxTipSearch(
   }
 }
 
+/** 按名搜歌手拿真 id(LX `/api/music/search?type=singer`,仅 wy/tx 支持)。失败空。 */
+export interface LxArtistHit {
+  id: string;
+  name: string;
+  pic?: string;
+  platform: MusicPlatform;
+}
+
+export async function searchLxArtist(
+  source: MusicSourceDescriptor,
+  platform: MusicPlatform,
+  name: string
+): Promise<LxArtistHit[]> {
+  assertLxSource(source);
+  if (!name.trim()) return [];
+  try {
+    const payload = await lxGet<unknown>(
+      source,
+      `/api/music/search?type=singer&source=${platform}&name=${encodeURIComponent(
+        name
+      )}&limit=10`
+    );
+    const rawList = Array.isArray(payload) ? payload : unwrapArray<unknown>(payload);
+    return rawList
+      .map((item): LxArtistHit | null => {
+        const row = asRecord(item);
+        const id = asString(row?.id) || asString(row?.mid);
+        const hitName = asString(row?.name);
+        if (!id || !hitName) return null;
+        return {
+          id,
+          name: hitName,
+          pic: asString(row?.picUrl) || asString(row?.pic) || asString(row?.img) || undefined,
+          platform,
+        };
+      })
+      .filter((item): item is LxArtistHit => !!item);
+  } catch {
+    return [];
+  }
+}
+
 /** 歌手详情,返回原始记录。失败抛错。 */
 export async function getLxArtistDetail(
   source: MusicSourceDescriptor,

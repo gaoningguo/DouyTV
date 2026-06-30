@@ -2304,7 +2304,8 @@ code {
   align-items: center;
   justify-content: center;
   gap: 6px;
-  background: transparent;
+  background: rgba(14, 15, 17, var(--dl-bg-opacity, 0));
+  border-radius: 14px;
   user-select: none;
   overflow: hidden;
   padding: 8px 20px;
@@ -2322,13 +2323,13 @@ code {
   max-width: 100%;
   pointer-events: none;
   font-family: "Bricolage Grotesque", "PingFang SC", system-ui, sans-serif;
-  font-weight: 800;
+  font-weight: var(--dl-font-weight, 800);
   font-size: var(--dl-font-size, clamp(24px, 7vh, 48px));
   line-height: 1.2;
   white-space: nowrap;
 }
 .desktop-lyric-base {
-  color: rgba(255, 255, 255, 0.34);
+  color: var(--dl-idle, rgba(255, 255, 255, 0.4));
   -webkit-text-stroke: 1px var(--dl-stroke, rgba(0, 0, 0, 0.55));
   paint-order: stroke fill;
 }

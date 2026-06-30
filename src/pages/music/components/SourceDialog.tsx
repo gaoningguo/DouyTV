@@ -168,7 +168,7 @@ export function SourceDialog({
         ? await fetchAndParseLxScript(lxText.trim())
         : parseLxScript(lxText.trim());
       if (!parsed) {
-        setError("解析失败:未识别到洛雪音源(缺少可用 apiUrl)");
+        setError("解析失败:脚本下载或读取出错,请检查链接/源码");
         return;
       }
       const descriptor = createLxSourceDescriptor(parsed);

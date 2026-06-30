@@ -76,6 +76,7 @@ export function PlayerView({
   abLoop,
   onAbLoop,
   extrasSource,
+  lxSource,
   onPlaySong,
   onOpenPlaylist,
 }: {
@@ -125,6 +126,7 @@ export function PlayerView({
   abLoop: { a: number | null; b: number | null };
   onAbLoop: () => void;
   extrasSource: MusicSourceDescriptor | null;
+  lxSource?: MusicSourceDescriptor | null;
   onPlaySong: (song: MusicSong) => void;
   onOpenPlaylist: (summary: MusicSongListSummary) => void;
 }) {
@@ -272,6 +274,7 @@ export function PlayerView({
               <SongExtrasPanel
                 song={currentSong}
                 source={extrasSource}
+                lxSource={lxSource}
                 onPlaySong={onPlaySong}
                 onOpenPlaylist={onOpenPlaylist}
               />

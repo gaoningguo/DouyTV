@@ -240,17 +240,42 @@ async function resolveTunehub(
   };
 }
 
-function buildOmniUrl(base: string, platform: MusicPlatform, id: string, q: string): string {
+/**
+ * 构建 OmniParse 播放请求。netease 是 POST /song（body {ids,level,type}，源码 index.ts 确证），
+ * QQ/酷狗是 GET（/qq/song?ids= 认 url||ids；/kugou/song?emixsongid= 只认 emixsongid）。
+ * 返回 null 表示该平台无端点。
+ */
+function buildOmniRequest(
+  base: string,
+  platform: MusicPlatform,
+  id: string,
+  q: string,
+  headers: Record<string, string>
+): { url: string; init: Parameters<typeof scriptFetch>[1] } | null {
   switch (platform) {
     case "wy":
-      return `${base}/song?id=${encodeURIComponent(id)}&quality=${q}&type=json`;
+      return {
+        url: `${base}/song`,
+        init: {
+          method: "POST",
+          headers: { ...headers, "Content-Type": "application/json" },
+          json: { ids: id, level: q, type: "json" },
+          timeout: 15000,
+        },
+      };
     case "tx":
-      return `${base}/qq/song?ids=${encodeURIComponent(id)}&quality=${q}`;
+      return {
+        url: `${base}/qq/song?ids=${encodeURIComponent(id)}&quality=${q}`,
+        init: { headers, timeout: 15000 },
+      };
     case "kg":
       // OmniParse /kugou/song 只认 emixsongid（id 即搜索结果的 emixsongid）。
-      return `${base}/kugou/song?emixsongid=${encodeURIComponent(id)}&quality=${q}`;
+      return {
+        url: `${base}/kugou/song?emixsongid=${encodeURIComponent(id)}&quality=${q}`,
+        init: { headers, timeout: 15000 },
+      };
     default:
-      return "";
+      return null;
   }
 }
 
@@ -269,6 +294,10 @@ export async function resolveCyrene(
   song: MusicSong,
   quality: MusicQuality
 ): Promise<MusicPlayResult> {
+  // 抖音 BGM 等已携带直链的歌曲(getOmniDouyinMusic 归一)：直接放，不再走后端解析。
+  if (song.directUrl) {
+    return { url: song.directUrl, directUrl: song.directUrl, quality, headers: source.headers };
+  }
   const platform = (normalizeMusicPlatform(song.platform) || "wy") as MusicPlatform;
   const mode = source.cyreneMode ?? "omni";
 
@@ -291,7 +320,7 @@ export async function resolveCyrene(
   const base = playBase(source);
   if (!base) throw new Error("聚合源缺少播放后端地址");
 
-  let url = "";
+  let res: Awaited<ReturnType<typeof scriptFetch>>;
   if (mode === "lx") {
     const code = LX_SOURCE_CODE[platform];
     if (!code) throw new Error(`LX 不支持平台 ${platform}`);
@@ -302,13 +331,19 @@ export async function resolveCyrene(
       .replace("{source}", code)
       .replace("{songId}", encodeURIComponent(song.id))
       .replace("{quality}", String(quality));
-    url = `${base}${path.startsWith("/") ? "" : "/"}${path}`;
+    const url = `${base}${path.startsWith("/") ? "" : "/"}${path}`;
+    res = await scriptFetch(url, { headers: headersFor(source), timeout: 15000 });
   } else {
-    url = buildOmniUrl(base, platform, song.id, omniQuality(quality));
+    const built = buildOmniRequest(
+      base,
+      platform,
+      song.id,
+      omniQuality(quality),
+      headersFor(source)
+    );
+    if (!built) throw new Error("无法为该平台构建播放地址");
+    res = await scriptFetch(built.url, built.init);
   }
-  if (!url) throw new Error("无法为该平台构建播放地址");
-
-  const res = await scriptFetch(url, { headers: headersFor(source), timeout: 15000 });
   if (!res.ok) throw new Error((await res.text()) || `获取播放地址失败 ${res.status}`);
   // 后端可能直接返回音频字节、JSON、或纯文本 URL。
   const text = await res.text();
@@ -331,6 +366,18 @@ export async function resolveCyrene(
     }
   }
   if (!direct) throw new Error("聚合源未返回可用播放地址（可能版权/实例禁播放）");
+  // 网易平台歌缺歌词时，回退 OmniParse /song?type=json 单独取一次歌词。
+  if (!lyric && platform === "wy") {
+    try {
+      const extra = await getOmniNeteaseLyric(source, song.id);
+      if (extra.lyric) {
+        lyric = extra.lyric;
+        tlyric = tlyric || extra.tlyric;
+      }
+    } catch {
+      /* 歌词兜底失败不影响播放 */
+    }
+  }
   return { url: direct, directUrl: direct, quality, headers: source.headers, lyric, tlyric };
 }
 
@@ -420,8 +467,30 @@ export async function getOmniDouyinMusic(
 }
 
 /**
- * OmniParse 网易歌词：复用 omni 的 /song 接口（GET，参数与 buildOmniUrl 严格对齐：
- * id / quality / type=json），取其顶层 lyric/tlyric（或嵌套 lyric:{lyric,tylyric}）。
+ * 抖音 BGM 解析结果 → 可直接入队播放的 MusicSong：directUrl 已是可播音频，
+ * id 用 dy: 前缀 + 序号标识，platform 标 "dy"（resolveCyrene 见 directUrl 即短路返回）。
+ */
+export async function getOmniDouyinSongs(
+  source: MusicSourceDescriptor,
+  shareUrlOrText: string
+): Promise<MusicSong[]> {
+  const tracks = await getOmniDouyinMusic(source, shareUrlOrText);
+  return tracks.map((track, idx) => ({
+    id: `dy:${idx}:${track.url}`,
+    sourceId: source.id,
+    sourceName: source.name,
+    title: track.title || `抖音 BGM ${idx + 1}`,
+    artist: "抖音",
+    cover: track.cover,
+    platform: "dy",
+    directUrl: track.url,
+    raw: track,
+  }));
+}
+
+/**
+ * OmniParse 网易歌词：复用 omni 的 /song 接口（POST /song，body {ids,level,type}，
+ * 与 buildOmniRequest 一致），取其顶层 lyric/tlyric（或嵌套 lyric:{lyric,tylyric}）。
  * 当播放走 omni 时可省一次额外歌词请求。失败返回空对象。
  */
 export async function getOmniNeteaseLyric(
@@ -431,10 +500,9 @@ export async function getOmniNeteaseLyric(
   const base = playBase(source);
   if (!base || !id) return { lyric: "" };
   try {
-    const res = await scriptFetch(buildOmniUrl(base, "wy", id, "exhigh"), {
-      headers: headersFor(source),
-      timeout: 15000,
-    });
+    const built = buildOmniRequest(base, "wy", id, "exhigh", headersFor(source));
+    if (!built) return { lyric: "" };
+    const res = await scriptFetch(built.url, built.init);
     if (!res.ok) return { lyric: "" };
     const payload = asRecord(await res.json<unknown>());
     if (!payload) return { lyric: "" };

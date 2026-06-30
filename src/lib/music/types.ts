@@ -4,6 +4,7 @@ export type MusicSourceKind =
   | "aggregate-http"
   | "netease-api"
   | "cyrene-aggregate"
+  | "musicsdk"
   | "local";
 
 /** 网易源传输模式：builtin=前端直连 music.163.com；external=自部署 NeteaseCloudMusicApi。 */
