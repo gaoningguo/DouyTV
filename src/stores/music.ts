@@ -2,6 +2,7 @@ import { create } from "zustand";
 import {
   createBuiltinNeteaseSource,
   createLocalMusicSource,
+  createMusicSdkSource,
   musicSongKey,
   normalizeMusicSourceDescriptor,
   type MusicHistoryRecord,
@@ -347,6 +348,12 @@ export const useMusicStore = create<MusicStore>((set, get) => ({
     const seeded = stored.neteaseBuiltinSeeded ?? false;
     if (!seeded && !sources.some((source) => source.kind === "netease-api")) {
       sources = [createBuiltinNeteaseSource(), ...sources];
+    }
+    // 始终确保内置多平台源(musicSdk)存在:它是免配置的「列表壳子」,
+    // 提供发现/榜单/歌单/搜索/歌词(六平台),播放取直链需另启用解析源
+    // (洛雪脚本 / OmniParse)。对齐 lx-music-desktop 的内置 musicSdk,常驻不可删。
+    if (!sources.some((source) => source.id === "music-sdk-builtin")) {
+      sources = [createMusicSdkSource(), ...sources];
     }
     // 始终确保本地音乐源存在(播放本地曲走 directUrl;曲库由 musicLocal store 提供)。
     if (!sources.some((source) => source.id === "music-local")) {

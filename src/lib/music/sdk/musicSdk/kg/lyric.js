@@ -1,5 +1,5 @@
 import { httpFetch } from '../../request'
-import { decodeKrc } from '@common/utils/lyricUtils/kg'
+import { decodeKrc } from './krcDecode'
 
 export default {
   getIntv(interval) {

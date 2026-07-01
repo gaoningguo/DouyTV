@@ -1,32 +1,18 @@
 import crypto from 'crypto'
-import dns from 'dns'
-import { decodeName } from '@renderer/utils'
+import { decodeName } from './index'
 
 export const toMD5 = str => crypto.createHash('md5').update(str).digest('hex')
 
 
-const ipMap = new Map()
-export const getHostIp = hostname => {
-  const result = ipMap.get(hostname)
-  if (typeof result === 'object') return result
-  if (result === true) return
-  ipMap.set(hostname, true)
-  // console.log(hostname)
-  dns.lookup(hostname, {
-    // family: 4,
-    all: false,
-  }, (err, address, family) => {
-    if (err) return console.log(err)
-    // console.log(address, family)
-    ipMap.set(hostname, { address, family })
-  })
-}
+// 浏览器/WebView 无 node `dns` 模块。原逻辑是给 node http.request 做 DNS 缓存的
+// lookup 钩子（仅各平台 api-test.js 脚手架引用，运行路径走 request.ts→scriptFetch，
+// 不经过这里）。这里 stub 成 no-op / 系统默认解析，去掉 dns 依赖。
+export const getHostIp = () => undefined
 
 export const dnsLookup = (hostname, options, callback) => {
-  const result = getHostIp(hostname)
-  if (result) return callback(null, result.address, result.family)
-
-  dns.lookup(hostname, options, callback)
+  if (typeof options === 'function') callback = options
+  // 交给底层默认解析（此钩子在浏览器环境实际不会被调用）。
+  callback(null, hostname, 4)
 }
 
 

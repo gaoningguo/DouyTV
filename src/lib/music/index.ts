@@ -13,7 +13,8 @@ import {
 } from "./neteaseApi";
 import { searchCyrene, resolveCyrene } from "./cyreneApi";
 import { getLxRuntimeMusicUrlByInfo } from "./lxRuntime";
-import { searchMusicSdk } from "./musicSdkSource";
+import { searchMusicSdk, getMusicSdkLyric, MUSIC_SDK_PLATFORMS } from "./musicSdkSource";
+import type { MusicSdkPlatform } from "./sdk/index-sdk";
 import { unblockMatch, type UnblockSource } from "./unblock";
 import { parseLxScript, looksLikeLxSource, type LxSourceParsed } from "./lxSource";
 import { isMusicPreviewError } from "./playback";
@@ -352,6 +353,19 @@ export async function resolveMusicSource(
     // musicSdk 是纯列表源，自身不解析直链：按歌曲平台路由到已启用的播放源
     // （洛雪 runtime / OmniParse / 自部署网易 / UNM 解灰）。无可用解析源则抛错。
     result = await resolveMusicSdkSong(song, quality, options);
+    // 歌词分层（同 lx-music-desktop）：优先用播放源顺带的歌词（OmniParse /song 自带），
+    // 没有再用 musicSdk 内置 getLyric 兜底（6 平台覆盖，最稳的主力）。
+    if (!result.lyric) {
+      const platform = String(song.platform || "");
+      if ((MUSIC_SDK_PLATFORMS as readonly string[]).includes(platform)) {
+        const ly = await getMusicSdkLyric(platform as MusicSdkPlatform, song).catch(
+          () => ({ lyric: "" as string, tlyric: undefined as string | undefined })
+        );
+        if (ly.lyric) {
+          result = { ...result, lyric: ly.lyric, tlyric: ly.tlyric ?? result.tlyric };
+        }
+      }
+    }
   } else {
     result =
       source.kind === "lx-server"
