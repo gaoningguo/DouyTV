@@ -249,7 +249,9 @@ async function resolveMusicSdkSong(
   const all = options.unblock?.allSources ?? [];
 
   // 1) 洛雪 runtime 脚本：把 SDK 原始 musicInfo 交脚本取链（各平台 id 编码脚本自己认）。
-  const lxRuntime = all.find(
+  //    对齐 lxserver：收集所有已启用的 LX runtime 脚本，逐个尝试，任一出链即返回
+  //    （单脚本失败不该放弃——用户常装多个源做互备）。
+  const lxRuntimes = all.filter(
     (s) =>
       s.enabled &&
       s.kind === "cyrene-aggregate" &&
@@ -257,23 +259,25 @@ async function resolveMusicSdkSong(
       s.lxMode === "runtime" &&
       s.code
   );
-  if (lxRuntime && (song.raw || song.id)) {
-    try {
-      const cacheKey = `${lxRuntime.id}:${lxRuntime.updatedAt ?? 0}`;
-      const info =
-        song.raw && typeof song.raw === "object"
-          ? (song.raw as Record<string, unknown>)
-          : { songmid: song.id };
-      const direct = await getLxRuntimeMusicUrlByInfo(
-        cacheKey,
-        lxRuntime.code as string,
-        platform,
-        info,
-        String(quality)
-      );
-      if (direct) return { url: direct, directUrl: direct, quality, headers: lxRuntime.headers };
-    } catch {
-      /* 落到下一个解析源 */
+  if (lxRuntimes.length && (song.raw || song.id)) {
+    const info =
+      song.raw && typeof song.raw === "object"
+        ? (song.raw as Record<string, unknown>)
+        : { songmid: song.id };
+    for (const lxRuntime of lxRuntimes) {
+      try {
+        const cacheKey = `${lxRuntime.id}:${lxRuntime.updatedAt ?? 0}`;
+        const direct = await getLxRuntimeMusicUrlByInfo(
+          cacheKey,
+          lxRuntime.code as string,
+          platform,
+          info,
+          String(quality)
+        );
+        if (direct) return { url: direct, directUrl: direct, quality, headers: lxRuntime.headers };
+      } catch {
+        /* 试下一个脚本 */
+      }
     }
   }
 
@@ -375,7 +379,12 @@ export async function resolveMusicSource(
         : source.kind === "plugin-js"
           ? await resolvePlugin(source, song, quality)
           : source.kind === "cyrene-aggregate"
-            ? await resolveCyrene(source, song, quality)
+            ? // OmniParse(omni) 是列表壳子,自身 /song 常拿不到直链;和 musicSdk 一样
+              // 走通用解析器:先试已启用的 LX 脚本(轮询)→ 再 OmniParse /song → 网易兜底。
+              // lx/tunehub 模式的源本身就是解析器,仍走 resolveCyrene。
+              (source.cyreneMode ?? "omni") === "omni"
+              ? await resolveMusicSdkSong(song, quality, options)
+              : await resolveCyrene(source, song, quality)
             : await resolveAggregate(source, song, quality);
   }
   if (options.proxy === false) return result;

@@ -250,6 +250,12 @@ export interface BookTtsVoice {
   displayName: string;
 }
 
+export interface BookTtsBoundary {
+  offset: number;
+  duration: number;
+  text: string;
+}
+
 /** Legado 订阅元数据(对应 MoonTVPlus 的 LegadoSubscriptionMeta)。 */
 export interface LegadoSubscriptionMeta {
   id: string;

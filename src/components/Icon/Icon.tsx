@@ -522,3 +522,24 @@ export const IconChevronLeft = (p: Props) => (
     <polyline points="15 18 9 12 15 6" />
   </svg>
 );
+
+// ─── 漫画 / 小说 ─────────────────────────────────────────
+export const IconManga = (p: Props) => (
+  <svg {...base(p)}>
+    {/* 双联画格 —— 漫画分镜感 */}
+    <rect x="3" y="4" width="18" height="16" rx="1.5" />
+    <path d="M12 4v16" />
+    <path d="M6.5 8.5l2.5 2 -2.5 2" />
+    <path d="M15 9h3" />
+    <path d="M15 13h3" />
+  </svg>
+);
+
+export const IconBook = (p: Props) => (
+  <svg {...base(p)}>
+    {/* 翻开的书 */}
+    <path d="M12 6c-1.5-1-4-1.5-6.5-1.5S3 5 3 5v13s.5-.5 2.5-.5S10.5 18 12 19" />
+    <path d="M12 6c1.5-1 4-1.5 6.5-1.5S21 5 21 5v13s-.5-.5-2.5-.5S13.5 18 12 19" />
+    <path d="M12 6v13" />
+  </svg>
+);

@@ -12,6 +12,8 @@ import Live from "@/pages/Live";
 import NetworkRoom from "@/pages/live/NetworkRoom";
 import Local from "@/pages/Local";
 import Music from "@/pages/Music";
+// import Manga from "@/pages/Manga";
+// import Book from "@/pages/Book";
 import { DesktopLyric } from "@/pages/music/DesktopLyric";
 import Settings from "@/pages/Settings";
 import SettingsLocalScan from "@/pages/settings/LocalScan";
@@ -22,6 +24,8 @@ import SettingsUpdates from "@/pages/settings/Updates";
 import SettingsVideoHub from "@/pages/settings/VideoSourcesHub";
 import SettingsLiveHub from "@/pages/settings/LiveSourcesHub";
 import SettingsMusicHub from "@/pages/settings/MusicSourcesHub";
+// import SettingsMangaHub from "@/pages/settings/MangaSourcesHub";
+// import SettingsBookHub from "@/pages/settings/BookSourcesHub";
 import SettingsStripchatKeys, {
   loadKeysFromStorage as loadStripchatKeys,
   syncKeysToRust as syncStripchatKeys,
@@ -39,10 +43,19 @@ import { useNetliveProxyStore } from "@/stores/netliveProxy";
 import { useExternalPluginStore } from "@/stores/netliveExternalPlugins";
 import { usePluginSubscriptionStore } from "@/stores/netlivePluginSubscription";
 import { useMusicStore } from "@/stores/music";
+import { useMangaStore } from "@/stores/manga";
+import { useBookStore } from "@/stores/book";
 import { startAutoSyncTimer, useSyncStore } from "@/stores/sync";
 import { useViewport } from "@/hooks/useViewport";
 
-const HIDE_NAV_PREFIXES = ["/play", "/detail", "/live/room", "/music/player"];
+const HIDE_NAV_PREFIXES = [
+  "/play",
+  "/detail",
+  "/live/room",
+  "/music/player",
+  "/manga/reader",
+  "/book/reader",
+];
 const ONBOARDED_KEY = "douytv:onboarded";
 
 interface RouteState {
@@ -104,6 +117,8 @@ export default function App() {
     usePluginSubscriptionStore.getState().hydrate();
     usePluginSubscriptionStore.getState().bootRefresh();
     useMusicStore.getState().hydrate();
+    void useMangaStore.getState().hydrate();
+    void useBookStore.getState().hydrate();
     useProxyStore.getState().hydrate();
     useNetliveProxyStore.getState().hydrate();
     useSyncStore.getState().hydrate();
@@ -193,6 +208,10 @@ export default function App() {
           <Route path="/browse/:key" element={<Browse />} />
           <Route path="/live" element={<Live />} />
           <Route path="/music/*" element={<Music />} />
+          {/* <Route path="/manga/*" element={<Manga />} />
+          <Route path="/book/*" element={<Book />} />
+          <Route path="/settings/manga-hub" element={<SettingsMangaHub />} />
+          <Route path="/settings/book-hub" element={<SettingsBookHub />} /> */}
           <Route
             path="/live/room/:platform/:roomId"
             element={<NetworkRoom />}

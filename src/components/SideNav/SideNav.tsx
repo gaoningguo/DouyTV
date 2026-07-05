@@ -5,6 +5,8 @@ import {
   IconSearch,
   IconLive,
   IconAlbum,
+  IconManga,
+  IconBook,
   IconLibrary,
   IconSettings,
   IconChevronRight,
@@ -15,6 +17,8 @@ const NAV_TABS = [
   { to: "/search", Icon: IconSearch, label: "点播", end: false },
   { to: "/live", Icon: IconLive, label: "直播", end: false },
   { to: "/music", Icon: IconAlbum, label: "音乐", end: false },
+  { to: "/manga", Icon: IconManga, label: "漫画", end: false },
+  { to: "/book", Icon: IconBook, label: "小说", end: false },
   { to: "/library", Icon: IconLibrary, label: "我的", end: false },
   { to: "/settings", Icon: IconSettings, label: "设置", end: false },
 ];

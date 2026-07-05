@@ -22,7 +22,12 @@ import {
   getNeteaseToplists,
   getNeteaseToplistDetail,
 } from "./neteaseApi";
-import { getOmniToplists } from "./cyreneApi";
+import {
+  getOmniToplistBoards,
+  getOmniSonglists,
+  getOmniSonglistTags,
+  getOmniSonglistDetail,
+} from "./cyreneApi";
 import {
   getMusicSdkBoards,
   getMusicSdkBoardSongs,
@@ -141,23 +146,39 @@ const omniBoardSongsCache = new Map<string, MusicSong[]>();
 
 const cyreneProvider: DiscoveryProvider = {
   async boards(source) {
-    const toplists = await getOmniToplists(source);
-    return toplists.map((entry, idx) => {
-      const id = `omni:${idx}:${entry.name}`;
-      omniBoardSongsCache.set(`${source.id}:${id}`, entry.list);
+    // 榜单列表:先试 /toplists(内联歌曲的后端),空则回退 /toplist/detail(带真实 id)。
+    // 内联歌曲的榜单把歌缓存起来,boardSongs 直接回放;否则 boardSongs 走 /playlist?id=。
+    const boards = await getOmniToplistBoards(source);
+    return boards.map((entry) => {
+      if (entry.inlineSongs && entry.inlineSongs.length > 0) {
+        omniBoardSongsCache.set(`${source.id}:${entry.id}`, entry.inlineSongs);
+      }
       return {
-        id,
+        id: entry.id,
         name: entry.name,
         source: "wy" as MusicPlatform,
-        cover: entry.list[0]?.cover,
+        cover: entry.cover ?? entry.inlineSongs?.[0]?.cover,
         sourceId: source.id,
       };
     });
   },
   async boardSongs(source, board) {
-    return omniBoardSongsCache.get(`${source.id}:${board.id}`) ?? [];
+    // 内联缓存命中即回放;否则榜单 id 走 /playlist?id=(和歌单详情同端点)。
+    const cached = omniBoardSongsCache.get(`${source.id}:${board.id}`);
+    if (cached && cached.length > 0) return cached;
+    return getOmniSonglistDetail(source, board.id);
   },
-  // OmniParse 无歌单广场/标签/热搜端点，仅榜单。
+  // 后端为 chuxin0816 的完整 ncmapi（ncmapiy.chuxin0816.com，CyreneMusic 同款）时，
+  // 有网易歌单广场/标签/详情端点。纯 OmniParse 实例无这些端点，函数会 404 → 静默返回空。
+  async songlists(source, tagId, _sortId, page) {
+    return getOmniSonglists(source, tagId || "全部歌单", page);
+  },
+  async tags(source) {
+    return getOmniSonglistTags(source);
+  },
+  async songlistDetail(source, summary) {
+    return getOmniSonglistDetail(source, summary.id);
+  },
 };
 
 // ───────────────────────── musicsdk（六平台内置 SDK）─────────────────────────
@@ -165,7 +186,10 @@ const cyreneProvider: DiscoveryProvider = {
 const musicSdkProvider: DiscoveryProvider = {
   async boards(source) {
     const platforms = musicSdkSourcePlatforms(source);
-    return platforms.flatMap((platform) => getMusicSdkBoards(source, platform));
+    const settled = await Promise.allSettled(
+      platforms.map((platform) => getMusicSdkBoards(source, platform))
+    );
+    return settled.flatMap((r) => (r.status === "fulfilled" ? r.value : []));
   },
   async boardSongs(source, board, page) {
     // board.source 是平台 id，board.id 是 bangid。

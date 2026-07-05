@@ -558,6 +558,7 @@ export default function Music() {
       enabledSources.find(
         (source) =>
           source.kind === "lx-server" ||
+          source.kind === "musicsdk" ||
           source.kind === "netease-api" ||
           (source.kind === "cyrene-aggregate" &&
             source.cyreneMode === "omni" &&

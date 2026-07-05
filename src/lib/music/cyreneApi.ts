@@ -16,6 +16,8 @@ import type {
   MusicQuality,
   MusicSearchResult,
   MusicSong,
+  MusicSongListSummary,
+  MusicSongListTags,
   MusicSourceDescriptor,
 } from "./types";
 import { normalizeMusicPlatform } from "./types";
@@ -80,18 +82,36 @@ function normalizeCyreneSong(
   }
   if (!id) return null;
 
+  // 兼容两种曲目结构（对齐 CyreneMusic convertToTrack）：
+  //  - 扁平格式（/search、/toplists 后端已归一）：artists/album/picUrl 为字符串；
+  //  - 网易原始格式（/playlist 歌单详情）：ar:[{name}] / al:{name,picUrl} / dt(ms)。
+  const arArtists = arr(item.ar)
+    .map((a) => asString(asRecord(a)?.name))
+    .filter(Boolean)
+    .join(" / ");
+  const al = asRecord(item.al);
+  const artist =
+    asString(item.artists) ||
+    asString(item.singer) ||
+    asString(item.artist) ||
+    arArtists ||
+    "未知歌手";
+  const album =
+    asString(item.album) || asString(asRecord(item.album)?.name) || asString(al?.name);
+  const cover =
+    asString(item.picUrl) ||
+    asString(item.pic) ||
+    asString(item.img) ||
+    asString(al?.picUrl);
+
   return {
     id,
     sourceId: source.id,
     sourceName: source.name,
     title,
-    artist:
-      asString(item.artists) ||
-      asString(item.singer) ||
-      asString(item.artist) ||
-      "未知歌手",
-    album: asString(item.album) || asString(asRecord(item.album)?.name),
-    cover: asString(item.picUrl) || asString(item.pic) || asString(item.img),
+    artist,
+    album,
+    cover,
     platform,
     songmid: platform === "tx" ? asString(item.mid) : undefined,
     raw: item,
@@ -384,36 +404,168 @@ export async function resolveCyrene(
 // ── 发现页/弱音源补充接口（OmniParse 已暴露但此前未调用）──
 
 /**
- * OmniParse 网易内置榜单：GET {base}/toplists → {status, toplists:[{name, list/songs:[...]}]}。
- * 4 个网易榜单（飙升/新歌/原创/热歌，每榜约 20 首），每首按 wy 平台归一。
- * 发现页榜单展示用，免走网易直连被反爬。失败返回空数组。
+ * ncmapi 网易榜单列表：优先 GET {base}/toplists（部分后端内联返回 {toplists:[{name,list}]}）；
+ * 内联为空时回退 GET {base}/toplist/detail → {status,list:[{id,name,coverImgUrl}]}（榜单卡，
+ * 内联 tracks 仅 {first,second} 预览无法播放，须用 id 再走 /playlist?id= 取歌）。
+ * nekofun 等后端 /toplists 恒空，真实榜单在 /toplist/detail —— 故用后者兜底。失败返回空。
  */
-export async function getOmniToplists(
+export async function getOmniToplistBoards(
   source: MusicSourceDescriptor
-): Promise<Array<{ name: string; list: MusicSong[] }>> {
+): Promise<Array<{ id: string; name: string; cover?: string; inlineSongs?: MusicSong[] }>> {
   const base = cleanBaseUrl(source.baseUrl);
   if (!base) return [];
+  // 先试 /toplists（内联歌曲的后端，如完整 OmniParse）。
   try {
     const res = await scriptFetch(`${base}/toplists`, {
       headers: headersFor(source),
       timeout: 15000,
     });
+    if (res.ok) {
+      const payload = asRecord(await res.json<unknown>());
+      const inline = arr(payload?.toplists)
+        .map((entry, idx) => {
+          const record = asRecord(entry);
+          const name = asString(record?.name);
+          if (!name) return null;
+          const rawList = arr(record?.list).length > 0 ? arr(record?.list) : arr(record?.songs);
+          const songs = rawList
+            .map((item) => normalizeCyreneSong(source, "wy", item))
+            .filter((item): item is MusicSong => !!item);
+          const id = asString(record?.id) || `omni-top-${idx}`;
+          return { id, name, cover: asString(record?.coverImgUrl), inlineSongs: songs };
+        })
+        .filter((e): e is { id: string; name: string; cover?: string; inlineSongs: MusicSong[] } => !!e);
+      // 内联榜单里有歌才用它；否则回退 /toplist/detail。
+      if (inline.some((e) => e.inlineSongs.length > 0)) return inline;
+    }
+  } catch {
+    /* 回退 /toplist/detail */
+  }
+  // 回退：/toplist/detail 返回榜单卡（带真实 id），歌曲后续走 /playlist?id=。
+  try {
+    const res = await scriptFetch(`${base}/toplist/detail`, {
+      headers: headersFor(source),
+      timeout: 15000,
+    });
     if (!res.ok) return [];
     const payload = asRecord(await res.json<unknown>());
-    const toplists = arr(payload?.toplists);
-    return toplists
+    return arr(payload?.list)
       .map((entry) => {
         const record = asRecord(entry);
-        if (!record) return null;
-        const name = asString(record.name);
-        if (!name) return null;
-        const rawList = arr(record.list).length > 0 ? arr(record.list) : arr(record.songs);
-        const list = rawList
-          .map((item) => normalizeCyreneSong(source, "wy", item))
-          .filter((item): item is MusicSong => !!item);
-        return { name, list };
+        const id = asString(record?.id);
+        const name = asString(record?.name);
+        if (!id || !name) return null;
+        return { id, name, cover: asString(record?.coverImgUrl) };
       })
-      .filter((entry): entry is { name: string; list: MusicSong[] } => !!entry);
+      .filter((e): e is { id: string; name: string; cover?: string } => !!e);
+  } catch {
+    return [];
+  }
+}
+
+/**
+ * ncmapi 网易歌单广场：GET {base}/netease/top/playlist?cat={分类} →
+ * {status:200, playlists:[{id,name,coverImgUrl,creator:{nickname},playCount,trackCount}]}。
+ * 照 CyreneMusic discoveryService.getDiscoverPlaylists 移植（默认后端 ncmapiy.chuxin0816.com）。
+ * ⚠️ 仅完整 ncmapi 后端有此端点；纯 OmniParse 无 → 返回空。失败返回空数组。
+ */
+export async function getOmniSonglists(
+  source: MusicSourceDescriptor,
+  cat = "全部歌单",
+  page = 1
+): Promise<MusicSongListSummary[]> {
+  const base = cleanBaseUrl(source.baseUrl);
+  if (!base) return [];
+  try {
+    // CyreneMusic 只传 cat（无分页）；这里带 limit/offset，后端不认时自动忽略。
+    const res = await scriptFetch(
+      `${base}/netease/top/playlist?cat=${encodeURIComponent(cat)}&limit=50&offset=${(page - 1) * 50}`,
+      { headers: headersFor(source), timeout: 15000 }
+    );
+    if (!res.ok) return [];
+    const payload = asRecord(await res.json<unknown>());
+    if (asNumber(payload?.status) !== 200) return [];
+    return arr(payload?.playlists)
+      .map((entry): MusicSongListSummary | null => {
+        const row = asRecord(entry);
+        const id = asString(row?.id);
+        const name = asString(row?.name);
+        if (!id || !name) return null;
+        return {
+          id,
+          name,
+          source: "wy",
+          sourceId: source.id,
+          pic: asString(row?.coverImgUrl) || asString(row?.picUrl),
+          author: asString(asRecord(row?.creator)?.nickname),
+          playCount: asNumber(row?.playCount) ?? undefined,
+          total: asNumber(row?.trackCount) ?? undefined,
+        };
+      })
+      .filter((item): item is MusicSongListSummary => !!item);
+  } catch {
+    return [];
+  }
+}
+
+/**
+ * ncmapi 网易歌单分类标签：GET {base}/netease/playlist/highquality/tags →
+ * {status:200, tags:[{id,name,category}]}。照 CyreneMusic getDiscoverTags 移植。
+ * hotTags 取全部 tag 名；sortList 空（ncmapi 无排序维度）。失败返回空。
+ */
+export async function getOmniSonglistTags(
+  source: MusicSourceDescriptor
+): Promise<MusicSongListTags> {
+  const empty: MusicSongListTags = { groups: [], hotTags: [], sortList: [] };
+  const base = cleanBaseUrl(source.baseUrl);
+  if (!base) return empty;
+  try {
+    const res = await scriptFetch(`${base}/netease/playlist/highquality/tags`, {
+      headers: headersFor(source),
+      timeout: 15000,
+    });
+    if (!res.ok) return empty;
+    const payload = asRecord(await res.json<unknown>());
+    if (asNumber(payload?.status) !== 200) return empty;
+    const hotTags = arr(payload?.tags)
+      .map((entry) => {
+        const row = asRecord(entry);
+        const name = asString(row?.name);
+        // 歌单广场按 cat 名过滤，故 tag id 用 name 本身。
+        return name ? { id: name, name } : null;
+      })
+      .filter((t): t is { id: string; name: string } => !!t);
+    return { groups: [], hotTags, sortList: [] };
+  } catch {
+    return empty;
+  }
+}
+
+/**
+ * ncmapi 网易歌单详情：GET {base}/playlist?id={id}&limit=200 →
+ * {success:true, data:{playlist:{tracks:[网易原始 song: {id,name,ar,al,dt}]}}}。
+ * 照 CyreneMusic getPlaylistDetail(netease) 移植；tracks 走 normalizeCyreneSong（已兼容 ar/al/dt）。
+ */
+export async function getOmniSonglistDetail(
+  source: MusicSourceDescriptor,
+  id: string,
+  limit = 200
+): Promise<MusicSong[]> {
+  const base = cleanBaseUrl(source.baseUrl);
+  if (!base) return [];
+  try {
+    const res = await scriptFetch(`${base}/playlist?id=${encodeURIComponent(id)}&limit=${limit}`, {
+      headers: headersFor(source),
+      timeout: 15000,
+    });
+    if (!res.ok) return [];
+    const payload = asRecord(await res.json<unknown>());
+    // CyreneMusic: result.success → result.data.playlist。兼容扁平 {tracks} 兜底。
+    const playlist = asRecord(asRecord(payload?.data)?.playlist) ?? payload;
+    const tracks = arr(playlist?.tracks).length > 0 ? arr(playlist?.tracks) : arr(playlist?.songs);
+    return tracks
+      .map((item) => normalizeCyreneSong(source, "wy", item))
+      .filter((item): item is MusicSong => !!item);
   } catch {
     return [];
   }

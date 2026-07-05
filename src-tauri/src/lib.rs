@@ -3000,6 +3000,90 @@ pub fn run() {
             ",
             kind: MigrationKind::Up,
         },
+        Migration {
+            version: 4,
+            description: "create manga shelf and read history tables",
+            sql: "
+                CREATE TABLE IF NOT EXISTS manga_shelf (
+                    item_key TEXT PRIMARY KEY,
+                    source_id TEXT NOT NULL,
+                    source_name TEXT NOT NULL,
+                    manga_id TEXT NOT NULL,
+                    title TEXT NOT NULL,
+                    cover TEXT,
+                    description TEXT,
+                    author TEXT,
+                    status TEXT,
+                    last_chapter_id TEXT,
+                    last_chapter_name TEXT,
+                    save_time INTEGER NOT NULL
+                );
+                CREATE INDEX IF NOT EXISTS idx_manga_shelf_save ON manga_shelf(save_time DESC);
+
+                CREATE TABLE IF NOT EXISTS manga_history (
+                    item_key TEXT PRIMARY KEY,
+                    source_id TEXT NOT NULL,
+                    source_name TEXT NOT NULL,
+                    manga_id TEXT NOT NULL,
+                    title TEXT NOT NULL,
+                    cover TEXT,
+                    chapter_id TEXT NOT NULL,
+                    chapter_name TEXT NOT NULL,
+                    page_index INTEGER NOT NULL DEFAULT 0,
+                    page_count INTEGER NOT NULL DEFAULT 0,
+                    save_time INTEGER NOT NULL
+                );
+                CREATE INDEX IF NOT EXISTS idx_manga_history_save ON manga_history(save_time DESC);
+            ",
+            kind: MigrationKind::Up,
+        },
+        Migration {
+            version: 5,
+            description: "create book shelf and read record tables",
+            sql: "
+                CREATE TABLE IF NOT EXISTS book_shelf (
+                    item_key TEXT PRIMARY KEY,
+                    source_id TEXT NOT NULL,
+                    source_name TEXT NOT NULL,
+                    book_id TEXT NOT NULL,
+                    title TEXT NOT NULL,
+                    author TEXT,
+                    cover TEXT,
+                    format TEXT,
+                    detail_href TEXT,
+                    acquisition_href TEXT,
+                    progress_percent REAL NOT NULL DEFAULT 0,
+                    last_read_time INTEGER,
+                    last_locator_type TEXT,
+                    last_locator_value TEXT,
+                    last_chapter_title TEXT,
+                    save_time INTEGER NOT NULL
+                );
+                CREATE INDEX IF NOT EXISTS idx_book_shelf_save ON book_shelf(save_time DESC);
+
+                CREATE TABLE IF NOT EXISTS book_history (
+                    item_key TEXT PRIMARY KEY,
+                    source_id TEXT NOT NULL,
+                    source_name TEXT NOT NULL,
+                    book_id TEXT NOT NULL,
+                    title TEXT NOT NULL,
+                    author TEXT,
+                    cover TEXT,
+                    format TEXT NOT NULL,
+                    detail_href TEXT,
+                    acquisition_href TEXT,
+                    locator_type TEXT NOT NULL,
+                    locator_value TEXT NOT NULL,
+                    locator_href TEXT,
+                    progress_percent REAL NOT NULL DEFAULT 0,
+                    chapter_title TEXT,
+                    chapter_href TEXT,
+                    save_time INTEGER NOT NULL
+                );
+                CREATE INDEX IF NOT EXISTS idx_book_history_save ON book_history(save_time DESC);
+            ",
+            kind: MigrationKind::Up,
+        },
     ];
 
     tauri::Builder::default()

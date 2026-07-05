@@ -134,16 +134,15 @@ export async function searchMusicSdk(
 
 // ── 榜单 ───────────────────────────────────────────────────────────
 
-/** 某平台的全部榜单（getBoards 静态数据，board.id 形如 `wy__19723756`，bangid 为纯数字）。 */
-export function getMusicSdkBoards(
+/** 某平台的全部榜单（board.id 形如 `wy__19723756`，bangid 为纯数字）。 */
+export async function getMusicSdkBoards(
   source: MusicSourceDescriptor,
   platform: MusicSdkPlatform
-): MusicDiscoveryBoard[] {
+): Promise<MusicDiscoveryBoard[]> {
   const mod = plat(platform);
   if (!mod?.leaderboard?.getBoards) return [];
-  // getBoards 内部为同步返回 { list:[{id,name,bangid}] }（动态抓取已被注释）。
-  const result = mod.leaderboard.getBoards();
-  // 个别平台可能返回 Promise，这里只处理同步值；异步在 aggregated 层 await。
+  // 六平台的 getBoards 均为 async（返回 Promise），必须 await —— 否则读 Promise.list 恒为空。
+  const result = await mod.leaderboard.getBoards();
   const list = Array.isArray(asRecord(result)?.list) ? asRecord(result)?.list : [];
   return ((list as unknown[]) ?? [])
     .map((item): MusicDiscoveryBoard | null => {

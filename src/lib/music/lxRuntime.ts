@@ -183,15 +183,34 @@ function generateSandboxHtml(): string {
       }
     },
     buffer: {
+      // 对齐 Node Buffer.from(data, enc) 的字节语义（lxserver/lx-music 沙箱同款）。
+      // 脚本签名常做 buffer.from(str,'binary'|'hex'|'base64')，编码错一位签名就废 → 后端「服务器异常」。
       from: function(data, enc) {
         if (typeof data === 'string') {
           if (enc === 'base64') return Uint8Array.from(atob(data), function(c) { return c.charCodeAt(0); });
+          if (enc === 'hex') {
+            const out = new Uint8Array(Math.floor(data.length / 2));
+            for (let i = 0; i < out.length; i++) out[i] = parseInt(data.substr(i * 2, 2), 16);
+            return out;
+          }
+          if (enc === 'binary' || enc === 'latin1') {
+            const out = new Uint8Array(data.length);
+            for (let i = 0; i < data.length; i++) out[i] = data.charCodeAt(i) & 0xff;
+            return out;
+          }
           return new TextEncoder().encode(data);
         }
         return new Uint8Array(data);
       },
+      // 关键：buf 可能是字符串（脚本把 md5 hex 串直接喂进来）。Node 的 Buffer.from(str,'binary')
+      // 按 latin1 逐字符映射成字节，绝不能用 new Uint8Array(str)（那会得到空数组 → 签名全错）。
       bufToString: function(buf, fmt) {
-        const u8 = buf instanceof Uint8Array ? buf : new Uint8Array(buf);
+        let u8;
+        if (buf instanceof Uint8Array) u8 = buf;
+        else if (typeof buf === 'string') {
+          u8 = new Uint8Array(buf.length);
+          for (let i = 0; i < buf.length; i++) u8[i] = buf.charCodeAt(i) & 0xff;
+        } else u8 = new Uint8Array(buf);
         if (fmt === 'hex') return Array.from(u8).map(function(b) { return b.toString(16).padStart(2, '0'); }).join('');
         if (fmt === 'base64') return btoa(String.fromCharCode.apply(null, u8));
         return new TextDecoder().decode(u8);
@@ -215,7 +234,7 @@ function generateSandboxHtml(): string {
     utils: utils,
     version: '2.0.0',
     env: 'desktop',
-    currentScriptInfo: {}
+    currentScriptInfo: { name: '', description: '', version: '', author: '', homepage: '', rawScript: '' }
   };
   globalThis.lx = window.lx;
 
@@ -231,7 +250,14 @@ function generateSandboxHtml(): string {
       }
     } else if (type === 'lx-load-script') {
       requestHandler = null;
-      window.lx.currentScriptInfo = { rawScript: d.scriptContent };
+      // currentScriptInfo 必须带脚本头元信息(name/version/author/...)——很多洛雪源
+      // (如「野花/独家音源」)会把 currentScriptInfo.version 塞进 source-ver 请求头、
+      // 并参与后端签名;只给 rawScript 会导致 header=undefined → 后端「服务器异常」。
+      window.lx.currentScriptInfo = Object.assign(
+        { name: '', description: '', version: '', author: '', homepage: '' },
+        d.scriptInfo || {},
+        { rawScript: d.scriptContent }
+      );
       try {
         (new Function(d.scriptContent))();
         sendToParent('lx-loaded', {});
@@ -380,6 +406,29 @@ function ensureSandbox(): Sandbox {
   return sb;
 }
 
+/** 解析脚本头 @name/@version/... 元信息，填充沙箱 currentScriptInfo（对齐 lx-music）。 */
+function parseScriptHeader(script: string): Record<string, string> {
+  const info: Record<string, string> = {};
+  const block = script.match(/\/\*[\s\S]*?\*\//);
+  if (!block) return info;
+  const patterns: Record<string, RegExp> = {
+    name: /@name\s+(.+)/,
+    author: /@author\s+(.+)/,
+    version: /@version\s+(.+)/,
+    description: /@description\s+(.+)/,
+    homepage: /@homepage\s+(.+)/,
+  };
+  for (const [key, pattern] of Object.entries(patterns)) {
+    const match = block[0].match(pattern);
+    if (match?.[1]) {
+      let value = match[1].trim();
+      if (value.startsWith("*")) value = value.substring(1).trim();
+      if (value) info[key] = value;
+    }
+  }
+  return info;
+}
+
 /** 把脚本加载进沙箱（若当前已加载同一 cacheKey 则复用）。等待就绪，最多 10s。 */
 async function loadScript(cacheKey: string, scriptContent: string): Promise<Sandbox> {
   if (!scriptContent.trim()) throw new Error("洛雪脚本源码为空");
@@ -397,11 +446,13 @@ async function loadScript(cacheKey: string, scriptContent: string): Promise<Sand
     setTimeout(() => reject(new Error("洛雪脚本加载超时")), 10000);
   });
 
+  const scriptInfo = parseScriptHeader(scriptContent);
+
   // iframe 可能还在 doc.write 之后未完全就绪，poll 一下 contentWindow。
   const post = () => {
     if (sb.iframe.contentWindow) {
       sb.iframe.contentWindow.postMessage(
-        { type: "lx-load-script", scriptContent },
+        { type: "lx-load-script", scriptContent, scriptInfo },
         "*"
       );
     } else {
