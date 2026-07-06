@@ -25,26 +25,29 @@ return {
     // 从 /categories 页抓【真实分类】(锚点 href="/video?c=<id>"),亚洲相关排前面。
     // 分类 sourceId 形如 "c:111";另有 video/hd/verified 三个非分类的浏览入口。
     const cats = await this._fetchCategories(ctx);
-    const kw = this._asianKw();
     const asian = [];
     const other = [];
     for (const c of cats) {
-      (kw.test(c.name) ? asian : other).push(c);
+      // rank<99 = 命中亚洲(_asianKw 超集);同时带回 rank 供亚洲内部排序
+      const r = this._asianRank(c.name);
+      (r < 99 ? asian : other).push({ c, r });
     }
+    // 亚洲内部: 中文/台/港 → 日 → 韩 → 其它亚洲(稳定,同档保原顺序)
+    asian.sort((a, b) => a.r - b.r);
     const item = (c, group) => ({
       id: "c:" + c.id,
       name: this._zhName(c.name),
       group,
     });
     const sources = [];
-    // ① 亚洲分类打头
-    for (const c of asian) sources.push(item(c, "亚洲"));
+    // ① 亚洲分类打头(已按 中→日→韩→其它 排好)
+    for (const { c } of asian) sources.push(item(c, "亚洲"));
     // ② 通用浏览入口
     sources.push({ id: "video", name: "最新(全部)", group: "浏览" });
     sources.push({ id: "hd", name: "HD", group: "浏览" });
     sources.push({ id: "verified", name: "认证", group: "浏览" });
-    // ③ 其余真实分类
-    for (const c of other) sources.push(item(c, "分类"));
+    // ③ 其余真实分类(other 里也是 { c, r },同样要解构)
+    for (const { c } of other) sources.push(item(c, "分类"));
     return sources;
   },
 
@@ -253,7 +256,24 @@ return {
    * 每次 new 一个,避免共享 /g regex 的 lastIndex 副作用。
    */
   _asianKw() {
-    return /japan|japanese|jav|asian|asia|korean|korea|china|chinese|thai|hentai|tokyo|desi|filipina|vietnam|東京|日本|亚洲|亞洲|中文|中国|韩国|韓国|한국|日本語/i;
+    return /japan|japanese|jav|asian|asia|korean|korea|china|chinese|taiwan|thai|hentai|tokyo|desi|filipina|vietnam|東京|日本|亚洲|亞洲|中文|中国|中國|台湾|台灣|香港|韩国|韓国|한국|日本語/i;
+  },
+
+  /**
+   * 亚洲【内部】优先级: 中文/台湾/港 → 日本 → 韩国 → 其它亚洲。
+   * 返回 0/1/2/3;完全不含亚洲关键词返回 99。数字越小越靠前。
+   * getSources 分区、_firstAsianCategoryId 选择、_asianSort 排序共用。
+   * 注意: 0~2 档各有独立正则(含 _asianKw 未覆盖的 taiwan/香港 等),
+   * 3 档回落到 _asianKw —— 故"命中亚洲(rank<99)"是旧 _asianKw 判定的超集,
+   * 只会把更多华语条目也算作亚洲,不会漏掉原先命中的。
+   */
+  _asianRank(text) {
+    const s = String(text || "");
+    if (/chinese|\bchina\b|taiwan|\btw\b|hongkong|hong\s*kong|\bhk\b|中文|中国|中國|华人|華人|台湾|台灣|台北|香港|粤语|粵語/i.test(s)) return 0;
+    if (/japan|japanese|jav|tokyo|hentai|東京|日本|里番|日本語/i.test(s)) return 1;
+    if (/korean|korea|韩国|韓国|한국/i.test(s)) return 2;
+    if (this._asianKw().test(s)) return 3; // 其它亚洲(asian/thai/desi/filipina/vietnam…)
+    return 99; // 非亚洲
   },
 
   /**
@@ -264,15 +284,15 @@ return {
    */
   _asianSort(list) {
     if (!Array.isArray(list) || list.length < 2) return list;
-    const kw = this._asianKw();
-    // 稳定分区: 命中关键词的保序在前,未命中的保序在后
-    const hit = [];
-    const miss = [];
-    for (const it of list) {
-      const hay = ((it && it.title) || "") + " " + ((it && it.vod_remarks) || "");
-      (kw.test(hay) ? hit : miss).push(it);
-    }
-    return hit.concat(miss);
+    // 亚洲命中(rank<99)在前、非亚洲(99)在后;亚洲内部再按 中→日→韩→其它 分档。
+    // 用带原始下标的稳定排序: 同档保持原相对顺序(不改列表内容,只调顺序)。
+    return list
+      .map((it, i) => {
+        const hay = ((it && it.title) || "") + " " + ((it && it.vod_remarks) || "");
+        return { it, i, r: this._asianRank(hay) };
+      })
+      .sort((a, b) => a.r - b.r || a.i - b.i)
+      .map((x) => x.it);
   },
 
   /**
@@ -391,15 +411,25 @@ return {
   },
 
   /**
-   * 从站点真实分类里挑第一个亚洲分类的 sourceId(形如 "c:111")。
+   * 从站点真实分类里挑【优先级最高】的亚洲分类 sourceId(形如 "c:111")。
+   * 优先级: 中文/台/港 → 日 → 韩 → 其它亚洲(_asianRank),同档取首个出现的。
    * 抓不到 / 无亚洲分类时返回 null,调用方自行降级。不写死任何 id。
    */
   async _firstAsianCategoryId(ctx) {
     const cats = await this._fetchCategories(ctx);
     if (!Array.isArray(cats) || !cats.length) return null;
-    const kw = this._asianKw();
-    const hit = cats.find((c) => c && c.name && kw.test(c.name));
-    return hit ? "c:" + hit.id : null;
+    let best = null;
+    let bestRank = 99;
+    for (const c of cats) {
+      if (!c || !c.name) continue;
+      const r = this._asianRank(c.name);
+      if (r < bestRank) {
+        bestRank = r;
+        best = c;
+        if (r === 0) break; // 已是最高档(中文),无需再找
+      }
+    }
+    return best ? "c:" + best.id : null;
   },
 
   /** 常见分类英文名 → 中文(命不中原样返回)。 */
