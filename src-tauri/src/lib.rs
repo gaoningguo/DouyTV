@@ -3189,7 +3189,12 @@ pub fn run() {
                 let host_needs_h2_pool = target_host.ends_with(".live.fc2.com")
                     || target_host == "live.fc2.com"
                     || target_host.ends_with(".a0s.net")
-                    || target_host == "a0s.net";
+                    || target_host == "a0s.net"
+                    // Pornhub CDN(*.phncdn.com)把 HLS 的 h= 签名绑出口 IP:
+                    // ureq 每次新 TCP,经 Clash 多节点代理时上游 IP 漂移,token 未过期
+                    // 也会被 Cloudflare 直接 410。切 reqwest h2 连接池复用同一上游节点。
+                    || target_host.ends_with(".phncdn.com")
+                    || target_host == "phncdn.com";
                 // a0s.net master.m3u8 每秒拉一次,内容固定但语义是"每次看到都是新一秒",
                 // m3u8 cache 1.5s TTL 会让 hls.js 看到旧版本无法刷新 sequence。
                 let host_skips_m3u8_cache = target_host.ends_with(".a0s.net")
