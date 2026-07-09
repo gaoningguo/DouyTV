@@ -2,6 +2,8 @@ import { useEffect, useMemo, useState } from "react";
 import { appAlert, appConfirm } from "@/components/AppDialog";
 import { IconCheck, IconPlus, IconRefresh, IconTrash } from "@/components/Icon";
 import { normalizeImportedLegadoSources } from "@/lib/book/legado.client";
+import { errText } from "@/lib/book/subscription-store";
+import { readingFetchText } from "@/lib/reading/net";
 import type { BookSource } from "@/lib/book/types";
 import { useBookStore } from "@/stores/book";
 import { SettingsSubPageLayout } from "./Layout";
@@ -69,12 +71,48 @@ function SourcesTab() {
     setOpdsName("");
   };
 
+  // 把输入解析成 Legado 书源 JSON 文本。支持三种形态:
+  //   1) 直接粘贴的 JSON(单条 / 数组)
+  //   2) http(s):// 指向书源 JSON 的地址
+  //   3) 深链 booktv:// / legado:// / yuedu://(阅读系分享链),
+  //      形如 scheme://import/bookSource?src=<url或JSON>,或 scheme 后直接跟 url。
+  const resolveLegadoText = async (input: string): Promise<string> => {
+    const raw = input.trim();
+    const scheme = raw.match(/^(booktv|legado|yuedu):\/\//i);
+    if (scheme) {
+      let payload = raw.slice(scheme[0].length);
+      // 取 ?src= / ?url= 参数,否则用 scheme 后剩余部分(可能是 import/bookSource?src=... 或直接 url)。
+      const qIndex = payload.indexOf("?");
+      if (qIndex >= 0) {
+        const params = new URLSearchParams(payload.slice(qIndex + 1));
+        const src = params.get("src") || params.get("url");
+        if (src) payload = src;
+        else payload = payload.slice(0, qIndex);
+      }
+      payload = decodeURIComponent(payload.trim());
+      // 深链的 src 通常是个 URL;若本身就是 JSON 则直接用。
+      if (/^https?:\/\//i.test(payload)) {
+        const res = await readingFetchText(payload, { timeout: 15000 });
+        if (!res.ok) throw new Error(`书源地址请求失败: ${res.status}`);
+        return res.text;
+      }
+      return payload;
+    }
+    if (/^https?:\/\//i.test(raw)) {
+      const res = await readingFetchText(raw, { timeout: 15000 });
+      if (!res.ok) throw new Error(`书源地址请求失败: ${res.status}`);
+      return res.text;
+    }
+    return raw;
+  };
+
   const importLegado = async () => {
     const raw = legadoJson.trim();
     if (!raw) return;
     setBusy(true);
     try {
-      const parsed = JSON.parse(raw);
+      const text = await resolveLegadoText(raw);
+      const parsed = JSON.parse(text);
       const imported = normalizeImportedLegadoSources(parsed);
       if (imported.length === 0) {
         await appAlert("没有识别到有效的 Legado 书源", { tone: "danger" });
@@ -84,7 +122,7 @@ function SourcesTab() {
       setLegadoJson("");
       await appAlert(`已导入 ${imported.length} 个 Legado 书源。`);
     } catch (e) {
-      await appAlert(`导入失败: ${(e as Error).message}`, { tone: "danger" });
+      await appAlert(`导入失败: ${errText(e)}`, { tone: "danger" });
     } finally {
       setBusy(false);
     }
@@ -124,12 +162,12 @@ function SourcesTab() {
 
       <section className="space-y-3">
         <p className="font-mono text-[10px] tracking-[0.2em] text-cream-faint">
-          导入 Legado 书源 (JSON)
+          导入 Legado 书源 (JSON / URL / booktv://)
         </p>
         <textarea
           value={legadoJson}
           onChange={(e) => setLegadoJson(e.target.value)}
-          placeholder='粘贴 Legado 书源 JSON(单条或数组)'
+          placeholder='粘贴 Legado 书源 JSON、书源地址(http/https)或分享链接(booktv:// / legado://)'
           rows={4}
           className="w-full rounded-lg px-3 py-2.5 text-sm bg-ink-2 text-cream outline-none font-mono"
           style={{ border: "1px solid var(--cream-line)" }}
@@ -261,7 +299,7 @@ function SubscriptionsTab() {
       setUrl("");
       setName("");
     } catch (e) {
-      await appAlert(`同步失败: ${(e as Error).message}`, { tone: "danger" });
+      await appAlert(`同步失败: ${errText(e)}`, { tone: "danger" });
     } finally {
       setBusy(null);
     }
@@ -272,7 +310,7 @@ function SubscriptionsTab() {
     try {
       await syncSubscription({ name: subName, url: subUrl });
     } catch (e) {
-      await appAlert(`刷新失败: ${(e as Error).message}`, { tone: "danger" });
+      await appAlert(`刷新失败: ${errText(e)}`, { tone: "danger" });
     } finally {
       setBusy(null);
     }

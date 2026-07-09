@@ -3084,6 +3084,30 @@ pub fn run() {
             ",
             kind: MigrationKind::Up,
         },
+        Migration {
+            version: 6,
+            description: "add latest-chapter tracking columns to manga_shelf",
+            sql: "
+                ALTER TABLE manga_shelf ADD COLUMN latest_chapter_id TEXT;
+                ALTER TABLE manga_shelf ADD COLUMN latest_chapter_name TEXT;
+                ALTER TABLE manga_shelf ADD COLUMN latest_chapter_count INTEGER;
+                ALTER TABLE manga_shelf ADD COLUMN unread_chapter_count INTEGER;
+            ",
+            kind: MigrationKind::Up,
+        },
+        Migration {
+            version: 7,
+            description: "store legado subscription sources in sqlite (one row per source)",
+            sql: "
+                CREATE TABLE IF NOT EXISTS book_subscription_sources (
+                    subscription_id TEXT NOT NULL,
+                    seq INTEGER NOT NULL,
+                    source_json TEXT NOT NULL,
+                    PRIMARY KEY (subscription_id, seq)
+                );
+            ",
+            kind: MigrationKind::Up,
+        },
     ];
 
     tauri::Builder::default()

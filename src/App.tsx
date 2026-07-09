@@ -12,8 +12,8 @@ import Live from "@/pages/Live";
 import NetworkRoom from "@/pages/live/NetworkRoom";
 import Local from "@/pages/Local";
 import Music from "@/pages/Music";
-// import Manga from "@/pages/Manga";
-// import Book from "@/pages/Book";
+import Manga from "@/pages/Manga";
+import Book from "@/pages/Book";
 import { DesktopLyric } from "@/pages/music/DesktopLyric";
 import Settings from "@/pages/Settings";
 import SettingsLocalScan from "@/pages/settings/LocalScan";
@@ -24,8 +24,8 @@ import SettingsUpdates from "@/pages/settings/Updates";
 import SettingsVideoHub from "@/pages/settings/VideoSourcesHub";
 import SettingsLiveHub from "@/pages/settings/LiveSourcesHub";
 import SettingsMusicHub from "@/pages/settings/MusicSourcesHub";
-// import SettingsMangaHub from "@/pages/settings/MangaSourcesHub";
-// import SettingsBookHub from "@/pages/settings/BookSourcesHub";
+import SettingsMangaHub from "@/pages/settings/MangaSourcesHub";
+import SettingsBookHub from "@/pages/settings/BookSourcesHub";
 import SettingsStripchatKeys, {
   loadKeysFromStorage as loadStripchatKeys,
   syncKeysToRust as syncStripchatKeys,
@@ -208,10 +208,10 @@ export default function App() {
           <Route path="/browse/:key" element={<Browse />} />
           <Route path="/live" element={<Live />} />
           <Route path="/music/*" element={<Music />} />
-          {/* <Route path="/manga/*" element={<Manga />} />
+          <Route path="/manga/*" element={<Manga />} />
           <Route path="/book/*" element={<Book />} />
           <Route path="/settings/manga-hub" element={<SettingsMangaHub />} />
-          <Route path="/settings/book-hub" element={<SettingsBookHub />} /> */}
+          <Route path="/settings/book-hub" element={<SettingsBookHub />} />
           <Route
             path="/live/room/:platform/:roomId"
             element={<NetworkRoom />}

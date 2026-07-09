@@ -311,6 +311,22 @@ function persistSubscriptions(subs: LegadoSubscriptionMeta[]): void {
   saveArr(BOOK_SUBSCRIPTIONS_KEY, subs);
 }
 
+/**
+ * hydrate 期间(await SQL 迁移可达数百 ms)用户可能已 addSource/syncSubscription。
+ * 结束时的 set 必须与内存态 merge、而非用开头的 localStorage 快照覆盖,否则刚导入的源被清掉
+ * (localStorage 已存,所以重启后又出现——正是"导入后收缩页 0 源"的现象)。
+ * 内存态(in-flight)优先:按 id 去重,st 里已有的覆盖 loaded。
+ */
+function mergeById<T extends { id: string }>(inflight: T[], loaded: T[]): T[] {
+  const map = new Map<string, T>();
+  for (const item of loaded) map.set(item.id, item);
+  for (const item of inflight) map.set(item.id, item); // in-flight wins
+  return Array.from(map.values());
+}
+
+// hydrate 去重:并发调用(Book.tsx + BookSourcesHub 都会触发)只跑一次。
+let hydratePromise: Promise<void> | null = null;
+
 export const useBookStore = create<BookStore>((set, get) => ({
   sources: [],
   subscriptions: [],
@@ -321,42 +337,46 @@ export const useBookStore = create<BookStore>((set, get) => ({
 
   hydrate: async () => {
     if (get().hydrated) return;
-    const sources = loadArr<BookSource>(BOOK_SOURCES_KEY);
-    const subscriptions = loadArr<LegadoSubscriptionMeta>(BOOK_SUBSCRIPTIONS_KEY);
-    const settings = loadSettings();
+    if (hydratePromise) return hydratePromise;
+    hydratePromise = (async () => {
+      const sources = loadArr<BookSource>(BOOK_SOURCES_KEY);
+      const subscriptions = loadArr<LegadoSubscriptionMeta>(BOOK_SUBSCRIPTIONS_KEY);
+      const settings = loadSettings();
 
-    if (isSqlAvailable()) {
-      try {
-        const localShelf = loadArr<BookShelfItem>(SHELF_KEY);
-        const localRecords = loadArr<BookReadRecord>(RECORD_KEY);
-        if (localShelf.length || localRecords.length) {
-          for (const s of localShelf) await sqlUpsertShelf(s).catch(() => {});
-          for (const r of localRecords) await sqlUpsertRecord(r).catch(() => {});
-          localStorage.removeItem(SHELF_KEY);
-          localStorage.removeItem(RECORD_KEY);
+      if (isSqlAvailable()) {
+        try {
+          const localShelf = loadArr<BookShelfItem>(SHELF_KEY);
+          const localRecords = loadArr<BookReadRecord>(RECORD_KEY);
+          if (localShelf.length || localRecords.length) {
+            for (const s of localShelf) await sqlUpsertShelf(s).catch(() => {});
+            for (const r of localRecords) await sqlUpsertRecord(r).catch(() => {});
+            localStorage.removeItem(SHELF_KEY);
+            localStorage.removeItem(RECORD_KEY);
+          }
+          const { shelf, records } = await sqlLoadAll();
+          set((st) => ({
+            sources: mergeById(st.sources, sources),
+            subscriptions: mergeById(st.subscriptions, subscriptions),
+            settings,
+            shelf: mergeShelf(st.shelf, shelf),
+            records: mergeRecords(st.records, records),
+            hydrated: true,
+          }));
+          return;
+        } catch (e) {
+          console.error("[book] SQL hydrate failed, fallback localStorage", e);
         }
-        const { shelf, records } = await sqlLoadAll();
-        set((st) => ({
-          sources,
-          subscriptions,
-          settings,
-          shelf: mergeShelf(st.shelf, shelf),
-          records: mergeRecords(st.records, records),
-          hydrated: true,
-        }));
-        return;
-      } catch (e) {
-        console.error("[book] SQL hydrate failed, fallback localStorage", e);
       }
-    }
-    set((st) => ({
-      sources,
-      subscriptions,
-      settings,
-      shelf: mergeShelf(st.shelf, loadArr<BookShelfItem>(SHELF_KEY)),
-      records: mergeRecords(st.records, loadArr<BookReadRecord>(RECORD_KEY)),
-      hydrated: true,
-    }));
+      set((st) => ({
+        sources: mergeById(st.sources, sources),
+        subscriptions: mergeById(st.subscriptions, subscriptions),
+        settings,
+        shelf: mergeShelf(st.shelf, loadArr<BookShelfItem>(SHELF_KEY)),
+        records: mergeRecords(st.records, loadArr<BookReadRecord>(RECORD_KEY)),
+        hydrated: true,
+      }));
+    })();
+    return hydratePromise;
   },
 
   addSource: (source) => {
@@ -398,7 +418,9 @@ export const useBookStore = create<BookStore>((set, get) => ({
     persistSubscriptions(next);
   },
   removeSubscription: (id) => {
-    legadoSubscriptionStore.delete(id);
+    void legadoSubscriptionStore.delete(id).catch((e) =>
+      console.error("[book] subscription delete", e)
+    );
     const next = get().subscriptions.filter((s) => s.id !== id);
     set({ subscriptions: next });
     persistSubscriptions(next);

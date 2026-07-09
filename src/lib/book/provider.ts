@@ -9,7 +9,7 @@ import type {
   BookSearchResult,
   BookSource,
 } from "./types";
-// import { legadoClient } from "./legado.client";
+import { legadoClient } from "./legado.client";
 import { opdsClient } from "./opds.client";
 
 function sourceKind(source?: Pick<BookSource, "type"> & { legado?: unknown }): "legado" | "opds" {
@@ -19,8 +19,8 @@ function sourceKind(source?: Pick<BookSource, "type"> & { legado?: unknown }): "
 export class BookProvider {
   async getSources(): Promise<BookSource[]> {
     const [opdsSources, legadoSources] = await Promise.all([
-      opdsClient.getSources().catch(() => []),
-      legadoClient.getSources().catch(() => []),
+      opdsClient.getSources().catch((): BookSource[] => []),
+      legadoClient.getSources().catch((): BookSource[] => []),
     ]);
     return [
       ...opdsSources.map((source) => ({
@@ -73,6 +73,48 @@ export class BookProvider {
             sourceName: source.name,
             error: (error as Error).message,
           });
+        }
+      })
+    );
+    return { results, failedSources };
+  }
+
+  /**
+   * 流式多源搜索 —— 等价 MoonTVPlus 的 SSE fluid search,但纯前端:
+   * 每个源各自 resolve 就回调一次(结果增量刷新 + 完成进度),不等所有源。
+   * 返回汇总结果(与 searchBooks 一致),供不关心增量的调用方使用。
+   */
+  async searchBooksStream(
+    q: string,
+    handlers: {
+      onStart?: (total: number) => void;
+      onSourceResult?: (source: BookSource, results: BookListItem[], done: number, total: number) => void;
+      onSourceError?: (failure: BookSearchFailure, done: number, total: number) => void;
+    },
+    sourceId?: string
+  ): Promise<BookSearchResult> {
+    const sources = await this.getSearchSources(sourceId);
+    const total = sources.length;
+    handlers.onStart?.(total);
+    const results: BookListItem[] = [];
+    const failedSources: BookSearchFailure[] = [];
+    let done = 0;
+    await Promise.all(
+      sources.map(async (source) => {
+        try {
+          const sourceResult = await this.searchBooksSource(q, source);
+          results.push(...sourceResult.results);
+          done += 1;
+          handlers.onSourceResult?.(source, sourceResult.results, done, total);
+        } catch (error) {
+          done += 1;
+          const failure: BookSearchFailure = {
+            sourceId: source.id,
+            sourceName: source.name,
+            error: (error as Error).message,
+          };
+          failedSources.push(failure);
+          handlers.onSourceError?.(failure, done, total);
         }
       })
     );

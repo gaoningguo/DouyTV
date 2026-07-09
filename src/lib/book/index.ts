@@ -6,13 +6,18 @@
 
 import { bookProvider } from "./provider";
 import { legadoClient } from "./legado.client";
+import { readingFetchBytes } from "@/lib/reading/net";
 import type {
+  BookCatalogResult,
   BookChapter,
   BookChapterContent,
   BookDetail,
+  BookListItem,
+  BookSearchFailure,
   BookSearchResult,
   BookSource,
 } from "./types";
+import { b64encode } from "./legado-crypto";
 
 export * from "./types";
 export { bookProvider } from "./provider";
@@ -29,6 +34,28 @@ export function getBookSources(): Promise<BookSource[]> {
 
 export function searchBooks(q: string, sourceId?: string): Promise<BookSearchResult> {
   return bookProvider.searchBooks(q, sourceId);
+}
+
+/** 流式多源搜索(结果增量刷新 + 完成进度)。等价 MoonTVPlus 的 fluid search。 */
+export function searchBooksStream(
+  q: string,
+  handlers: {
+    onStart?: (total: number) => void;
+    onSourceResult?: (
+      source: BookSource,
+      results: BookListItem[],
+      done: number,
+      total: number
+    ) => void;
+    onSourceError?: (
+      failure: BookSearchFailure,
+      done: number,
+      total: number
+    ) => void;
+  },
+  sourceId?: string
+): Promise<BookSearchResult> {
+  return bookProvider.searchBooksStream(q, handlers, sourceId);
 }
 
 export function getBookDetail(
@@ -62,4 +89,52 @@ export function getPreferredAcquisition(
   href: string
 ): Promise<{ format: "epub" | "pdf" | "chapters"; href: string }> {
   return bookProvider.getPreferredAcquisition(sourceId, href);
+}
+
+/** 目录 / 发现浏览(OPDS 导航树 + Legado explore 分类)。 */
+export function getBookCatalog(
+  sourceId: string,
+  href?: string
+): Promise<BookCatalogResult> {
+  return bookProvider.getCatalog(sourceId, href);
+}
+
+export interface BookFileResult {
+  bytes: Uint8Array;
+  mimeType: string;
+}
+
+/**
+ * 下载 epub/pdf 文件字节(带书源鉴权)。对标 MoonTVPlus 的 /api/books/file。
+ * 走 readingFetchBytes(Rust script_http_bytes,绕 CORS,32MB 上限);
+ * 大于上限的 epub 会失败,由上层提示。
+ */
+export async function getBookFileBytes(
+  sourceId: string,
+  fileUrl: string,
+  onProgress?: (received: number, total: number | null) => void
+): Promise<BookFileResult> {
+  const source = await bookProvider.getSourceById(sourceId);
+  const headers: Record<string, string> = {
+    "User-Agent":
+      "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0 Safari/537.36",
+  };
+  if (source.authMode === "basic" && source.username) {
+    headers.Authorization = `Basic ${b64encode(`${source.username}:${source.password || ""}`)}`;
+  } else if (source.authMode === "header" && source.headerName && source.headerValue) {
+    headers[source.headerName] = source.headerValue;
+  }
+  const res = await readingFetchBytes(fileUrl, { headers });
+  if (!res.ok) throw new Error(`文件下载失败: ${res.status}`);
+  // script_http_bytes 一次性返回完整字节,无法真正流式;这里给个完成回调保持 UI 契约。
+  onProgress?.(res.bytes.length, res.bytes.length);
+  return {
+    bytes: res.bytes,
+    mimeType: res.headers["content-type"] || "application/octet-stream",
+  };
+}
+
+/** 供 provider 外部按 id 取源(下载鉴权用)。 */
+export function getBookSourceById(sourceId: string): Promise<BookSource> {
+  return bookProvider.getSourceById(sourceId);
 }

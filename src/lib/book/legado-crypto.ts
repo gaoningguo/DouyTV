@@ -90,10 +90,16 @@ function bytesToStr(bytes: Uint8Array, enc: Enc): string {
  * 它本身是 Uint8Array 子类,所以 `instanceof Uint8Array`、索引访问、length 都成立。
  */
 export class BufferShim extends Uint8Array {
-  static from(
-    value: string | ArrayLike<number> | ArrayBuffer | Uint8Array,
-    encoding: Enc = "utf8"
-  ): BufferShim {
+  // 注意:不能直接 `static from(...)` 覆盖 —— 签名与 Uint8Array.from 不兼容会报
+  // TS2417。用更宽的 `...args: any[]` 承接 Node Buffer.from 的多态调用,再在内部分派。
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  static from(...args: any[]): BufferShim {
+    const value = args[0] as
+      | string
+      | ArrayLike<number>
+      | ArrayBuffer
+      | Uint8Array;
+    const encoding = (args[1] as Enc) ?? "utf8";
     if (typeof value === "string") {
       return new BufferShim(strToBytes(value, encoding));
     }

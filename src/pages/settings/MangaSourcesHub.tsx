@@ -47,7 +47,15 @@ export default function SettingsMangaSourcesHub() {
     setTesting(true);
     setSources([]);
     try {
-      const list = await getMangaSources();
+      const list = await getMangaSources({
+        ...config,
+        enabled: true,
+        serverUrl: serverUrl.trim().replace(/\/$/, ""),
+        authMode,
+        username: username.trim() || undefined,
+        password: password || undefined,
+        defaultLang: defaultLang.trim() || "zh",
+      });
       setSources(list);
       await appAlert(`连接成功,识别到 ${list.length} 个可用源。`);
     } catch (e) {

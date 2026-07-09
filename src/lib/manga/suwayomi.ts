@@ -279,10 +279,14 @@ export class SuwayomiClient {
       ];
     }
     try {
-      return (await this.getSources(resolved.defaultLang)).slice(0, resolved.maxSources);
+      // 先按默认语言过滤;若源语言码对不上(过滤后为空),回退到全部源,
+      // 否则「全部来源」搜索会因语言不匹配被滤空(与不带 lang 过滤的推荐下拉不对称)。
+      // 不再按 maxSources 截断 —— 全部源并发(用户可能有几十个源,截断会漏搜)。
+      const langScoped = await this.getSources(resolved.defaultLang);
+      return langScoped.length > 0 ? langScoped : await this.getSources();
     } catch (error) {
       if (resolved.sourceIds.length === 0) throw error;
-      return resolved.sourceIds.slice(0, resolved.maxSources).map((id) => ({
+      return resolved.sourceIds.map((id) => ({
         id,
         displayName: id,
         name: id,
@@ -376,6 +380,57 @@ export class SuwayomiClient {
     return { results, failedSources };
   }
 
+  /**
+   * 流式多源搜索 —— 等价 MoonTVPlus 的 SSE fluid search,但纯前端:
+   * 每个源各自 resolve 就回调一次(结果增量刷新 + 完成进度),不等所有源。
+   */
+  async searchMangaStream(
+    keyword: string,
+    handlers: {
+      onStart?: (total: number) => void;
+      onSourceResult?: (
+        source: { id: string; displayName?: string; name?: string },
+        results: MangaSearchItem[],
+        done: number,
+        total: number
+      ) => void;
+      onSourceError?: (
+        failure: MangaSearchFailure,
+        done: number,
+        total: number
+      ) => void;
+    },
+    sourceId?: string,
+    page = 1
+  ): Promise<MangaSearchResult> {
+    const sources = await this.getSearchSources(sourceId);
+    const total = sources.length;
+    handlers.onStart?.(total);
+    const results: MangaSearchItem[] = [];
+    const failedSources: MangaSearchFailure[] = [];
+    let done = 0;
+    await Promise.all(
+      sources.map(async (source) => {
+        try {
+          const res = await this.searchMangaSource(keyword, source, page);
+          results.push(...res.results);
+          done += 1;
+          handlers.onSourceResult?.(source, res.results, done, total);
+        } catch (error) {
+          done += 1;
+          const failure: MangaSearchFailure = {
+            sourceId: String(source.id),
+            sourceName: source.displayName || source.name || String(source.id),
+            error: error instanceof Error ? error.message : "未知错误",
+          };
+          failedSources.push(failure);
+          handlers.onSourceError?.(failure, done, total);
+        }
+      })
+    );
+    return { results, failedSources };
+  }
+
   async getRecommendedManga(
     sourceId: string,
     type: MangaRecommendType = "POPULAR",
@@ -430,31 +485,69 @@ export class SuwayomiClient {
     };
   }
 
-  async getChapters(mangaId: string): Promise<MangaChapter[]> {
-    const mutation = `
-      mutation GET_MANGA_CHAPTERS_FETCH($input: FetchChaptersInput!) {
-        fetchChapters(input: $input) {
-          chapters { id mangaId name chapterNumber scanlator isRead isDownloaded pageCount uploadDate }
+  /**
+   * 全源聚合推荐流 —— 首页信息流用。对每个源各拉一页 POPULAR/LATEST,各自 resolve 就回调
+   * (结果增量刷新),不等所有源。去重按 sourceId:id。返回汇总(不关心增量的调用方用)。
+   */
+  async getAggregatedRecommendStream(
+    handlers: {
+      onStart?: (total: number) => void;
+      onSourceResult?: (
+        source: { id: string; displayName?: string; name?: string },
+        mangas: MangaSearchItem[],
+        hasNextPage: boolean,
+        done: number,
+        total: number
+      ) => void;
+      onSourceError?: (
+        failure: MangaSearchFailure,
+        done: number,
+        total: number
+      ) => void;
+    },
+    type: MangaRecommendType = "POPULAR",
+    page = 1
+  ): Promise<{ mangas: MangaSearchItem[]; failedSources: MangaSearchFailure[] }> {
+    const sources = await this.getSearchSources();
+    const total = sources.length;
+    handlers.onStart?.(total);
+    const mangas: MangaSearchItem[] = [];
+    const failedSources: MangaSearchFailure[] = [];
+    let done = 0;
+    await Promise.all(
+      sources.map(async (source) => {
+        try {
+          const res = await this.getRecommendedManga(source.id, type, page);
+          mangas.push(...res.mangas);
+          done += 1;
+          handlers.onSourceResult?.(source, res.mangas, res.hasNextPage, done, total);
+        } catch (error) {
+          done += 1;
+          const failure: MangaSearchFailure = {
+            sourceId: String(source.id),
+            sourceName: source.displayName || source.name || String(source.id),
+            error: error instanceof Error ? error.message : "未知错误",
+          };
+          failedSources.push(failure);
+          handlers.onSourceError?.(failure, done, total);
         }
-      }
-    `;
-    const data = await this.graphqlRequest<{
-      fetchChapters?: {
-        chapters?: Array<{
-          id: string | number;
-          mangaId?: string | number;
-          name?: string;
-          chapterNumber?: number;
-          scanlator?: string;
-          isRead?: boolean;
-          isDownloaded?: boolean;
-          pageCount?: number;
-          uploadDate?: number;
-        }>;
-      };
-    }>(mutation, { input: { mangaId: Number(mangaId) || mangaId } }, "GET_MANGA_CHAPTERS_FETCH");
+      })
+    );
+    return { mangas, failedSources };
+  }
 
-    return (data.fetchChapters?.chapters || []).map((chapter) => ({
+  async getChapters(mangaId: string): Promise<MangaChapter[]> {
+    const mapChapter = (chapter: {
+      id: string | number;
+      mangaId?: string | number;
+      name?: string;
+      chapterNumber?: number;
+      scanlator?: string;
+      isRead?: boolean;
+      isDownloaded?: boolean;
+      pageCount?: number;
+      uploadDate?: number;
+    }): MangaChapter => ({
       id: String(chapter.id),
       mangaId: String(chapter.mangaId || mangaId),
       name: chapter.name || "未命名章节",
@@ -464,7 +557,48 @@ export class SuwayomiClient {
       isDownloaded: chapter.isDownloaded,
       pageCount: chapter.pageCount,
       uploadDate: chapter.uploadDate,
-    }));
+    });
+    const chapterFields =
+      "id mangaId name chapterNumber scanlator isRead isDownloaded pageCount uploadDate";
+    const id = Number(mangaId) || mangaId;
+
+    // 1) fetchChapters:让 Suwayomi 在线去源站拉章节(最新)。
+    //    源返回空 / 反爬 / 已下架时 Suwayomi 抛 "No chapters found",此时回退到已入库列表。
+    try {
+      const data = await this.graphqlRequest<{
+        fetchChapters?: {
+          chapters?: Array<Parameters<typeof mapChapter>[0]>;
+        };
+      }>(
+        `mutation GET_MANGA_CHAPTERS_FETCH($input: FetchChaptersInput!) {
+          fetchChapters(input: $input) { chapters { ${chapterFields} } }
+        }`,
+        { input: { mangaId: id } },
+        "GET_MANGA_CHAPTERS_FETCH"
+      );
+      const fetched = data.fetchChapters?.chapters || [];
+      if (fetched.length > 0) return fetched.map(mapChapter);
+    } catch {
+      // 落到下面读已入库章节
+    }
+
+    // 2) 回退:读 Suwayomi 数据库里已有的章节(此前拉取过的)。
+    try {
+      const data = await this.graphqlRequest<{
+        chapters?: {
+          nodes?: Array<Parameters<typeof mapChapter>[0]>;
+        };
+      }>(
+        `query GET_MANGA_CHAPTERS($id: Int!) {
+          chapters(condition: { mangaId: $id }) { nodes { ${chapterFields} } }
+        }`,
+        { id },
+        "GET_MANGA_CHAPTERS"
+      );
+      return (data.chapters?.nodes || []).map(mapChapter);
+    } catch {
+      return [];
+    }
   }
 
   async getMangaDetail(input: {

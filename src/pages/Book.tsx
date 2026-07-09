@@ -13,37 +13,33 @@ import {
   IconBook,
   IconBookmark,
   IconBookmarkFill,
+  IconDownload,
+  IconGrid,
   IconList,
-  IconPause,
-  IconPlay,
   IconSearch,
   IconSettings,
 } from "@/components/Icon";
 import {
-  getBookChapterContent,
   getBookChapters,
   getBookDetail,
+  getBookFileBytes,
   getBookSources,
-  getPreferredAcquisition,
-  searchBooks,
+  searchBooksStream,
   type BookChapter,
   type BookDetail,
   type BookListItem,
   type BookSource,
 } from "@/lib/book";
-import { synthesizeBookTts } from "@/lib/book/tts";
 import { useBookStore } from "@/stores/book";
 import type { BookReadRecord, BookShelfItem } from "@/lib/book/types";
+import ChapterReader from "@/pages/book/ChapterReader";
+import EpubReader from "@/pages/book/EpubReader";
+import PdfReader from "@/pages/book/PdfReader";
+import BookCatalog from "@/pages/book/Catalog";
 
 // 小说模块页面：首页/书架、搜索、详情、章节阅读器(含 TTS)。
 // 数据走 book 引擎(OPDS + Legado,经 script_http_bytes 绕 CORS + GBK 解码),
-// 书架/阅读记录走 book store。当前阅读器聚焦章节型(Legado)正文;OPDS epub/pdf 走系统下载。
-
-const READER_THEMES: Record<string, { bg: string; fg: string }> = {
-  sepia: { bg: "#f4ecd8", fg: "#5b4636" },
-  dark: { bg: "#0e0f11", fg: "#c9c4bb" },
-  paper: { bg: "#ffffff", fg: "#1a1a1a" },
-};
+// 书架/阅读记录走 book store。阅读器按 format 分流:章节型(Legado)/ EPUB / PDF。
 
 export default function Book() {
   const hydrate = useBookStore((s) => s.hydrate);
@@ -55,9 +51,29 @@ export default function Book() {
     <Routes>
       <Route path="/" element={<BookHome />} />
       <Route path="search" element={<BookSearch />} />
+      <Route path="catalog" element={<BookCatalogView />} />
       <Route path="detail/:sourceId/*" element={<BookDetailView />} />
       <Route path="reader/:sourceId/*" element={<BookReader />} />
     </Routes>
+  );
+}
+
+// 目录 / 发现浏览 —— 复用独立的 Catalog 组件,接线到详情路由。
+function BookCatalogView() {
+  const navigate = useNavigate();
+  return (
+    <BookCatalog
+      onBack={() => navigate("/book")}
+      onOpenBook={(sourceId, detailHref, meta) => {
+        const sp = new URLSearchParams();
+        if (meta?.title) sp.set("title", meta.title);
+        if (meta?.cover) sp.set("cover", meta.cover);
+        if (meta?.author) sp.set("author", meta.author);
+        navigate(
+          `/book/detail/${encodeURIComponent(sourceId)}/${encodeURIComponent(detailHref)}?${sp.toString()}`
+        );
+      }}
+    />
   );
 }
 
@@ -121,9 +137,17 @@ function BookHome() {
     <PageShell
       title="小说"
       eyebrow="BOOKS · LEGADO / OPDS"
-      onBack={() => navigate("/")}
       trailing={
         <div className="flex gap-2">
+          <button
+            type="button"
+            onClick={() => navigate("/book/catalog")}
+            className="w-9 h-9 flex items-center justify-center rounded-full tap text-cream"
+            style={{ background: "var(--ink-2)", border: "1px solid var(--cream-line)" }}
+            aria-label="发现"
+          >
+            <IconGrid size={16} />
+          </button>
           <button
             type="button"
             onClick={() => navigate("/book/search")}
@@ -255,6 +279,9 @@ function BookSearch() {
   const [loading, setLoading] = useState(false);
   const [searched, setSearched] = useState(false);
   const [failed, setFailed] = useState<string[]>([]);
+  const [progress, setProgress] = useState({ done: 0, total: 0 });
+  // 每次搜索递增,丢弃过期请求的增量回调(切换关键词/源时)。
+  const runTokenRef = useRef(0);
 
   useEffect(() => {
     getBookSources()
@@ -265,18 +292,45 @@ function BookSearch() {
   const run = useCallback(async () => {
     const q = query.trim();
     if (!q) return;
+    const token = ++runTokenRef.current;
     setLoading(true);
     setSearched(true);
     setResults([]);
     setFailed([]);
+    setProgress({ done: 0, total: 0 });
+    // 增量去重:同一书详情页 href 只保留一条。
+    const seen = new Set<string>();
     try {
-      const res = await searchBooks(q, sourceId || undefined);
-      setResults(res.results);
-      setFailed(res.failedSources.map((f) => f.sourceName));
+      await searchBooksStream(
+        q,
+        {
+          onStart: (total) => {
+            if (token === runTokenRef.current) setProgress({ done: 0, total });
+          },
+          onSourceResult: (_source, sourceResults, done, total) => {
+            if (token !== runTokenRef.current) return;
+            const fresh = sourceResults.filter((item) => {
+              const key = `${item.sourceId}:${item.detailHref || item.id}`;
+              if (seen.has(key)) return false;
+              seen.add(key);
+              return true;
+            });
+            if (fresh.length > 0) setResults((prev) => [...prev, ...fresh]);
+            setProgress({ done, total });
+          },
+          onSourceError: (failure, done, total) => {
+            if (token !== runTokenRef.current) return;
+            setFailed((prev) => [...prev, failure.sourceName]);
+            setProgress({ done, total });
+          },
+        },
+        sourceId || undefined
+      );
     } catch (e) {
-      await appAlert(`搜索失败: ${(e as Error).message}`, { tone: "danger" });
+      if (token === runTokenRef.current)
+        await appAlert(`搜索失败: ${(e as Error).message}`, { tone: "danger" });
     } finally {
-      setLoading(false);
+      if (token === runTokenRef.current) setLoading(false);
     }
   }, [query, sourceId]);
 
@@ -317,10 +371,22 @@ function BookSearch() {
           ))}
         </select>
 
-        {failed.length > 0 && (
-          <p className="text-[11px] text-cream-faint font-mono">
-            {failed.length} 个源无结果或失败
-          </p>
+        {(loading || failed.length > 0) && progress.total > 0 && (
+          <div className="flex items-center gap-2">
+            <div className="flex-1 h-1 rounded-full overflow-hidden" style={{ background: "var(--ink-2)" }}>
+              <div
+                className="h-full rounded-full transition-all"
+                style={{
+                  width: `${Math.round((progress.done / progress.total) * 100)}%`,
+                  background: "var(--ember)",
+                }}
+              />
+            </div>
+            <span className="text-[11px] text-cream-faint font-mono shrink-0">
+              {progress.done}/{progress.total}
+              {failed.length > 0 ? ` · ${failed.length} 失败` : ""}
+            </span>
+          </div>
         )}
 
         {searched && !loading && results.length === 0 ? (
@@ -430,13 +496,49 @@ function BookDetailView() {
     navigate(
       `/book/reader/${encodeURIComponent(sourceId)}/${encodeURIComponent(ch.href)}?title=${encodeURIComponent(
         detail?.title || ""
-      )}&toc=${encodeURIComponent(tocHref || "")}&bookId=${encodeURIComponent(detail?.id || "")}`
+      )}&toc=${encodeURIComponent(tocHref || "")}&bookId=${encodeURIComponent(detail?.id || "")}&format=chapters`
     );
   };
 
   const tocHref =
     detail?.acquisitionLinks.find((l) => l.type.includes("legado-chapters"))?.href ||
     detail?.navigation?.[0]?.href;
+
+  // 文件型资源(OPDS epub/pdf)—— acquisition link 的 MIME 决定格式。
+  const fileFormat = (type: string): "epub" | "pdf" | null => {
+    const t = type.toLowerCase();
+    if (t.includes("epub")) return "epub";
+    if (t.includes("pdf")) return "pdf";
+    return null;
+  };
+  const fileLinks = (detail?.acquisitionLinks || [])
+    .map((l) => ({ link: l, format: fileFormat(l.type || "") }))
+    .filter((x): x is { link: (typeof x)["link"]; format: "epub" | "pdf" } => !!x.format);
+
+  const openFile = (fileHref: string, format: "epub" | "pdf") => {
+    navigate(
+      `/book/reader/${encodeURIComponent(sourceId)}/${encodeURIComponent(fileHref)}?title=${encodeURIComponent(
+        detail?.title || ""
+      )}&bookId=${encodeURIComponent(detail?.id || "")}&format=${format}`
+    );
+  };
+
+  const downloadFile = async (fileHref: string, format: "epub" | "pdf") => {
+    try {
+      const { bytes, mimeType } = await getBookFileBytes(sourceId, fileHref);
+      const blob = new Blob([bytes as BlobPart], { type: mimeType });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = `${detail?.title || "book"}.${format}`;
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
+      setTimeout(() => URL.revokeObjectURL(url), 10000);
+    } catch (e) {
+      await appAlert(`下载失败: ${(e as Error).message}`, { tone: "danger" });
+    }
+  };
 
   return (
     <PageShell
@@ -562,11 +664,40 @@ function BookDetailView() {
             </div>
           )}
 
-          {chapters.length === 0 && (
+          {chapters.length === 0 && fileLinks.length > 0 && (
+            <div className="space-y-2">
+              <p className="font-mono text-[10px] tracking-[0.2em] text-cream-faint">
+                可用格式
+              </p>
+              {fileLinks.map(({ link, format }, i) => (
+                <div key={i} className="flex gap-2">
+                  <button
+                    type="button"
+                    onClick={() => openFile(link.href, format)}
+                    className="flex-1 rounded-lg py-2.5 text-sm font-semibold tap glow-ember"
+                    style={{ background: "var(--ember)", color: "var(--ink)" }}
+                  >
+                    在线阅读 · {format.toUpperCase()}
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => downloadFile(link.href, format)}
+                    className="w-11 flex items-center justify-center rounded-lg tap text-cream"
+                    style={{ background: "var(--ink-2)", border: "1px solid var(--cream-line)" }}
+                    aria-label="下载文件"
+                  >
+                    <IconDownload size={16} />
+                  </button>
+                </div>
+              ))}
+            </div>
+          )}
+
+          {chapters.length === 0 && fileLinks.length === 0 && (
             <EmptyState
               icon={<IconList size={40} />}
               title="没有可用章节"
-              subtitle="该书源可能是 OPDS 文件型(epub/pdf),暂不支持在应用内阅读。"
+              subtitle="该书源没有返回可读的章节或文件资源。"
             />
           )}
         </div>
@@ -575,290 +706,65 @@ function BookDetailView() {
   );
 }
 
-// ─── 阅读器(章节型 + TTS) ───────────────────────────────
+// ─── 阅读器分流:按 format 路由到 章节 / EPUB / PDF ───────────
+// URL: /book/reader/:sourceId/*  ,splat = 章节 href 或 epub/pdf 文件 url
+// query: format(chapters|epub|pdf,缺省 chapters)、toc、bookId、title
 function BookReader() {
   const navigate = useNavigate();
   const { sourceId = "" } = useParams();
   const params = useParams();
-  const chapterHref = decodeURIComponent((params["*"] as string) || "");
+  const target = decodeURIComponent((params["*"] as string) || "");
   const [search] = useSearchParams();
+  const format = (search.get("format") || "chapters") as
+    | "chapters"
+    | "epub"
+    | "pdf";
   const tocHref = search.get("toc") || undefined;
   const bookId = search.get("bookId") || "";
   const bookTitle = search.get("title") || "";
 
-  const settings = useBookStore((s) => s.settings);
-  const setSettings = useBookStore((s) => s.setSettings);
-  const upsertRecord = useBookStore((s) => s.upsertRecord);
+  const back = () => navigate(-1);
 
-  const [content, setContent] = useState("");
-  const [chapterTitle, setChapterTitle] = useState("");
-  const [prevHref, setPrevHref] = useState<string | undefined>();
-  const [nextHref, setNextHref] = useState<string | undefined>();
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState("");
-  const [showControls, setShowControls] = useState(false);
-  const [ttsPlaying, setTtsPlaying] = useState(false);
-  const audioRef = useRef<HTMLAudioElement | null>(null);
-  const scrollRef = useRef<HTMLDivElement | null>(null);
-
-  const load = useCallback(
-    async (href: string) => {
-      setLoading(true);
-      setError("");
-      stopTts();
-      try {
-        const ch = await getBookChapterContent(sourceId, href, tocHref);
-        setContent(ch.content);
-        setChapterTitle(ch.title || bookTitle);
-        setPrevHref(ch.previousHref);
-        setNextHref(ch.nextHref);
-        scrollRef.current?.scrollTo({ top: 0 });
-        // 记录阅读进度
-        if (bookId) {
-          upsertRecord({
-            sourceId,
-            sourceName: "",
-            bookId,
-            title: bookTitle,
-            format: "chapters",
-            locator: { type: "chapter", value: href, href, chapterTitle: ch.title },
-            progressPercent: 0,
-            chapterTitle: ch.title,
-            chapterHref: href,
-            saveTime: Date.now(),
-          });
-        }
-      } catch (e) {
-        setError((e as Error).message);
-      } finally {
-        setLoading(false);
-      }
-    },
-    [sourceId, tocHref, bookId, bookTitle, upsertRecord]
-  );
-
-  useEffect(() => {
-    void load(chapterHref);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [chapterHref]);
-
-  const goto = (href?: string) => {
-    if (!href) return;
-    navigate(
-      `/book/reader/${encodeURIComponent(sourceId)}/${encodeURIComponent(href)}?title=${encodeURIComponent(
-        bookTitle
-      )}&toc=${encodeURIComponent(tocHref || "")}&bookId=${encodeURIComponent(bookId)}`,
-      { replace: true }
+  if (format === "epub") {
+    return (
+      <EpubReader
+        sourceId={sourceId}
+        bookId={bookId}
+        fileUrl={target}
+        title={bookTitle}
+        onBack={back}
+      />
     );
-  };
-
-  const stopTts = () => {
-    if (audioRef.current) {
-      audioRef.current.pause();
-      audioRef.current.src = "";
-    }
-    setTtsPlaying(false);
-  };
-
-  const startTts = async () => {
-    if (ttsPlaying) {
-      stopTts();
-      return;
-    }
-    const plain = content.replace(/<[^>]+>/g, "").replace(/\s+/g, " ").trim();
-    if (!plain) return;
-    try {
-      setTtsPlaying(true);
-      const { blob } = await synthesizeBookTts({
-        text: plain.slice(0, 1800),
-        voice: settings.ttsVoice,
-        rate: settings.ttsRate,
-        pitch: settings.ttsPitch,
-        volume: settings.ttsVolume,
-      });
-      const url = URL.createObjectURL(blob);
-      if (!audioRef.current) audioRef.current = new Audio();
-      audioRef.current.src = url;
-      audioRef.current.onended = () => {
-        setTtsPlaying(false);
-        URL.revokeObjectURL(url);
-      };
-      await audioRef.current.play();
-    } catch (e) {
-      setTtsPlaying(false);
-      await appAlert(`朗读失败: ${(e as Error).message}`, { tone: "danger" });
-    }
-  };
-
-  useEffect(() => () => stopTts(), []);
-
-  const theme = READER_THEMES[settings.theme] || READER_THEMES.sepia;
-  const paragraphs = useMemo(
-    () =>
-      content
-        .replace(/<[^>]+>/g, "")
-        .split(/\n+/)
-        .map((p) => p.trim())
-        .filter(Boolean),
-    [content]
-  );
-
+  }
+  if (format === "pdf") {
+    return (
+      <PdfReader
+        sourceId={sourceId}
+        bookId={bookId}
+        fileUrl={target}
+        title={bookTitle}
+        onBack={back}
+      />
+    );
+  }
   return (
-    <div className="flex-1 min-h-0 flex flex-col overflow-hidden" style={{ background: theme.bg }}>
-      {/* 顶栏 */}
-      {showControls && (
-        <div
-          className="shrink-0 flex items-center gap-3 px-4 py-3 backdrop-blur-xl"
-          style={{ background: "rgba(14,15,17,0.9)", borderBottom: "1px solid var(--cream-line)" }}
-        >
-          <button
-            type="button"
-            onClick={() => navigate(-1)}
-            className="w-9 h-9 flex items-center justify-center rounded-full tap text-cream"
-            style={{ background: "var(--ink-2)", border: "1px solid var(--cream-line)" }}
-          >
-            <IconArrowLeft size={16} />
-          </button>
-          <p className="flex-1 min-w-0 font-display text-sm font-semibold line-clamp-1 text-cream">
-            {chapterTitle}
-          </p>
-          <button
-            type="button"
-            onClick={startTts}
-            className="w-9 h-9 flex items-center justify-center rounded-full tap"
-            style={{
-              background: ttsPlaying ? "var(--ember-soft)" : "var(--ink-2)",
-              color: ttsPlaying ? "var(--ember)" : "var(--cream)",
-              border: "1px solid var(--cream-line)",
-            }}
-            aria-label="朗读"
-          >
-            {ttsPlaying ? <IconPause size={16} /> : <IconPlay size={16} />}
-          </button>
-        </div>
-      )}
-
-      {/* 正文 */}
-      <div
-        ref={scrollRef}
-        className="flex-1 min-h-0 overflow-y-auto"
-        onClick={() => setShowControls((v) => !v)}
-      >
-        {loading ? (
-          <div className="p-8 text-center font-mono text-sm" style={{ color: theme.fg, opacity: 0.6 }}>
-            加载中…
-          </div>
-        ) : error ? (
-          <div className="p-8 text-center">
-            <p style={{ color: theme.fg }}>加载失败: {error}</p>
-            <button
-              type="button"
-              onClick={() => load(chapterHref)}
-              className="mt-3 rounded-lg px-4 py-2 text-sm"
-              style={{ background: "var(--ember)", color: "var(--ink)" }}
-            >
-              重试
-            </button>
-          </div>
-        ) : (
-          <div
-            className="mx-auto max-w-2xl px-6 py-8"
-            style={{
-              color: theme.fg,
-              fontSize: settings.fontSize,
-              lineHeight: settings.lineHeight,
-            }}
-          >
-            <h2 className="font-display font-bold mb-6" style={{ fontSize: settings.fontSize + 6 }}>
-              {chapterTitle}
-            </h2>
-            {paragraphs.map((p, i) => (
-              <p key={i} className="mb-4" style={{ textIndent: "2em" }}>
-                {p}
-              </p>
-            ))}
-            <div className="flex gap-3 mt-8 pb-4">
-              <button
-                type="button"
-                onClick={(e) => {
-                  e.stopPropagation();
-                  goto(prevHref);
-                }}
-                disabled={!prevHref}
-                className="flex-1 rounded-lg py-2.5 text-sm tap"
-                style={{
-                  background: "var(--ink-2)",
-                  color: "var(--cream)",
-                  border: "1px solid var(--cream-line)",
-                  opacity: prevHref ? 1 : 0.4,
-                }}
-              >
-                上一章
-              </button>
-              <button
-                type="button"
-                onClick={(e) => {
-                  e.stopPropagation();
-                  goto(nextHref);
-                }}
-                disabled={!nextHref}
-                className="flex-1 rounded-lg py-2.5 text-sm tap glow-ember"
-                style={{
-                  background: "var(--ember)",
-                  color: "var(--ink)",
-                  opacity: nextHref ? 1 : 0.4,
-                }}
-              >
-                下一章
-              </button>
-            </div>
-          </div>
-        )}
-      </div>
-
-      {/* 底部设置条 */}
-      {showControls && (
-        <div
-          className="shrink-0 flex items-center gap-4 px-4 py-3 backdrop-blur-xl"
-          style={{ background: "rgba(14,15,17,0.9)", borderTop: "1px solid var(--cream-line)" }}
-        >
-          <div className="flex items-center gap-2">
-            <span className="text-[11px] font-mono text-cream-faint">字号</span>
-            <button
-              type="button"
-              onClick={() => setSettings({ fontSize: Math.max(14, settings.fontSize - 1) })}
-              className="w-7 h-7 rounded tap text-cream"
-              style={{ background: "var(--ink-2)", border: "1px solid var(--cream-line)" }}
-            >
-              -
-            </button>
-            <span className="text-sm text-cream w-6 text-center">{settings.fontSize}</span>
-            <button
-              type="button"
-              onClick={() => setSettings({ fontSize: Math.min(32, settings.fontSize + 1) })}
-              className="w-7 h-7 rounded tap text-cream"
-              style={{ background: "var(--ink-2)", border: "1px solid var(--cream-line)" }}
-            >
-              +
-            </button>
-          </div>
-          <div className="flex items-center gap-1.5 ml-auto">
-            {(["sepia", "paper", "dark"] as const).map((t) => (
-              <button
-                key={t}
-                type="button"
-                onClick={() => setSettings({ theme: t })}
-                className="w-7 h-7 rounded-full tap"
-                style={{
-                  background: READER_THEMES[t].bg,
-                  border: settings.theme === t ? "2px solid var(--ember)" : "1px solid var(--cream-line)",
-                }}
-                aria-label={t}
-              />
-            ))}
-          </div>
-        </div>
-      )}
-    </div>
+    <ChapterReader
+      sourceId={sourceId}
+      chapterHref={target}
+      tocHref={tocHref}
+      bookId={bookId}
+      bookTitle={bookTitle}
+      onBack={back}
+      onNavigateChapter={(href) =>
+        navigate(
+          `/book/reader/${encodeURIComponent(sourceId)}/${encodeURIComponent(
+            href
+          )}?title=${encodeURIComponent(bookTitle)}&toc=${encodeURIComponent(
+            tocHref || ""
+          )}&bookId=${encodeURIComponent(bookId)}`,
+          { replace: true }
+        )
+      }
+    />
   );
 }

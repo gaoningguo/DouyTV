@@ -434,7 +434,7 @@ export async function getOmniToplistBoards(
           const id = asString(record?.id) || `omni-top-${idx}`;
           return { id, name, cover: asString(record?.coverImgUrl), inlineSongs: songs };
         })
-        .filter((e): e is { id: string; name: string; cover?: string; inlineSongs: MusicSong[] } => !!e);
+        .filter((e): e is { id: string; name: string; cover: string; inlineSongs: MusicSong[] } => !!e);
       // 内联榜单里有歌才用它；否则回退 /toplist/detail。
       if (inline.some((e) => e.inlineSongs.length > 0)) return inline;
     }
@@ -457,7 +457,7 @@ export async function getOmniToplistBoards(
         if (!id || !name) return null;
         return { id, name, cover: asString(record?.coverImgUrl) };
       })
-      .filter((e): e is { id: string; name: string; cover?: string } => !!e);
+      .filter((e): e is { id: string; name: string; cover: string } => !!e);
   } catch {
     return [];
   }

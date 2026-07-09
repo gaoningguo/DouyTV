@@ -16,7 +16,48 @@ import {
 const CONFIG_KEY = "douytv:manga-config";
 const SHELF_KEY = "douytv:manga-shelf";
 const HISTORY_KEY = "douytv:manga-history";
+const SETTINGS_KEY = "douytv:manga-reader-settings";
 const HISTORY_LIMIT = 100;
+
+/** 漫画阅读器设置(对应 MoonTVPlus 的 mangaReadMode/mangaScaleMode/mangaPageGap)。 */
+export type MangaReadMode = "single" | "double" | "vertical" | "horizontal";
+export type MangaScaleMode = "fit" | "original";
+
+export interface MangaReaderSettings {
+  readMode: MangaReadMode;
+  scaleMode: MangaScaleMode;
+  /** 页间距 px,0-48。 */
+  pageGap: number;
+}
+
+export const DEFAULT_MANGA_READER_SETTINGS: MangaReaderSettings = {
+  readMode: "vertical",
+  scaleMode: "fit",
+  pageGap: 0,
+};
+
+function loadReaderSettings(): MangaReaderSettings {
+  try {
+    const raw = localStorage.getItem(SETTINGS_KEY);
+    if (!raw) return { ...DEFAULT_MANGA_READER_SETTINGS };
+    const parsed = JSON.parse(raw) as Partial<MangaReaderSettings>;
+    return {
+      ...DEFAULT_MANGA_READER_SETTINGS,
+      ...parsed,
+      pageGap: Math.min(Math.max(Number(parsed.pageGap ?? 0), 0), 48),
+    };
+  } catch {
+    return { ...DEFAULT_MANGA_READER_SETTINGS };
+  }
+}
+
+function saveReaderSettings(settings: MangaReaderSettings): void {
+  try {
+    localStorage.setItem(SETTINGS_KEY, JSON.stringify(settings));
+  } catch (e) {
+    console.warn("[manga] reader settings persist failed", e);
+  }
+}
 
 function loadArr<T>(key: string): T[] {
   try {
@@ -67,6 +108,10 @@ interface ShelfRow {
   status: string | null;
   last_chapter_id: string | null;
   last_chapter_name: string | null;
+  latest_chapter_id: string | null;
+  latest_chapter_name: string | null;
+  latest_chapter_count: number | null;
+  unread_chapter_count: number | null;
   save_time: number;
 }
 
@@ -95,6 +140,10 @@ function rowToShelf(r: ShelfRow): MangaShelfItem {
     status: r.status ?? undefined,
     lastChapterId: r.last_chapter_id ?? undefined,
     lastChapterName: r.last_chapter_name ?? undefined,
+    latestChapterId: r.latest_chapter_id ?? undefined,
+    latestChapterName: r.latest_chapter_name ?? undefined,
+    latestChapterCount: r.latest_chapter_count ?? undefined,
+    unreadChapterCount: r.unread_chapter_count ?? undefined,
     saveTime: r.save_time,
   };
 }
@@ -117,8 +166,9 @@ function rowToHistory(r: HistoryRow): MangaReadRecord {
 async function sqlUpsertShelf(item: MangaShelfItem): Promise<void> {
   const db = await getDb();
   await db.execute(
-    "INSERT OR REPLACE INTO manga_shelf (source_id, source_name, manga_id, title, cover, description, author, status, last_chapter_id, last_chapter_name, save_time) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11)",
+    "INSERT OR REPLACE INTO manga_shelf (item_key, source_id, source_name, manga_id, title, cover, description, author, status, last_chapter_id, last_chapter_name, latest_chapter_id, latest_chapter_name, latest_chapter_count, unread_chapter_count, save_time) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16)",
     [
+      mangaItemKey(item.sourceId, item.mangaId),
       item.sourceId,
       item.sourceName,
       item.mangaId,
@@ -129,6 +179,10 @@ async function sqlUpsertShelf(item: MangaShelfItem): Promise<void> {
       item.status ?? null,
       item.lastChapterId ?? null,
       item.lastChapterName ?? null,
+      item.latestChapterId ?? null,
+      item.latestChapterName ?? null,
+      item.latestChapterCount ?? null,
+      item.unreadChapterCount ?? null,
       item.saveTime,
     ]
   );
@@ -145,8 +199,9 @@ async function sqlDeleteShelf(sourceId: string, mangaId: string): Promise<void> 
 async function sqlUpsertHistory(record: MangaReadRecord): Promise<void> {
   const db = await getDb();
   await db.execute(
-    "INSERT OR REPLACE INTO manga_history (source_id, source_name, manga_id, chapter_id, chapter_name, title, cover, page_index, page_count, save_time) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10)",
+    "INSERT OR REPLACE INTO manga_history (item_key, source_id, source_name, manga_id, chapter_id, chapter_name, title, cover, page_index, page_count, save_time) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11)",
     [
+      mangaItemKey(record.sourceId, record.mangaId),
       record.sourceId,
       record.sourceName,
       record.mangaId,
@@ -160,7 +215,7 @@ async function sqlUpsertHistory(record: MangaReadRecord): Promise<void> {
     ]
   );
   await db.execute(
-    "DELETE FROM manga_history WHERE (source_id, manga_id) IN (SELECT source_id, manga_id FROM manga_history ORDER BY save_time DESC LIMIT -1 OFFSET $1)",
+    "DELETE FROM manga_history WHERE item_key IN (SELECT item_key FROM manga_history ORDER BY save_time DESC LIMIT -1 OFFSET $1)",
     [HISTORY_LIMIT]
   );
 }
@@ -212,16 +267,34 @@ function mergeHistory(
 
 interface MangaStore {
   config: SuwayomiConfig;
+  readerSettings: MangaReaderSettings;
   shelf: MangaShelfItem[];
   history: MangaReadRecord[];
   hydrated: boolean;
   hydrate: () => Promise<void>;
   setConfig: (patch: Partial<SuwayomiConfig>) => void;
+  setReaderSettings: (patch: Partial<MangaReaderSettings>) => void;
   isOnShelf: (sourceId: string, mangaId: string) => boolean;
   toggleShelf: (item: MangaShelfItem) => void;
+  /** 更新已在架条目的追踪字段(最新章/未读数)。不在架则忽略。 */
+  updateShelfItem: (
+    sourceId: string,
+    mangaId: string,
+    patch: Partial<MangaShelfItem>
+  ) => void;
+  getShelfItem: (sourceId: string, mangaId: string) => MangaShelfItem | undefined;
   upsertHistory: (record: MangaReadRecord) => void;
   getHistory: (sourceId: string, mangaId: string) => MangaReadRecord | undefined;
+  removeHistory: (sourceId: string, mangaId: string) => void;
   clearHistory: () => void;
+}
+
+async function sqlRemoveHistory(sourceId: string, mangaId: string): Promise<void> {
+  const db = await getDb();
+  await db.execute(
+    "DELETE FROM manga_history WHERE source_id = $1 AND manga_id = $2",
+    [sourceId, mangaId]
+  );
 }
 
 async function sqlClearHistory(): Promise<void> {
@@ -231,12 +304,14 @@ async function sqlClearHistory(): Promise<void> {
 
 export const useMangaStore = create<MangaStore>((set, get) => ({
   config: DEFAULT_SUWAYOMI_CONFIG,
+  readerSettings: DEFAULT_MANGA_READER_SETTINGS,
   shelf: [],
   history: [],
   hydrated: false,
   hydrate: async () => {
     if (get().hydrated) return;
     const config = loadConfig();
+    const readerSettings = loadReaderSettings();
     if (isSqlAvailable()) {
       try {
         const localShelf = loadArr<MangaShelfItem>(SHELF_KEY);
@@ -252,6 +327,7 @@ export const useMangaStore = create<MangaStore>((set, get) => ({
         const { shelf, history } = await sqlLoadAll();
         set((st) => ({
           config,
+          readerSettings,
           shelf: mergeShelf(st.shelf, shelf),
           history: mergeHistory(st.history, history),
           hydrated: true,
@@ -263,6 +339,7 @@ export const useMangaStore = create<MangaStore>((set, get) => ({
     }
     set((st) => ({
       config,
+      readerSettings,
       shelf: mergeShelf(st.shelf, loadArr<MangaShelfItem>(SHELF_KEY)),
       history: mergeHistory(st.history, loadArr<MangaReadRecord>(HISTORY_KEY)),
       hydrated: true,
@@ -272,6 +349,11 @@ export const useMangaStore = create<MangaStore>((set, get) => ({
     const next = { ...get().config, ...patch };
     set({ config: next });
     saveConfig(next);
+  },
+  setReaderSettings: (patch) => {
+    const next = { ...get().readerSettings, ...patch };
+    set({ readerSettings: next });
+    saveReaderSettings(next);
   },
   isOnShelf: (sourceId, mangaId) =>
     get().shelf.some(
@@ -304,6 +386,26 @@ export const useMangaStore = create<MangaStore>((set, get) => ({
       }
     }
   },
+  getShelfItem: (sourceId, mangaId) =>
+    get().shelf.find((s) => s.sourceId === sourceId && s.mangaId === mangaId),
+  updateShelfItem: (sourceId, mangaId, patch) => {
+    const existing = get().shelf.find(
+      (s) => s.sourceId === sourceId && s.mangaId === mangaId
+    );
+    if (!existing) return;
+    const updated: MangaShelfItem = { ...existing, ...patch };
+    const next = get().shelf.map((s) =>
+      s.sourceId === sourceId && s.mangaId === mangaId ? updated : s
+    );
+    set({ shelf: next });
+    if (isSqlAvailable()) {
+      void sqlUpsertShelf(updated).catch((e) =>
+        console.error("[manga] updateShelfItem", e)
+      );
+    } else {
+      saveArr(SHELF_KEY, next);
+    }
+  },
   upsertHistory: (record) => {
     const merged: MangaReadRecord = { ...record, saveTime: Date.now() };
     const next = [
@@ -333,6 +435,19 @@ export const useMangaStore = create<MangaStore>((set, get) => ({
       );
     } else {
       saveArr(HISTORY_KEY, []);
+    }
+  },
+  removeHistory: (sourceId, mangaId) => {
+    const next = get().history.filter(
+      (h) => !(h.sourceId === sourceId && h.mangaId === mangaId)
+    );
+    set({ history: next });
+    if (isSqlAvailable()) {
+      void sqlRemoveHistory(sourceId, mangaId).catch((e) =>
+        console.error("[manga] sqlRemoveHistory", e)
+      );
+    } else {
+      saveArr(HISTORY_KEY, next);
     }
   },
 }));

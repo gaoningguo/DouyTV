@@ -67,6 +67,12 @@ export interface MangaShelfItem {
   status?: string;
   lastChapterId?: string;
   lastChapterName?: string;
+  /** 书源当前最新章(用于更新徽章)。 */
+  latestChapterId?: string;
+  latestChapterName?: string;
+  latestChapterCount?: number;
+  /** 相对上次阅读的未读章节数(NEW 徽章 / "已更新 N 话")。 */
+  unreadChapterCount?: number;
 }
 
 export interface MangaReadRecord {
