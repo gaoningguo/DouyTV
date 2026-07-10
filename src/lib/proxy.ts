@@ -1,4 +1,5 @@
 import type { MediaItem } from "@/types/media";
+import { getActiveProxyUrl } from "@/stores/proxy";
 
 export const isTauri =
   typeof window !== "undefined" && "__TAURI_INTERNALS__" in window;
@@ -265,6 +266,7 @@ export function wrapSegment(
   return buildProxyUrl("segment", absUrl, {
     ua: getHeader(headers, "User-Agent"),
     referer: getHeader(headers, "Referer"),
+    proxyUrl: getActiveProxyUrl(),
   });
 }
 
@@ -278,9 +280,12 @@ export function wrapImage(
 ): string | undefined {
   if (!imgUrl) return imgUrl;
   if (!isTauri) return imgUrl;
+  // 图片也走激活的代理(与 scriptFetch 一致)——否则 B站/起点等 CDN 在需代理的网络下
+  // 会直连超时(os error 10060)。
   return buildProxyUrl("image", imgUrl, {
     ua: getHeader(headers, "User-Agent"),
     referer: getHeader(headers, "Referer"),
+    proxyUrl: getActiveProxyUrl(),
   });
 }
 

@@ -32,6 +32,20 @@ import {
 } from "@/lib/book";
 import { useBookStore } from "@/stores/book";
 import type { BookReadRecord, BookShelfItem } from "@/lib/book/types";
+import { wrapImage } from "@/lib/proxy";
+import { Sheet } from "@/components/Sheet";
+import type { DiscoverItem } from "@/lib/discover";
+import {
+  fetchQidianRecommend,
+  fetchQidianFinished,
+  fetchQidianRank,
+  QIDIAN_RANKS,
+} from "@/lib/qidian";
+import {
+  titleVariants,
+  decideResolution,
+  type ScoredCandidate,
+} from "@/lib/resolveTitle";
 import ChapterReader from "@/pages/book/ChapterReader";
 import EpubReader from "@/pages/book/EpubReader";
 import PdfReader from "@/pages/book/PdfReader";
@@ -121,6 +135,306 @@ function PageShell({
   );
 }
 
+// ─── 官方发现区(壳子)—— 起点 推荐 / 榜单 / 完结 ─────────────
+// 数据来自 m.qidian.com(只做展示),点击卡片拿书名去用户配置的书源里搜索解析,
+// 与影视的豆瓣壳子同构。阅读走用户源。
+
+type BookDiscoverTab = "recommend" | "rank" | "finished";
+
+function BookDiscoverCard({
+  item,
+  onClick,
+  resolving,
+}: {
+  item: DiscoverItem;
+  onClick: () => void;
+  resolving: boolean;
+}) {
+  const [failed, setFailed] = useState(false);
+  const src = wrapImage(item.cover, { Referer: "https://www.qidian.com/" });
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      disabled={resolving}
+      className="text-left rounded-xl overflow-hidden tap"
+      style={{ background: "var(--ink-2)", border: "1px solid var(--cream-line)" }}
+    >
+      <div className="aspect-[3/4] relative" style={{ background: "var(--ink)" }}>
+        {item.cover && !failed ? (
+          <img
+            src={src}
+            alt={item.title}
+            loading="lazy"
+            referrerPolicy="no-referrer"
+            onError={() => setFailed(true)}
+            className="w-full h-full object-cover"
+          />
+        ) : (
+          <div className="w-full h-full flex items-center justify-center text-cream-faint">
+            <IconBook size={32} />
+          </div>
+        )}
+        {item.meta && (
+          <span
+            className="absolute top-1 right-1 rounded px-1.5 py-0.5 text-[9px] font-mono"
+            style={{ background: "rgba(14,15,17,0.82)", color: "var(--ember)" }}
+          >
+            {item.meta}
+          </span>
+        )}
+        {resolving && (
+          <div className="absolute inset-0 grid place-items-center bg-black/50">
+            <span className="signal-bars" style={{ height: 18 }}>
+              <span></span>
+              <span></span>
+              <span></span>
+            </span>
+          </div>
+        )}
+      </div>
+      <div className="p-2">
+        <p className="text-xs font-display font-semibold line-clamp-1 text-cream">{item.title}</p>
+        <p className="mt-0.5 text-[10px] text-cream-faint line-clamp-1">
+          {item.author || item.cat || ""}
+        </p>
+      </div>
+    </button>
+  );
+}
+
+function BookDiscover() {
+  const navigate = useNavigate();
+  const sources = useBookStore((s) => s.sources);
+  const subscriptions = useBookStore((s) => s.subscriptions);
+  const hasSource =
+    sources.some((s) => s.enabled !== false) ||
+    subscriptions.some((s) => s.enabled !== false);
+
+  const [tab, setTab] = useState<BookDiscoverTab>("recommend");
+  const [rankKey, setRankKey] = useState(QIDIAN_RANKS[0].key);
+  const [items, setItems] = useState<DiscoverItem[]>([]);
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState("");
+  const [resolving, setResolving] = useState<string | null>(null);
+  const [chooser, setChooser] = useState<{
+    title: string;
+    candidates: ScoredCandidate<BookListItem>[];
+  } | null>(null);
+  const tokenRef = useRef(0);
+
+  useEffect(() => {
+    const token = ++tokenRef.current;
+    setLoading(true);
+    setError("");
+    setItems([]);
+    const run =
+      tab === "recommend"
+        ? fetchQidianRecommend()
+        : tab === "finished"
+          ? fetchQidianFinished()
+          : fetchQidianRank(rankKey);
+    run
+      .then((list) => {
+        if (token === tokenRef.current) setItems(list);
+      })
+      .catch((e) => {
+        if (token === tokenRef.current) setError((e as Error).message);
+      })
+      .finally(() => {
+        if (token === tokenRef.current) setLoading(false);
+      });
+  }, [tab, rankKey]);
+
+  const gotoDetail = useCallback(
+    (b: BookListItem) => {
+      navigate(
+        `/book/detail/${encodeURIComponent(b.sourceId)}/${encodeURIComponent(
+          b.detailHref || b.id
+        )}?title=${encodeURIComponent(b.title)}&cover=${encodeURIComponent(
+          b.cover || ""
+        )}&author=${encodeURIComponent(b.author || "")}`
+      );
+    },
+    [navigate]
+  );
+
+  // 多级解析:逐个查询变体聚合搜索 → 打分决策 → 自动跳 / 弹选择器 / 跳搜索页。
+  const openItem = useCallback(
+    async (item: DiscoverItem) => {
+      if (!hasSource) {
+        void appAlert("阅读需要先添加书源,前往书源管理导入 Legado 书源 / 订阅后即可阅读。", {
+          tone: "warning",
+        });
+        return;
+      }
+      if (resolving) return;
+      setResolving(item.id);
+      try {
+        const seen = new Set<string>();
+        const collected: BookListItem[] = [];
+        for (const q of titleVariants(item.title)) {
+          await searchBooksStream(q, {
+            onSourceResult: (_source, results) => {
+              for (const r of results) {
+                const key = `${r.sourceId}:${r.detailHref || r.id}`;
+                if (!seen.has(key)) {
+                  seen.add(key);
+                  collected.push(r);
+                }
+              }
+            },
+          });
+          const peek = decideResolution(item.title, collected, (c) => c.title);
+          if (peek.kind === "auto") break;
+        }
+        const decision = decideResolution(item.title, collected, (c) => c.title);
+        if (decision.kind === "auto") {
+          gotoDetail(decision.item);
+        } else if (decision.kind === "choose") {
+          setChooser({ title: item.title, candidates: decision.candidates });
+        } else {
+          navigate(`/book/search?q=${encodeURIComponent(item.title)}`);
+        }
+      } catch {
+        navigate(`/book/search?q=${encodeURIComponent(item.title)}`);
+      } finally {
+        setResolving(null);
+      }
+    },
+    [hasSource, resolving, navigate, gotoDetail]
+  );
+
+  const tabs: Array<{ key: BookDiscoverTab; label: string }> = [
+    { key: "recommend", label: "推荐" },
+    { key: "rank", label: "榜单" },
+    { key: "finished", label: "完结" },
+  ];
+
+  return (
+    <div className="p-4 space-y-3">
+      <div className="flex items-center gap-2 overflow-x-auto vod-scroll-row">
+        {tabs.map((t) => (
+          <button
+            key={t.key}
+            type="button"
+            onClick={() => setTab(t.key)}
+            className="shrink-0 rounded-full px-3 py-1 text-xs font-display font-semibold tap"
+            style={{
+              background: tab === t.key ? "var(--ember)" : "var(--ink-2)",
+              color: tab === t.key ? "var(--ink)" : "var(--cream-dim)",
+              border: `1px solid ${tab === t.key ? "var(--ember)" : "var(--cream-line)"}`,
+            }}
+          >
+            {t.label}
+          </button>
+        ))}
+      </div>
+
+      {tab === "rank" && (
+        <div className="flex items-center gap-1.5 overflow-x-auto vod-scroll-row">
+          {QIDIAN_RANKS.map((r) => (
+            <button
+              key={r.key}
+              type="button"
+              onClick={() => setRankKey(r.key)}
+              className="shrink-0 rounded-full px-2.5 py-1 text-[11px] font-display tap whitespace-nowrap"
+              style={{
+                background: rankKey === r.key ? "var(--ember-soft)" : "var(--ink-2)",
+                color: rankKey === r.key ? "var(--ember)" : "var(--cream-dim)",
+                border: `1px solid ${rankKey === r.key ? "var(--ember)" : "var(--cream-line)"}`,
+              }}
+            >
+              {r.label}
+            </button>
+          ))}
+        </div>
+      )}
+
+      {loading && items.length === 0 ? (
+        <div className="grid gap-3" style={{ gridTemplateColumns: "repeat(auto-fill, minmax(110px, 1fr))" }}>
+          {Array.from({ length: 12 }).map((_, i) => (
+            <div key={i} className="space-y-1.5">
+              <div className="aspect-[3/4] rounded-xl animate-pulse" style={{ background: "var(--ink-2)" }} />
+              <div className="h-3 w-3/4 rounded animate-pulse" style={{ background: "var(--ink-2)" }} />
+            </div>
+          ))}
+        </div>
+      ) : error ? (
+        <p className="text-sm text-ember">{error}</p>
+      ) : items.length === 0 ? (
+        <EmptyState icon={<IconBook size={40} />} title="暂无内容" />
+      ) : (
+        <div className="grid gap-3" style={{ gridTemplateColumns: "repeat(auto-fill, minmax(110px, 1fr))" }}>
+          {items.map((item) => (
+            <BookDiscoverCard
+              key={item.id}
+              item={item}
+              resolving={resolving === item.id}
+              onClick={() => void openItem(item)}
+            />
+          ))}
+        </div>
+      )}
+
+      {/* 多候选选择器 */}
+      {chooser && (
+        <Sheet
+          open={!!chooser}
+          onClose={() => setChooser(null)}
+          side="bottom"
+          title={`选择「${chooser.title}」的来源`}
+        >
+          <div className="p-3 space-y-2">
+            <p className="text-[11px] text-cream-faint px-1">
+              官方书名与书源里的名字可能有差异,选一个正确的:
+            </p>
+            {chooser.candidates.map((c) => (
+              <button
+                key={`${c.item.sourceId}:${c.item.detailHref || c.item.id}`}
+                type="button"
+                onClick={() => {
+                  gotoDetail(c.item);
+                  setChooser(null);
+                }}
+                className="w-full flex gap-3 rounded-lg p-2.5 text-left tap"
+                style={{ background: "var(--ink-2)", border: "1px solid var(--cream-line)" }}
+              >
+                <div className="w-10 h-14 shrink-0 rounded overflow-hidden" style={{ background: "var(--ink)" }}>
+                  {c.item.cover && (
+                    <img src={c.item.cover} alt="" loading="lazy" className="w-full h-full object-cover" />
+                  )}
+                </div>
+                <div className="min-w-0 flex-1">
+                  <p className="text-sm font-display font-semibold line-clamp-1 text-cream">{c.item.title}</p>
+                  {c.item.author && (
+                    <p className="text-[11px] text-cream-dim line-clamp-1 mt-0.5">{c.item.author}</p>
+                  )}
+                  <p className="text-[10px] font-mono text-cream-faint mt-0.5">
+                    {c.item.sourceName} · 匹配度 {Math.round(c.score * 100)}%
+                  </p>
+                </div>
+              </button>
+            ))}
+            <button
+              type="button"
+              onClick={() => {
+                const t = chooser.title;
+                setChooser(null);
+                navigate(`/book/search?q=${encodeURIComponent(t)}`);
+              }}
+              className="w-full text-center px-4 py-2.5 rounded-lg text-sm tap text-cream-dim"
+              style={{ background: "var(--ink)", border: "1px solid var(--cream-line)" }}
+            >
+              都不对,去搜索页手动找
+            </button>
+          </div>
+        </Sheet>
+      )}
+    </div>
+  );
+}
+
 // ─── 首页 / 书架 ────────────────────────────────────────────
 function BookHome() {
   const navigate = useNavigate();
@@ -169,61 +483,58 @@ function BookHome() {
         </div>
       }
     >
-      {!hasSource ? (
-        <EmptyState
-          icon={<IconBook size={48} />}
-          title="还没有配置书源"
-          subtitle="前往书源管理添加 OPDS 目录或导入 Legado 书源 / 订阅,即可搜索和阅读小说。"
-          action={
+      <div>
+        {/* 书架:有书才显示 */}
+        {shelf.length > 0 && (
+          <section className="p-4">
+            <h2 className="font-display font-bold text-sm text-cream mb-3">我的书架</h2>
+            <div className="grid gap-3" style={{ gridTemplateColumns: "repeat(auto-fill, minmax(150px, 1fr))" }}>
+              {shelf.map((item) => {
+                const rec = records.find(
+                  (r) => r.sourceId === item.sourceId && r.bookId === item.bookId
+                );
+                return (
+                  <BookShelfCard
+                    key={`${item.sourceId}:${item.bookId}`}
+                    item={item}
+                    record={rec}
+                    onOpen={() =>
+                      navigate(
+                        `/book/detail/${encodeURIComponent(item.sourceId)}/${encodeURIComponent(
+                          item.detailHref || item.bookId
+                        )}?title=${encodeURIComponent(item.title)}`
+                      )
+                    }
+                  />
+                );
+              })}
+            </div>
+          </section>
+        )}
+
+        {/* 未配置书源:细提示条(不再整页拦截,发现区照常展示) */}
+        {!hasSource && (
+          <div
+            className="mx-4 mt-1 flex items-center justify-between gap-3 rounded-lg p-3"
+            style={{ background: "var(--ink-2)", border: "1px solid var(--cream-line)" }}
+          >
+            <p className="text-xs text-cream-dim leading-relaxed">
+              阅读需要先添加书源,导入 Legado 书源 / 订阅后即可打开下面的官方推荐。
+            </p>
             <button
               type="button"
               onClick={() => navigate("/settings/book-hub")}
-              className="rounded-lg px-4 py-2 text-sm font-semibold tap glow-ember"
+              className="shrink-0 px-3 py-1.5 rounded-lg text-xs font-display font-semibold tap"
               style={{ background: "var(--ember)", color: "var(--ink)" }}
             >
               添加书源
             </button>
-          }
-        />
-      ) : shelf.length === 0 ? (
-        <EmptyState
-          icon={<IconBookmark size={48} />}
-          title="书架空空如也"
-          subtitle="搜索感兴趣的小说并加入书架,进度会自动记录。"
-          action={
-            <button
-              type="button"
-              onClick={() => navigate("/book/search")}
-              className="rounded-lg px-4 py-2 text-sm font-semibold tap glow-ember"
-              style={{ background: "var(--ember)", color: "var(--ink)" }}
-            >
-              去搜索
-            </button>
-          }
-        />
-      ) : (
-        <div className="p-4 grid gap-3" style={{ gridTemplateColumns: "repeat(auto-fill, minmax(150px, 1fr))" }}>
-          {shelf.map((item) => {
-            const rec = records.find(
-              (r) => r.sourceId === item.sourceId && r.bookId === item.bookId
-            );
-            return (
-              <BookShelfCard
-                key={`${item.sourceId}:${item.bookId}`}
-                item={item}
-                record={rec}
-                onOpen={() =>
-                  navigate(
-                    `/book/detail/${encodeURIComponent(item.sourceId)}/${encodeURIComponent(
-                      item.detailHref || item.bookId
-                    )}?title=${encodeURIComponent(item.title)}`
-                  )
-                }
-              />
-            );
-          })}
-        </div>
-      )}
+          </div>
+        )}
+
+        {/* 官方发现区(壳子)—— 起点 推荐/榜单/完结,常驻 */}
+        <BookDiscover />
+      </div>
     </PageShell>
   );
 }
@@ -272,6 +583,7 @@ function BookShelfCard({
 // ─── 搜索 ────────────────────────────────────────────────
 function BookSearch() {
   const navigate = useNavigate();
+  const [searchParams] = useSearchParams();
   const [query, setQuery] = useState("");
   const [sourceId, setSourceId] = useState("");
   const [sources, setSources] = useState<BookSource[]>([]);
@@ -289,8 +601,8 @@ function BookSearch() {
       .catch(() => undefined);
   }, []);
 
-  const run = useCallback(async () => {
-    const q = query.trim();
+  const run = useCallback(async (override?: string) => {
+    const q = (override ?? query).trim();
     if (!q) return;
     const token = ++runTokenRef.current;
     setLoading(true);
@@ -334,6 +646,16 @@ function BookSearch() {
     }
   }, [query, sourceId]);
 
+  // 从官方发现区跳来时带 ?q=书名,自动预填 + 搜索一次。
+  const autoQ = searchParams.get("q") || "";
+  const autoRanRef = useRef("");
+  useEffect(() => {
+    if (!autoQ || autoRanRef.current === autoQ) return;
+    autoRanRef.current = autoQ;
+    setQuery(autoQ);
+    void run(autoQ);
+  }, [autoQ, run]);
+
   return (
     <PageShell title="搜索小说" eyebrow="BOOKS · SEARCH">
       <div className="p-4 space-y-3">
@@ -349,7 +671,7 @@ function BookSearch() {
           />
           <button
             type="button"
-            onClick={run}
+            onClick={() => run()}
             disabled={loading || !query.trim()}
             className="rounded-lg px-5 text-sm font-semibold tap glow-ember"
             style={{ background: "var(--ember)", color: "var(--ink)", opacity: loading || !query.trim() ? 0.5 : 1 }}

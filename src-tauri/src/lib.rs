@@ -3177,6 +3177,9 @@ pub fn run() {
                 };
                 let is_m3u8_path = path.ends_with("/m3u8");
                 let is_stream_path = path.ends_with("/stream");
+                // 图片(海报/封面)是静态资源:给 WebView 下发 Cache-Control,
+                // 否则每次滚动进视口都重新打一遍代理 → 明显比浏览器慢(浏览器直接吃 CDN 的缓存头)。
+                let is_image_path = path.ends_with("/image");
 
                 // 直播 FLV / MPEG-TS 通常无 EOF，read_to_end 会一直读到上限。
                 // 给 /proxy/stream 路径放宽 timeout —— 否则 30s 内 ureq 超时会把流断成 502。
@@ -3416,6 +3419,10 @@ pub fn run() {
                     .header("Accept-Ranges", accept_ranges);
                 if let Some(cr) = content_range {
                     builder = builder.header("Content-Range", cr);
+                }
+                // 封面/海报静态资源:让 WebView 缓存一天,滚动回来秒出,不再重打代理。
+                if is_image_path && status == 200 {
+                    builder = builder.header("Cache-Control", "public, max-age=86400, immutable");
                 }
                 let response = builder.body(bytes).unwrap();
                 responder.respond(response);

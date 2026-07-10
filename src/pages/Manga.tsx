@@ -13,6 +13,8 @@ import {
   IconBookmark,
   IconBookmarkFill,
   IconChevronDown,
+  IconChevronLeft,
+  IconChevronRight,
   IconChevronUp,
   IconGrid,
   IconList,
@@ -23,7 +25,6 @@ import {
 import {
   getMangaSources,
   searchMangaStream,
-  getAggregatedRecommendStream,
   getMangaDetail,
   getMangaChapters,
   getMangaChapterPages,
@@ -42,8 +43,21 @@ import MangaBrowse from "@/pages/manga/Browse";
 import type {
   MangaReadRecord,
   MangaShelfItem,
-  MangaRecommendType,
 } from "@/lib/manga/types";
+import { appAlert } from "@/components/AppDialog";
+import { wrapImage } from "@/lib/proxy";
+import type { DiscoverItem } from "@/lib/discover";
+import {
+  fetchMangaHome,
+  BILI_MANGA_REFERER,
+  type MangaHomeData,
+  type BannerCard,
+} from "@/lib/mangaDiscover";
+import {
+  titleVariants,
+  decideResolution,
+  type ScoredCandidate,
+} from "@/lib/resolveTitle";
 
 // 漫画模块页面：单一 Routes 承载 首页/书架、搜索、详情、阅读器 四个视图。
 // 数据全部走 Suwayomi 客户端（Rust script_http_bytes 绕 CORS），书架/历史走 manga store。
@@ -58,6 +72,7 @@ export default function Manga() {
     <Routes>
       <Route path="/" element={<MangaHome />} />
       <Route path="search" element={<MangaSearch />} />
+      <Route path="ranking" element={<MangaRanking />} />
       <Route path="browse" element={<MangaBrowse />} />
       <Route path="detail/:sourceId/:mangaId" element={<MangaDetailView />} />
       <Route
@@ -158,7 +173,7 @@ function MangaCover({
       onPointerUp={onPointerUp}
       onPointerLeave={onPointerLeave}
       onContextMenu={onContextMenu}
-      className="group text-left w-full tap"
+      className="group text-left w-full tap relative transition-transform duration-300 hover:z-20 hover:scale-[1.06]"
     >
       <div
         className="relative aspect-[3/4] w-full overflow-hidden rounded-lg"
@@ -170,7 +185,7 @@ function MangaCover({
             alt={title}
             loading="lazy"
             onError={() => setFailed(true)}
-            className="w-full h-full object-cover transition-transform group-hover:scale-105"
+            className="w-full h-full object-cover"
           />
         ) : (
           <div className="w-full h-full flex items-center justify-center text-cream-faint">
@@ -246,6 +261,951 @@ function MangaHistoryCard({
   );
 }
 
+// ─── 官方发现区(壳子)—— B站热门 + 包子完结/题材 ─────────
+// 数据来自官方接口(只做展示),点击卡片拿标题去用户配置的 Suwayomi 源里搜索解析,
+// 与影视的豆瓣壳子同构。
+
+type RankRegion = "JP" | "CN" | "KO";
+
+// 官方封面卡片:与 MangaCover 同视觉,但走 wrapImage(封面是外站,Tauri 下过代理)。
+function DiscoverCover({
+  item,
+  onClick,
+  resolving,
+}: {
+  item: DiscoverItem;
+  onClick: () => void;
+  resolving: boolean;
+}) {
+  const [failed, setFailed] = useState(false);
+  const src = wrapImage(item.cover, { Referer: BILI_MANGA_REFERER });
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      disabled={resolving}
+      className="group text-left w-full tap relative transition-transform duration-300 hover:z-20 hover:scale-[1.06]"
+    >
+      {/* 封面 3:4,标签叠在封面底部(照 B站 top-[255px] + bg-white/25)。
+          整卡放大而非只裁剪封面 —— 外层不裁剪,靠 hover:scale + z 抬升盖过邻卡。 */}
+      <div
+        className="relative aspect-[3/4] w-full overflow-hidden rounded-lg"
+        style={{ background: "var(--ink-2)", border: "1px solid var(--cream-line)" }}
+      >
+        {item.cover && !failed ? (
+          <img
+            src={src}
+            alt={item.title}
+            loading="lazy"
+            referrerPolicy="no-referrer"
+            onError={() => setFailed(true)}
+            className="w-full h-full object-cover"
+          />
+        ) : (
+          <div className="w-full h-full flex items-center justify-center text-cream-faint">
+            <IconManga size={32} />
+          </div>
+        )}
+        {item.cat && (
+          <>
+            <div
+              className="absolute inset-x-0 bottom-0 h-1/3 pointer-events-none"
+              style={{ background: "linear-gradient(to top, rgba(0,0,0,0.6), transparent)" }}
+            />
+            <div className="absolute bottom-1.5 left-1.5 right-1.5 flex gap-1 overflow-hidden">
+              {item.cat.split(" ").filter(Boolean).slice(0, 2).map((tag) => (
+                <span
+                  key={tag}
+                  className="truncate rounded px-1.5 py-0.5 text-[10px] leading-tight text-white/90"
+                  style={{ background: "rgba(255,255,255,0.25)" }}
+                >
+                  {tag}
+                </span>
+              ))}
+            </div>
+          </>
+        )}
+        {resolving && (
+          <div className="absolute inset-0 grid place-items-center bg-black/50">
+            <span className="signal-bars" style={{ height: 18 }}>
+              <span></span>
+              <span></span>
+              <span></span>
+            </span>
+          </div>
+        )}
+      </div>
+      {/* 标题 text-lg + 分区状态行(畅销指数/人热议中/完结共N话,金色段用 ember) */}
+      <div className="my-2.5 flex h-6 items-center">
+        <h3 className="w-0 flex-1 truncate text-base font-display font-semibold text-cream-dim group-hover:text-cream">
+          {item.title}
+        </h3>
+      </div>
+      {item.metaSegs && item.metaSegs.length > 0 && (
+        <p className="truncate text-sm text-cream-faint">
+          {item.metaSegs.map((s, i) => (
+            <span key={i} className={i > 0 ? "ml-1" : ""} style={s.gold ? { color: "var(--ember)" } : undefined}>
+              {s.text}
+            </span>
+          ))}
+        </p>
+      )}
+    </button>
+  );
+}
+
+// 顶部 banner 封面墙(严格照 B站 CSS 复刻):
+//   swiper 居中轮播,每屏 931×398 马赛克(big-card 242×381 ×2 + 堆叠对 141×188 ×3 = 8 卡),
+//   active 屏 opacity 1 / 邻屏 0.5,两侧 12.5% 渐变 mask + 箭头 + 底部圆点。
+//   带简介卡:标题 + 67px 半透黑条推荐语。响应式固定高度,列宽按 931:398 比例。
+
+function BannerSlide({
+  cards,
+  onOpenTitle,
+  onBrowse,
+}: {
+  cards: BannerCard[];
+  onOpenTitle: (title: string) => void;
+  onBrowse: () => void;
+}) {
+  const img = (src: string) => wrapImage(src, { Referer: BILI_MANGA_REFERER });
+  // 与下方分区卡片一致:能拿到标题就走多级解析(匹配到直接进详情、不完全弹选源),
+  // 填充卡没有 resolveTitle 时回落到 comicTitle / mainTitle,实在没有才去浏览页。
+  const click = (c: BannerCard) => {
+    const t = c.resolveTitle || c.comicTitle || c.mainTitle;
+    if (t) onOpenTitle(t);
+    else onBrowse();
+  };
+  // 每屏真实排列(照 DOM):big, 堆叠对, big(featured 浮层), 堆叠对, 堆叠对 = 8 卡。
+  const big1 = cards[0];
+  const pair1 = [cards[1], cards[2]];
+  const big2 = cards[3];
+  const pair2 = [cards[4], cards[5]];
+  const pair3 = [cards[6], cards[7]];
+
+  const BigCard = ({ c }: { c?: BannerCard }) => {
+    if (!c) return null;
+    const featured = !!c.mainTitle;
+    return (
+      <button
+        type="button"
+        onClick={() => click(c)}
+        className="relative block overflow-hidden rounded-[2px] tap group h-full shrink-0"
+        style={{ width: "26%" }}
+      >
+        <img
+          src={img(c.img)}
+          alt={c.mainTitle || ""}
+          referrerPolicy="no-referrer"
+          className="block h-full w-full object-cover transition-transform duration-300 group-hover:scale-105"
+        />
+        {featured && (
+          <div className="pointer-events-none absolute inset-0">
+            {/* eyebrow(bottom-90 scale-0.8)+ 主标题 h3(bottom-75) */}
+            {c.eyebrow && (
+              <div className="absolute left-3 origin-left" style={{ bottom: 90, transform: "scale(0.8)" }}>
+                <span className="block max-w-[220px] truncate text-xs text-white">{c.eyebrow}</span>
+              </div>
+            )}
+            <div className="absolute left-3 max-w-[220px] origin-left truncate text-xs text-white" style={{ bottom: 75 }}>
+              {c.mainTitle}
+            </div>
+            {/* 67px 黑条:44×33 缩略图 + 漫画名 + 题材色标签 + 推荐语 */}
+            <div className="absolute bottom-0 flex w-full gap-2 px-3" style={{ height: 67, background: "rgba(0,0,0,0.5)", paddingTop: 11, paddingBottom: 11 }}>
+              {c.thumb && (
+                <img src={img(c.thumb)} alt="" referrerPolicy="no-referrer" className="block rounded-[5px] object-cover" style={{ width: 33, height: 44 }} />
+              )}
+              <div className="max-w-[175px] flex-1">
+                <div className="flex items-start justify-between">
+                  <span className="block max-w-[140px] truncate text-[12px] text-white/80">{c.comicTitle}</span>
+                  {c.tag && (
+                    <div className="flex items-center rounded-[5px] px-[2px]" style={{ height: 16, background: c.tagColor || "#76797a" }}>
+                      <span className="block max-w-[50px] truncate text-[11px] text-white">{c.tag}</span>
+                    </div>
+                  )}
+                </div>
+                {c.recommendation && (
+                  <p className="max-w-[170px] truncate text-[10px] text-white/80">{c.recommendation}</p>
+                )}
+              </div>
+            </div>
+          </div>
+        )}
+      </button>
+    );
+  };
+
+  const StackPair = ({ pair }: { pair: (BannerCard | undefined)[] }) => (
+    <div className="flex flex-col h-full shrink-0" style={{ width: "15.1%", gap: "1.3%" }}>
+      {pair.map((c, i) =>
+        !c ? null : (
+          <button
+            key={i}
+            type="button"
+            onClick={() => click(c)}
+            className="block flex-1 min-h-0 overflow-hidden rounded-[2px] tap"
+          >
+            <img src={img(c.img)} alt="" referrerPolicy="no-referrer" className="block h-full w-full object-cover" />
+          </button>
+        )
+      )}
+    </div>
+  );
+
+  return (
+    <div className="flex gap-[0.65%] w-full h-[220px] sm:h-[300px] md:h-[360px]">
+      <BigCard c={big1} />
+      <StackPair pair={pair1} />
+      <BigCard c={big2} />
+      <StackPair pair={pair2} />
+      <StackPair pair={pair3} />
+    </div>
+  );
+}
+
+// B站 swiper loop 复刻:transform 轨道 + 首尾克隆,active 居中、邻屏半透、无限循环。
+const BANNER_SLIDE_W = 0.78; // 每屏占容器宽比例(两侧各露 11% 邻屏)
+const BANNER_GAP = 12;
+
+function BannerWall({
+  slides,
+  onOpenTitle,
+  onBrowse,
+}: {
+  slides: BannerCard[][];
+  resolvingId: string | null;
+  onOpenTitle: (title: string) => void;
+  onBrowse: () => void;
+}) {
+  const n = slides.length;
+  const wrapRef = useRef<HTMLDivElement>(null);
+  const [wrapW, setWrapW] = useState(0);
+  // 扩展列表:[克隆末屏, ...真实, 克隆首屏];pos 指向扩展列表下标,真实首屏在 pos=1。
+  const [pos, setPos] = useState(1);
+  const [anim, setAnim] = useState(true);
+
+  useEffect(() => {
+    const el = wrapRef.current;
+    if (!el) return;
+    const ro = new ResizeObserver(() => setWrapW(el.clientWidth));
+    ro.observe(el);
+    setWrapW(el.clientWidth);
+    return () => ro.disconnect();
+  }, []);
+
+  // 自动播放 5s → 前进一屏。
+  useEffect(() => {
+    if (n <= 1) return;
+    const t = window.setInterval(() => setPos((p) => p + 1), 5000);
+    return () => window.clearInterval(t);
+  }, [n]);
+
+  // 到克隆屏后,动画结束瞬间无动画跳回对应真实屏。
+  const onTransitionEnd = useCallback(() => {
+    if (pos === n + 1) {
+      setAnim(false);
+      setPos(1);
+    } else if (pos === 0) {
+      setAnim(false);
+      setPos(n);
+    }
+  }, [pos, n]);
+  // 关掉动画跳回后,下一帧恢复动画。
+  useEffect(() => {
+    if (!anim) {
+      const id = requestAnimationFrame(() => setAnim(true));
+      return () => cancelAnimationFrame(id);
+    }
+  }, [anim, pos]);
+
+  if (n === 0) return null;
+
+  const ext = [slides[n - 1], ...slides, slides[0]]; // 扩展列表
+  const slideW = wrapW * BANNER_SLIDE_W;
+  const step = slideW + BANNER_GAP;
+  // 让 pos 屏居中:偏移 = 容器中心 - (pos 屏中心)
+  const offset = wrapW / 2 - (pos * step + slideW / 2);
+  // active 真实屏下标(用于圆点高亮)
+  const activeReal = ((pos - 1) % n + n) % n;
+
+  const jump = (realIdx: number) => setPos(realIdx + 1);
+
+  return (
+    <section ref={wrapRef} className="relative -mx-4 bg-black py-3 overflow-hidden">
+      <div
+        className="flex"
+        style={{
+          gap: BANNER_GAP,
+          transform: `translateX(${offset}px)`,
+          transition: anim ? "transform .5s cubic-bezier(.22,.58,.12,.98)" : "none",
+        }}
+        onTransitionEnd={onTransitionEnd}
+      >
+        {ext.map((cards, i) => {
+          const isActive = i === pos;
+          return (
+            <div
+              key={i}
+              className="shrink-0 transition-opacity duration-300"
+              style={{ width: slideW || "78%", opacity: isActive ? 1 : 0.45 }}
+            >
+              <BannerSlide cards={cards} onOpenTitle={onOpenTitle} onBrowse={onBrowse} />
+            </div>
+          );
+        })}
+      </div>
+
+      {/* 两侧渐变遮罩(照 B站 mask) */}
+      <div className="pointer-events-none absolute inset-y-0 left-0 w-[11%]" style={{ background: "linear-gradient(90deg, rgba(0,0,0,.75), transparent)" }} />
+      <div className="pointer-events-none absolute inset-y-0 right-0 w-[11%]" style={{ background: "linear-gradient(270deg, rgba(0,0,0,.75), transparent)" }} />
+
+      {/* 箭头 */}
+      {n > 1 && (
+        <>
+          <button
+            type="button"
+            aria-label="上一屏"
+            onClick={() => setPos((p) => p - 1)}
+            className="absolute top-1/2 left-1 -translate-y-1/2 grid place-items-center text-white z-10"
+            style={{ width: 32, height: 80, background: "rgba(0,0,0,.5)" }}
+          >
+            <IconChevronLeft size={20} />
+          </button>
+          <button
+            type="button"
+            aria-label="下一屏"
+            onClick={() => setPos((p) => p + 1)}
+            className="absolute top-1/2 right-1 -translate-y-1/2 grid place-items-center text-white z-10"
+            style={{ width: 32, height: 80, background: "rgba(0,0,0,.5)" }}
+          >
+            <IconChevronRight size={20} />
+          </button>
+        </>
+      )}
+
+      {/* 圆点 */}
+      {n > 1 && (
+        <div className="flex justify-center gap-2 mt-2">
+          {slides.map((_, i) => (
+            <button
+              key={i}
+              type="button"
+              aria-label={`第 ${i + 1} 屏`}
+              onClick={() => jump(i)}
+              className="rounded-full"
+              style={{ width: 6, height: 6, background: "#fff", opacity: i === activeReal ? 1 : 0.5 }}
+            />
+          ))}
+        </div>
+      )}
+    </section>
+  );
+}
+
+// 为你推荐(严格照 B站 DOM 复刻):标题 32px + 深色圆角卡,
+//   左栏 标题24px/灰药丸标签/427px 分隔线/2行简介/64×85 缩略图条(选中放大 1.25),
+//   右侧大图 562×316 向上探出卡片,右下角 去阅读 药丸。整体桌面重叠、窄屏堆叠。
+function RecommendPanel({
+  items,
+  resolvingId,
+  onOpen,
+}: {
+  items: DiscoverItem[];
+  resolvingId: string | null;
+  onOpen: (item: DiscoverItem) => void;
+}) {
+  const [sel, setSel] = useState(0);
+  const [failed, setFailed] = useState<Record<string, boolean>>({});
+  const [paused, setPaused] = useState(false);
+  // 左侧缩略图条自动轮播(照 B站),右侧大图跟随;鼠标悬停/交互时暂停。
+  useEffect(() => {
+    if (paused || items.length <= 1) return;
+    const t = window.setInterval(() => {
+      setSel((s) => (s + 1) % items.length);
+    }, 4000);
+    return () => window.clearInterval(t);
+  }, [paused, items.length]);
+  if (items.length === 0) return null;
+  const cur = items[Math.min(sel, items.length - 1)];
+  const bg = cur.wide || cur.cover;
+  const tags = cur.cat ? cur.cat.split(" ").filter(Boolean).slice(0, 3) : [];
+  const readBtn = (
+    <button
+      type="button"
+      disabled={resolvingId === cur.id}
+      onClick={() => onOpen(cur)}
+      className="absolute right-3 bottom-3 grid place-items-center rounded-[22px] tap hover:scale-105 transition-transform"
+      style={{ width: 82, height: 36, background: "rgba(0,0,0,0.5)" }}
+    >
+      {resolvingId === cur.id ? (
+        <span className="signal-bars" style={{ height: 12 }}>
+          <span></span>
+          <span></span>
+          <span></span>
+        </span>
+      ) : (
+        <span className="text-[14px] text-white">去阅读</span>
+      )}
+    </button>
+  );
+  return (
+    <section
+      id="mg-reco"
+      style={{ scrollMarginTop: 12 }}
+      onMouseEnter={() => setPaused(true)}
+      onMouseLeave={() => setPaused(false)}
+    >
+      {/* 标题 32px + Pick你的最爱 */}
+      <div className="flex items-baseline gap-1.5 mb-3">
+        <h2 className="font-display text-2xl sm:text-[32px] font-normal text-cream leading-none">为你推荐</h2>
+        <span className="text-base text-cream-faint">Pick你的最爱！</span>
+      </div>
+      {/* 深色圆角卡;桌面右侧留白给大图重叠,大图向上探出所以留 mt。窄屏堆叠 */}
+      <div
+        className="relative flex flex-col md:block rounded-2xl md:mt-7 md:pr-[47%] md:min-h-[300px]"
+        style={{ background: "var(--ink-2)", border: "1px solid var(--cream-line)" }}
+      >
+        {/* 左栏信息 */}
+        <div className="p-5 md:p-6 order-2 md:order-none">
+          <h3 className="truncate text-xl sm:text-2xl font-display font-bold text-cream">{cur.title}</h3>
+          {tags.length > 0 && (
+            <div className="mt-3 flex flex-wrap gap-2">
+              {tags.map((t) => (
+                <span key={t} className="rounded px-1.5 py-0.5 text-[13px] text-white" style={{ background: "#76797a" }}>
+                  {t}
+                </span>
+              ))}
+            </div>
+          )}
+          <div className="mt-4 h-px max-w-[427px]" style={{ background: "var(--cream-line)" }} />
+          {cur.desc && (
+            <p className="mt-3 max-w-[427px] text-[14px] leading-relaxed text-cream-dim line-clamp-2">{cur.desc}</p>
+          )}
+          {/* 缩略图条 64×85,选中放大;py/-my 抵消给 hover 放大留出溢出空间不被裁 */}
+          <div className="mt-5 flex items-center gap-3 overflow-x-auto overflow-y-visible vod-scroll-row py-3 -my-2">
+            {items.map((it, i) => (
+              <button
+                key={it.id}
+                type="button"
+                onMouseEnter={() => setSel(i)}
+                onClick={() => setSel(i)}
+                className={`relative shrink-0 overflow-hidden rounded-[5px] tap transition-transform duration-300 hover:z-20 hover:scale-125 ${i === sel ? "scale-110" : "scale-100"}`}
+                style={{
+                  width: 64,
+                  height: 85,
+                  border: `1px solid ${i === sel ? "var(--ember)" : "transparent"}`,
+                }}
+              >
+                {it.cover && (
+                  <img
+                    src={wrapImage(it.cover, { Referer: BILI_MANGA_REFERER })}
+                    alt={it.title}
+                    loading="lazy"
+                    referrerPolicy="no-referrer"
+                    className="w-full h-full object-cover"
+                  />
+                )}
+              </button>
+            ))}
+          </div>
+        </div>
+        {/* 右侧大图:窄屏在顶部(16:9 block);桌面向上探出黑框(照 B站 -top-27),
+            用负 top + 底部内嵌,高度受控不横向溢出。 */}
+        <div
+          className="relative order-1 md:order-none w-full overflow-hidden rounded-t-2xl aspect-[16/9] md:aspect-auto md:rounded-xl md:absolute md:-top-7 md:bottom-5 md:right-6 md:w-[46%]"
+          style={{ background: "var(--ink)" }}
+        >
+          {bg && !failed[cur.id] ? (
+            <img
+              key={cur.id}
+              src={wrapImage(bg, { Referer: BILI_MANGA_REFERER })}
+              alt={cur.title}
+              referrerPolicy="no-referrer"
+              onError={() => setFailed((f) => ({ ...f, [cur.id]: true }))}
+              className="absolute inset-0 w-full h-full object-cover transition-all duration-500"
+            />
+          ) : (
+            <div className="absolute inset-0 grid place-items-center text-cream-faint">
+              <IconManga size={40} />
+            </div>
+          )}
+          {readBtn}
+        </div>
+      </div>
+    </section>
+  );
+}
+
+// 分区单行(畅销热门/全网热议/完结佳作)—— 照 B站:标题34px + 副标题 + 单行卡 + 右侧大圆箭头。
+function ArrowRow({
+  title,
+  subtitle,
+  items,
+  resolvingId,
+  onOpen,
+  anchorId,
+}: {
+  title: string;
+  subtitle?: string;
+  items: DiscoverItem[];
+  resolvingId: string | null;
+  onOpen: (item: DiscoverItem) => void;
+  anchorId?: string;
+}) {
+  const scrollRef = useRef<HTMLDivElement>(null);
+  const [atStart, setAtStart] = useState(true);
+  const [atEnd, setAtEnd] = useState(false);
+  const updateEdges = useCallback(() => {
+    const el = scrollRef.current;
+    if (!el) return;
+    setAtStart(el.scrollLeft <= 2);
+    setAtEnd(el.scrollLeft + el.clientWidth >= el.scrollWidth - 2);
+  }, []);
+  useEffect(() => {
+    updateEdges();
+  }, [updateEdges, items.length]);
+  if (items.length === 0) return null;
+  const nudge = (dir: -1 | 1) => {
+    const el = scrollRef.current;
+    if (el) el.scrollBy({ left: dir * el.clientWidth * 0.85, behavior: "smooth" });
+  };
+  // 箭头锚定在封面竖直中心(桌面卡宽 190,封面 3:4 → 高≈253,中心≈127),
+  // 用固定 top + translateY(-50%),不随卡片文字高度变化而移位。
+  const arrowBtn = (dir: -1 | 1, disabled: boolean) => (
+    <button
+      type="button"
+      onClick={() => nudge(dir)}
+      aria-label={dir < 0 ? "上一批" : "下一批"}
+      className="hidden md:grid place-items-center absolute z-10 rounded-full tap text-cream transition-opacity"
+      style={{
+        width: 44,
+        height: 44,
+        top: 127,
+        transform: "translateY(-50%)",
+        [dir < 0 ? "left" : "right"]: -8,
+        background: "rgba(14,15,17,0.85)",
+        border: "1px solid var(--cream-line)",
+        boxShadow: "0 0 14px rgba(0,0,0,0.4)",
+        opacity: disabled ? 0 : 1,
+        pointerEvents: disabled ? "none" : "auto",
+      }}
+    >
+      {dir < 0 ? <IconChevronLeft size={20} /> : <IconChevronRight size={20} />}
+    </button>
+  );
+  return (
+    <section id={anchorId} style={{ scrollMarginTop: 12 }}>
+      {/* 标题 34px + 副标题灰 */}
+      <div className="flex items-baseline gap-1.5 mb-4">
+        <h2 className="font-display text-2xl sm:text-[30px] font-semibold text-cream leading-none">{title}</h2>
+        {subtitle && <span className="text-base text-cream-faint">{subtitle}</span>}
+      </div>
+      <div className="relative">
+        {/* py + -my 抵消:给放大卡留出上下溢出空间,又不撑高行 */}
+        <div ref={scrollRef} onScroll={updateEdges} className="flex gap-4 overflow-x-auto overflow-y-visible scrollbar-hide py-3 -my-3 px-1 -mx-1">
+          {items.map((item) => (
+            <div key={item.id} className="shrink-0 w-[150px] sm:w-[190px]">
+              <DiscoverCover
+                item={item}
+                resolving={resolvingId === item.id}
+                onClick={() => onOpen(item)}
+              />
+            </div>
+          ))}
+        </div>
+        {arrowBtn(-1, atStart)}
+        {arrowBtn(1, atEnd)}
+      </div>
+    </section>
+  );
+}
+
+// 榜单卡片网格:大号橙色序号压在封面左上角(照搬 B站高能排行)。
+// 首页传前 6 → 单行;查看全部页传全部 → 自动换行。
+function RankList({
+  items,
+  resolvingId,
+  onOpen,
+}: {
+  items: DiscoverItem[];
+  resolvingId: string | null;
+  onOpen: (item: DiscoverItem) => void;
+}) {
+  return (
+    <div className="grid grid-cols-3 sm:grid-cols-4 md:grid-cols-6 gap-3">
+      {items.map((item, i) => {
+        const rank = i + 1;
+        return (
+          <button
+            key={item.id}
+            type="button"
+            disabled={resolvingId === item.id}
+            onClick={() => onOpen(item)}
+            className="group text-left w-full tap relative transition-transform duration-300 hover:z-20 hover:scale-[1.06]"
+          >
+            {/* 序号大号斜体压在封面左上角上方(照 B站 -top-7 序号图) */}
+            <div className="relative" style={{ paddingTop: 14 }}>
+              <span
+                className="absolute left-0 z-10 font-display font-extrabold italic leading-none pointer-events-none"
+                style={{
+                  top: 0,
+                  fontSize: 46,
+                  color: rank <= 3 ? "var(--ember)" : "var(--cream)",
+                  textShadow: "0 2px 8px rgba(0,0,0,0.9)",
+                }}
+              >
+                {rank}
+              </span>
+              <div
+                className="relative aspect-[3/4] w-full overflow-hidden rounded-lg"
+                style={{ background: "var(--ink-2)", border: "1px solid var(--cream-line)" }}
+              >
+                {item.cover ? (
+                  <img
+                    src={wrapImage(item.cover, { Referer: BILI_MANGA_REFERER })}
+                    alt={item.title}
+                    loading="lazy"
+                    referrerPolicy="no-referrer"
+                    className="w-full h-full object-cover"
+                  />
+                ) : (
+                  <div className="w-full h-full grid place-items-center text-cream-faint">
+                    <IconManga size={28} />
+                  </div>
+                )}
+                {resolvingId === item.id && (
+                  <div className="absolute inset-0 grid place-items-center bg-black/50">
+                    <span className="signal-bars" style={{ height: 18 }}>
+                      <span></span>
+                      <span></span>
+                      <span></span>
+                    </span>
+                  </div>
+                )}
+              </div>
+            </div>
+            {/* 标题 18px + 灰色作者/热度 */}
+            <p className="mt-2 truncate text-[15px] font-display font-semibold text-cream-dim group-hover:text-cream">
+              {item.title}
+            </p>
+            {(item.author || item.meta) && (
+              <p className="mt-1 truncate text-xs text-cream-faint">
+                {item.author || item.meta}
+              </p>
+            )}
+          </button>
+        );
+      })}
+    </div>
+  );
+}
+
+// 官方卡片 → 用户 Suwayomi 源的多级解析(发现区 + 榜单全部页共用)。
+function useMangaResolve() {
+  const navigate = useNavigate();
+  const config = useMangaStore((s) => s.config);
+  const configured = isMangaConfigured(config);
+  const [resolvingId, setResolvingId] = useState<string | null>(null);
+  const [chooser, setChooser] = useState<{
+    title: string;
+    candidates: ScoredCandidate<MangaSearchItem>[];
+  } | null>(null);
+
+  const gotoDetail = useCallback(
+    (m: MangaSearchItem) => {
+      navigate(
+        `/manga/detail/${encodeURIComponent(m.sourceId)}/${encodeURIComponent(m.id)}?title=${encodeURIComponent(m.title)}&cover=${encodeURIComponent(m.cover)}&sourceName=${encodeURIComponent(m.sourceName)}`
+      );
+    },
+    [navigate]
+  );
+
+  // 逐个查询变体聚合搜索 → 打分决策 → 自动跳 / 弹选择器 / 跳搜索页。
+  const openItem = useCallback(
+    async (item: DiscoverItem) => {
+      if (!configured) {
+        void appAlert("漫画阅读需要先配置 Suwayomi 服务,前往设置添加后即可阅读官方推荐。", {
+          tone: "warning",
+        });
+        return;
+      }
+      if (resolvingId) return;
+      setResolvingId(item.id);
+      try {
+        const seen = new Set<string>();
+        const collected: MangaSearchItem[] = [];
+        for (const q of titleVariants(item.title)) {
+          const res = await searchMangaStream(config, q, {});
+          for (const r of res.results) {
+            const key = `${r.sourceId}:${r.id}`;
+            if (!seen.has(key)) {
+              seen.add(key);
+              collected.push(r);
+            }
+          }
+          const peek = decideResolution(item.title, collected, (c) => c.title);
+          if (peek.kind === "auto") break;
+        }
+        const decision = decideResolution(item.title, collected, (c) => c.title);
+        if (decision.kind === "auto") {
+          gotoDetail(decision.item);
+        } else if (decision.kind === "choose") {
+          setChooser({ title: item.title, candidates: decision.candidates });
+        } else {
+          navigate(`/manga/search?q=${encodeURIComponent(item.title)}`);
+        }
+      } catch {
+        navigate(`/manga/search?q=${encodeURIComponent(item.title)}`);
+      } finally {
+        setResolvingId(null);
+      }
+    },
+    [config, configured, resolvingId, navigate, gotoDetail]
+  );
+
+  return { resolvingId, chooser, setChooser, openItem, gotoDetail };
+}
+
+// 多候选选择器(发现区 + 榜单全部页共用)。
+function MangaChooser({
+  chooser,
+  onClose,
+  onPick,
+  onManual,
+}: {
+  chooser: { title: string; candidates: ScoredCandidate<MangaSearchItem>[] } | null;
+  onClose: () => void;
+  onPick: (m: MangaSearchItem) => void;
+  onManual: (title: string) => void;
+}) {
+  if (!chooser) return null;
+  return (
+    <Sheet open={!!chooser} onClose={onClose} side="bottom" title={`选择「${chooser.title}」的来源`}>
+      <div className="p-3 space-y-2">
+        <p className="text-[11px] text-cream-faint px-1">
+          官方标题与源里的书名可能有差异,选一个正确的:
+        </p>
+        {chooser.candidates.map((c) => (
+          <button
+            key={`${c.item.sourceId}:${c.item.id}`}
+            type="button"
+            onClick={() => onPick(c.item)}
+            className="w-full flex gap-3 rounded-lg p-2.5 text-left tap"
+            style={{ background: "var(--ink-2)", border: "1px solid var(--cream-line)" }}
+          >
+            <div className="w-10 h-14 shrink-0 rounded overflow-hidden" style={{ background: "var(--ink)" }}>
+              {c.item.cover && (
+                <img src={c.item.cover} alt="" loading="lazy" className="w-full h-full object-cover" />
+              )}
+            </div>
+            <div className="min-w-0 flex-1">
+              <p className="text-sm font-display font-semibold line-clamp-1 text-cream">{c.item.title}</p>
+              {c.item.author && (
+                <p className="text-[11px] text-cream-dim line-clamp-1 mt-0.5">{c.item.author}</p>
+              )}
+              <p className="text-[10px] font-mono text-cream-faint mt-0.5">
+                {c.item.sourceName} · 匹配度 {Math.round(c.score * 100)}%
+              </p>
+            </div>
+          </button>
+        ))}
+        <button
+          type="button"
+          onClick={() => onManual(chooser.title)}
+          className="w-full text-center px-4 py-2.5 rounded-lg text-sm tap text-cream-dim"
+          style={{ background: "var(--ink)", border: "1px solid var(--cream-line)" }}
+        >
+          都不对,去搜索页手动找
+        </button>
+      </div>
+    </Sheet>
+  );
+}
+
+// 榜单"查看全部"页:某区全部 ~50 名。
+function MangaRanking() {
+  const navigate = useNavigate();
+  const [params] = useSearchParams();
+  const region = (params.get("region") as RankRegion) || "JP";
+  const [home, setHome] = useState<MangaHomeData | null>(null);
+  const [error, setError] = useState("");
+  const { resolvingId, chooser, setChooser, openItem, gotoDetail } = useMangaResolve();
+
+  useEffect(() => {
+    fetchMangaHome()
+      .then(setHome)
+      .catch((e) => setError((e as Error).message));
+  }, []);
+
+  const label = region === "JP" ? "日漫榜" : region === "CN" ? "国漫榜" : "韩漫榜";
+  const items = home?.ranking[region] || [];
+
+  return (
+    <PageShell title={`高能排行 · ${label}`} eyebrow="MANGA · RANKING" onBack={() => navigate(-1)}>
+      {error ? (
+        <p className="text-sm text-ember">{error}</p>
+      ) : !home ? (
+        <p className="text-sm text-cream-faint">加载中…</p>
+      ) : (
+        <RankList items={items} resolvingId={resolvingId} onOpen={openItem} />
+      )}
+      <MangaChooser
+        chooser={chooser}
+        onClose={() => setChooser(null)}
+        onPick={(m) => {
+          gotoDetail(m);
+          setChooser(null);
+        }}
+        onManual={(t) => {
+          setChooser(null);
+          navigate(`/manga/search?q=${encodeURIComponent(t)}`);
+        }}
+      />
+    </PageShell>
+  );
+}
+
+function MangaDiscover() {
+  const navigate = useNavigate();
+  const [home, setHome] = useState<MangaHomeData | null>(null);
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState("");
+  const [rankRegion, setRankRegion] = useState<RankRegion>("JP");
+  const { resolvingId, chooser, setChooser, openItem, gotoDetail } = useMangaResolve();
+
+  useEffect(() => {
+    let alive = true;
+    setLoading(true);
+    setError("");
+    fetchMangaHome()
+      .then((d) => {
+        if (alive) setHome(d);
+      })
+      .catch((e) => {
+        if (alive) setError((e as Error).message);
+      })
+      .finally(() => {
+        if (alive) setLoading(false);
+      });
+    return () => {
+      alive = false;
+    };
+  }, []);
+
+  if (loading && !home) {
+    return (
+      <div className="flex gap-3 overflow-hidden">
+        {Array.from({ length: 6 }).map((_, i) => (
+          <div key={i} className="shrink-0 w-[104px] space-y-1.5">
+            <div className="aspect-[3/4] rounded-lg animate-pulse" style={{ background: "var(--ink-2)" }} />
+            <div className="h-3 w-3/4 rounded animate-pulse" style={{ background: "var(--ink-2)" }} />
+          </div>
+        ))}
+      </div>
+    );
+  }
+  if (error && !home) return <p className="text-sm text-ember">{error}</p>;
+  if (!home) return null;
+
+  const rankItems = home.ranking[rankRegion];
+
+  return (
+    <>
+      <div className="space-y-6">
+        {/* 顶部分类区(照搬 B站):banner 封面墙轮播 + 题材 chips 条 */}
+        <BannerWall
+          slides={home.banner}
+          resolvingId={resolvingId}
+          onOpenTitle={(title) =>
+            openItem({ id: `banner:${title}`, title, cover: "" })
+          }
+          onBrowse={() => navigate("/manga/browse")}
+        />
+        {home.categories.length > 0 && (
+          <div className="flex items-center gap-x-4 gap-y-2 flex-wrap -mt-2">
+            {home.categories.map((c) => (
+              <button
+                key={c.id}
+                type="button"
+                onClick={() => navigate("/manga/browse")}
+                className="text-sm font-display tap text-cream-dim hover:text-ember"
+              >
+                {c.name}
+              </button>
+            ))}
+            <button
+              type="button"
+              onClick={() => navigate("/manga/browse")}
+              className="flex items-center gap-0.5 text-sm font-display text-cream tap"
+            >
+              全部 <IconChevronRight size={13} />
+            </button>
+          </div>
+        )}
+
+        <RecommendPanel items={home.recommendation} resolvingId={resolvingId} onOpen={openItem} />
+        <ArrowRow anchorId="mg-hot" title="畅销热门" subtitle="物有所值的真香漫画" items={home.hotSeller} resolvingId={resolvingId} onOpen={openItem} />
+        <ArrowRow anchorId="mg-net" title="全网热议" subtitle="恭喜你发现宝藏" items={home.internetHot} resolvingId={resolvingId} onOpen={openItem} />
+        <ArrowRow anchorId="mg-fin" title="完结佳作" subtitle="一口气追到大结局！" items={home.completed} resolvingId={resolvingId} onOpen={openItem} />
+
+        {rankItems.length > 0 && (
+          <section id="mg-rank" style={{ scrollMarginTop: 12 }}>
+            {/* 高能排行标题 + 大号 tab(日漫榜/国漫榜/韩漫榜)+ 竖分隔 + 蓝色更多药丸 */}
+            <div className="flex items-center justify-between mb-4 gap-2">
+              <div className="flex items-center min-w-0">
+                <h2 className="font-display font-extrabold text-xl text-cream shrink-0">高能排行</h2>
+                <span className="mx-4 h-6 w-px shrink-0" style={{ background: "var(--cream-line)" }} />
+                <div className="flex items-center gap-6 overflow-x-auto vod-scroll-row">
+                  {(
+                    [
+                      ["JP", "日漫榜"],
+                      ["CN", "国漫榜"],
+                      ["KO", "韩漫榜"],
+                    ] as [RankRegion, string][]
+                  ).map(([r, label]) => (
+                    <button
+                      key={r}
+                      type="button"
+                      onClick={() => setRankRegion(r)}
+                      className="shrink-0 text-lg font-display transition-colors tap"
+                      style={{ color: rankRegion === r ? "var(--cream)" : "var(--cream-faint)" }}
+                    >
+                      {label}
+                    </button>
+                  ))}
+                </div>
+              </div>
+              <button
+                type="button"
+                onClick={() => navigate(`/manga/ranking?region=${rankRegion}`)}
+                className="flex items-center gap-0.5 rounded-full px-3 py-1.5 text-xs font-display tap shrink-0"
+                style={{ background: "var(--ember-soft)", color: "var(--ember)" }}
+              >
+                更多 <IconChevronRight size={13} />
+              </button>
+            </div>
+            {/* 首页只显示前 6 名 */}
+            <RankList items={rankItems.slice(0, 6)} resolvingId={resolvingId} onOpen={openItem} />
+          </section>
+        )}
+      </div>
+
+      <MangaChooser
+        chooser={chooser}
+        onClose={() => setChooser(null)}
+        onPick={(m) => {
+          gotoDetail(m);
+          setChooser(null);
+        }}
+        onManual={(t) => {
+          setChooser(null);
+          navigate(`/manga/search?q=${encodeURIComponent(t)}`);
+        }}
+      />
+    </>
+  );
+}
+
 // ─── 首页 / 书架 + 推荐 ───────────────────────────────
 function MangaHome() {
   const navigate = useNavigate();
@@ -255,64 +1215,24 @@ function MangaHome() {
   const toggleShelf = useMangaStore((s) => s.toggleShelf);
   const removeHistory = useMangaStore((s) => s.removeHistory);
   const config = useMangaStore((s) => s.config);
-  const recType: MangaRecommendType = "POPULAR";
-  const [recommend, setRecommend] = useState<MangaSearchItem[]>([]);
-  const [loadingRec, setLoadingRec] = useState(false);
-  const [recError, setRecError] = useState("");
-  const [recProgress, setRecProgress] = useState({ done: 0, total: 0 });
-  const recTokenRef = useRef(0);
   // 长按/右键的历史记录操作菜单目标。
   const [actionTarget, setActionTarget] = useState<MangaReadRecord | null>(null);
 
   const configured = isMangaConfigured(config);
 
-  // 首页聚合信息流:所有源的推荐(POPULAR/LATEST)合并,逐源增量刷新。
-  useEffect(() => {
-    if (!configured) return;
-    const token = ++recTokenRef.current;
-    setLoadingRec(true);
-    setRecError("");
-    setRecommend([]);
-    setRecProgress({ done: 0, total: 0 });
-    const seen = new Set<string>();
-    getAggregatedRecommendStream(
-      config,
-      {
-        onStart: (total) => {
-          if (token === recTokenRef.current) setRecProgress({ done: 0, total });
-        },
-        onSourceResult: (_source, mangas, _hasNextPage, done, total) => {
-          if (token !== recTokenRef.current) return;
-          const fresh = mangas.filter((m) => {
-            const key = `${m.sourceId}:${m.id}`;
-            if (seen.has(key)) return false;
-            seen.add(key);
-            return true;
-          });
-          if (fresh.length > 0) setRecommend((prev) => [...prev, ...fresh]);
-          setRecProgress({ done, total });
-        },
-        onSourceError: (_failure, done, total) => {
-          if (token === recTokenRef.current) setRecProgress({ done, total });
-        },
-      },
-      recType
-    )
-      .then((res) => {
-        if (token === recTokenRef.current && res.mangas.length === 0 && res.failedSources.length > 0) {
-          setRecError(res.failedSources[0]?.error || "推荐加载失败");
-        }
-      })
-      .catch((e) => {
-        if (token === recTokenRef.current) setRecError((e as Error).message);
-      })
-      .finally(() => {
-        if (token === recTokenRef.current) setLoadingRec(false);
-      });
-  }, [config, configured, recType]);
-
   const trailing = (
     <div className="flex items-center gap-2">
+      {configured && (
+        <button
+          type="button"
+          onClick={() => navigate("/manga/browse")}
+          className="w-9 h-9 flex items-center justify-center rounded-full tap text-cream-dim"
+          style={{ background: "var(--ink-2)", border: "1px solid var(--cream-line)" }}
+          aria-label="源站寻书"
+        >
+          <IconGrid size={16} />
+        </button>
+      )}
       <button
         type="button"
         onClick={() => navigate("/manga/search")}
@@ -336,24 +1256,32 @@ function MangaHome() {
 
   return (
     <PageShell title="漫画" eyebrow="MANGA · SUWAYOMI" trailing={trailing}>
-      {!configured ? (
-        <EmptyState
-          icon={<IconManga size={48} />}
-          title="尚未配置 Suwayomi 服务"
-          subtitle="漫画功能依赖你自部署的 Suwayomi 服务，请先在设置里填写服务地址。"
-          action={
+      <div className="space-y-6">
+        {/* 官方发现区(壳子)—— 不依赖 Suwayomi,常驻展示 */}
+        <MangaDiscover />
+
+        {/* 未配置 Suwayomi:细提示条(阅读需要源) */}
+        {!configured && (
+          <div
+            className="flex items-center justify-between gap-3 rounded-lg p-3"
+            style={{ background: "var(--ink-2)", border: "1px solid var(--cream-line)" }}
+          >
+            <p className="text-xs text-cream-dim leading-relaxed">
+              阅读漫画需要先配置 Suwayomi 服务,配置后即可打开上面的官方推荐。
+            </p>
             <button
               type="button"
               onClick={() => navigate("/settings/manga-hub")}
-              className="px-4 py-2 rounded-lg text-sm font-display font-semibold tap"
+              className="shrink-0 px-3 py-1.5 rounded-lg text-xs font-display font-semibold tap"
               style={{ background: "var(--ember)", color: "var(--ink)" }}
             >
               前往设置
             </button>
-          }
-        />
-      ) : (
-        <div className="space-y-6">
+          </div>
+        )}
+
+        {configured && (
+          <>
           {shelf.length > 0 && (
             <section>
               <h2 className="font-display font-bold text-sm text-cream mb-3">
@@ -408,74 +1336,9 @@ function MangaHome() {
             </section>
           )}
 
-          <section>
-            <div className="flex items-center justify-between mb-3 gap-3">
-              <h2 className="font-display font-bold text-sm text-cream">
-                热门推荐
-              </h2>
-              <button
-                type="button"
-                onClick={() => navigate("/manga/browse")}
-                className="flex items-center gap-1 rounded-full px-3 py-1 text-xs font-display font-semibold tap text-cream-dim"
-                style={{ background: "var(--ink-2)", border: "1px solid var(--cream-line)" }}
-              >
-                <IconGrid size={13} />
-                源站寻书
-              </button>
-            </div>
-            {recProgress.total > 0 && recProgress.done < recProgress.total && (
-              <div className="h-1 rounded-full bg-ink-2 overflow-hidden mb-3">
-                <div
-                  className="h-full rounded-full transition-all"
-                  style={{
-                    width: `${(recProgress.done / recProgress.total) * 100}%`,
-                    background: "var(--ember)",
-                  }}
-                />
-              </div>
-            )}
-            {recommend.length === 0 && loadingRec ? (
-              <div className="grid grid-cols-3 sm:grid-cols-4 md:grid-cols-6 gap-3">
-                {Array.from({ length: 12 }).map((_, i) => (
-                  <div key={i} className="space-y-1.5">
-                    <div
-                      className="aspect-[3/4] rounded-lg animate-pulse"
-                      style={{ background: "var(--ink-2)" }}
-                    />
-                    <div
-                      className="h-3 w-3/4 rounded animate-pulse"
-                      style={{ background: "var(--ink-2)" }}
-                    />
-                  </div>
-                ))}
-              </div>
-            ) : recommend.length === 0 && recError ? (
-              <p className="text-sm text-ember">{recError}</p>
-            ) : recommend.length === 0 ? (
-              <EmptyState
-                icon={<IconManga size={48} />}
-                title="暂无推荐"
-                subtitle="试试直接搜索，或到源站寻书浏览分类。"
-              />
-            ) : (
-              <div className="grid grid-cols-3 sm:grid-cols-4 md:grid-cols-6 gap-3">
-                {recommend.map((item) => (
-                  <MangaCover
-                    key={`${item.sourceId}:${item.id}`}
-                    cover={item.cover}
-                    title={item.title}
-                    onClick={() =>
-                      navigate(
-                        `/manga/detail/${encodeURIComponent(item.sourceId)}/${encodeURIComponent(item.id)}?title=${encodeURIComponent(item.title)}&cover=${encodeURIComponent(item.cover)}&sourceName=${encodeURIComponent(item.sourceName)}`
-                      )
-                    }
-                  />
-                ))}
-              </div>
-            )}
-          </section>
-        </div>
-      )}
+          </>
+        )}
+      </div>
 
       {/* 历史记录操作菜单 */}
       {actionTarget && (
@@ -567,9 +1430,9 @@ function MangaSearch() {
   }, [config]);
 
   const doSearch = useCallback(
-    async (e?: React.FormEvent) => {
+    async (e?: React.FormEvent, override?: string) => {
       e?.preventDefault();
-      const q = query.trim();
+      const q = (override ?? query).trim();
       if (!q) return;
       const token = ++runTokenRef.current;
       setLoading(true);
@@ -624,6 +1487,17 @@ function MangaSearch() {
     },
     [config, query, sourceId]
   );
+
+  // 从官方发现区跳来时带 ?q=标题,自动预填 + 搜索一次。
+  const [searchParams] = useSearchParams();
+  const autoQ = searchParams.get("q") || "";
+  const autoRanRef = useRef("");
+  useEffect(() => {
+    if (!autoQ || autoRanRef.current === autoQ) return;
+    autoRanRef.current = autoQ;
+    setQuery(autoQ);
+    void doSearch(undefined, autoQ);
+  }, [autoQ, doSearch]);
 
   return (
     <PageShell
