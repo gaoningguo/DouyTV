@@ -87,10 +87,11 @@ function ScriptsTab() {
   const [cmsApi, setCmsApi] = useState("");
   const [cmsUa, setCmsUa] = useState("");
   const [cmsReferer, setCmsReferer] = useState("");
-  // Script form
+  // Script form（scriptEditKey 非空 = 编辑现有源，key 锁定）
   const [scriptKey, setScriptKey] = useState("");
   const [scriptName, setScriptName] = useState("");
   const [scriptCode, setScriptCode] = useState("");
+  const [scriptEditKey, setScriptEditKey] = useState<string | undefined>();
   // JSON import
   const [importText, setImportText] = useState("");
   const [importError, setImportError] = useState<string | undefined>();
@@ -103,10 +104,33 @@ function ScriptsTab() {
     install({ key: cmsKey.trim(), name: cmsName.trim(), type: "cms", api: cmsApi.trim(), ua: cmsUa.trim() || undefined, referer: cmsReferer.trim() || undefined, enabled: true });
     setCmsKey(""); setCmsName(""); setCmsApi(""); setCmsUa(""); setCmsReferer(""); setDialog(undefined);
   };
+  const resetScriptForm = () => { setScriptKey(""); setScriptName(""); setScriptCode(""); setScriptEditKey(undefined); };
   const handleAddScript = () => {
     if (!scriptKey.trim() || !scriptName.trim() || !scriptCode.trim()) return;
-    install({ key: scriptKey.trim(), name: scriptName.trim(), type: "script", code: scriptCode, enabled: true });
-    setScriptKey(""); setScriptName(""); setScriptCode(""); setDialog(undefined);
+    // 编辑现有源时 install 用同 key 覆盖（保留原启用态）；新增时默认启用。
+    const existing = scriptEditKey ? scripts.find((s) => s.key === scriptEditKey) : undefined;
+    install({ key: scriptKey.trim(), name: scriptName.trim(), type: "script", code: scriptCode, enabled: existing ? existing.enabled : true });
+    resetScriptForm(); setDialog(undefined);
+  };
+  // 打开编辑：把现有脚本源填入表单，key 锁定不可改。
+  const openScriptEdit = (key: string) => {
+    const s = scripts.find((x) => x.key === key);
+    if (!s || s.type !== "script") return;
+    setScriptKey(s.key); setScriptName(s.name); setScriptCode(s.code || ""); setScriptEditKey(s.key);
+    setDialog("add-script");
+  };
+  // 从 .js/.txt 文件读入脚本内容填进文本框（内容仍可继续编辑）。
+  const handleScriptFile = async (file: File | undefined) => {
+    if (!file) return;
+    try {
+      const text = await file.text();
+      setScriptCode(text);
+      // 新增场景下用文件名兜底填充 name/key（用户可改）。
+      if (!scriptEditKey) {
+        const base = file.name.replace(/\.[^.]+$/, "").trim();
+        if (base) { if (!scriptName.trim()) setScriptName(base); if (!scriptKey.trim()) setScriptKey(base.toLowerCase().replace(/[^a-z0-9_-]/g, "")); }
+      }
+    } catch (e) { await appAlert(`读取文件失败：${(e as Error).message}`, { title: "读取失败", tone: "warning" }); }
   };
   const handleImport = () => {
     setImportError(undefined);
@@ -177,6 +201,11 @@ function ScriptsTab() {
                 </div>
                 {!selectMode && (
                   <>
+                    {type === "script" && (
+                      <button type="button" onClick={() => openScriptEdit(s.key)} className="px-2 py-1 rounded text-[9px] font-mono font-bold tap" style={{ background: "var(--ink-3)", color: "var(--cream-dim)" }}>
+                        编辑
+                      </button>
+                    )}
                     <button type="button" onClick={() => toggle(s.key)} className="px-2 py-1 rounded text-[9px] font-mono font-bold tap" style={{ background: s.enabled ? "var(--ember-soft)" : "var(--ink-3)", color: s.enabled ? "var(--ember)" : "var(--cream-faint)" }}>
                       {s.enabled ? "ON" : "OFF"}
                     </button>
@@ -205,11 +234,18 @@ function ScriptsTab() {
         </DialogSheet>
       )}
       {dialog === "add-script" && (
-        <DialogSheet onClose={() => setDialog(undefined)} title="添加 JS 脚本源" hint="source-script 协议：导出 getSources/search/recommend/detail/resolvePlayUrl">
-          <DInput value={scriptKey} onChange={setScriptKey} placeholder="唯一 key" />
+        <DialogSheet onClose={() => { resetScriptForm(); setDialog(undefined); }} title={scriptEditKey ? "编辑 JS 脚本源" : "添加 JS 脚本源"} hint="source-script 协议：导出 getSources/search/recommend/detail/resolvePlayUrl">
+          <DInput value={scriptKey} onChange={setScriptKey} placeholder="唯一 key" disabled={!!scriptEditKey} />
           <DInput value={scriptName} onChange={setScriptName} placeholder="显示名称" />
+          <div className="flex items-center justify-between mb-1.5">
+            <span className="text-[10px] font-mono text-cream-faint">脚本内容（可粘贴 / 编辑）</span>
+            <label className="px-2 py-1 rounded text-[9px] font-mono font-bold tap cursor-pointer" style={{ background: "var(--ink-3)", color: "var(--cream-dim)", border: "1px solid var(--cream-line)" }}>
+              导入文件
+              <input type="file" accept=".js,.mjs,.cjs,.txt,text/javascript" className="hidden" onChange={(e) => { handleScriptFile(e.target.files?.[0]); e.target.value = ""; }} />
+            </label>
+          </div>
           <textarea value={scriptCode} onChange={(e) => setScriptCode(e.target.value)} placeholder="return { meta:{...}, async search(ctx,{keyword,page}){...} }" className="w-full h-40 p-2.5 rounded text-[11px] font-mono outline-none text-cream placeholder:text-cream-faint resize-none mb-2" style={{ background: "var(--ink-3)", border: "1px solid var(--cream-line)" }} />
-          <DialogActions onCancel={() => setDialog(undefined)} onConfirm={handleAddScript} disabled={!scriptKey.trim() || !scriptName.trim() || !scriptCode.trim()} />
+          <DialogActions onCancel={() => setDialog(undefined)} onConfirm={handleAddScript} disabled={!scriptKey.trim() || !scriptName.trim() || !scriptCode.trim()} confirmLabel={scriptEditKey ? "保存" : "确定"} />
         </DialogSheet>
       )}
       {dialog === "import-json" && (
@@ -378,8 +414,8 @@ function SmallBtn({ onClick, children }: { onClick: () => void; children: React.
   );
 }
 
-function DInput({ value, onChange, placeholder }: { value: string; onChange: (v: string) => void; placeholder: string }) {
-  return <input value={value} onChange={(e) => onChange(e.target.value)} placeholder={placeholder} className="w-full px-2.5 py-1.5 rounded text-[11px] mb-2 outline-none text-cream placeholder:text-cream-faint" style={{ background: "var(--ink-3)", border: "1px solid var(--cream-line)" }} />;
+function DInput({ value, onChange, placeholder, disabled }: { value: string; onChange: (v: string) => void; placeholder: string; disabled?: boolean }) {
+  return <input value={value} onChange={(e) => onChange(e.target.value)} placeholder={placeholder} disabled={disabled} className="w-full px-2.5 py-1.5 rounded text-[11px] mb-2 outline-none text-cream placeholder:text-cream-faint disabled:opacity-50" style={{ background: "var(--ink-3)", border: "1px solid var(--cream-line)" }} />;
 }
 
 function DialogSheet({ onClose, title, hint, children }: { onClose: () => void; title: string; hint?: string; children: React.ReactNode }) {
