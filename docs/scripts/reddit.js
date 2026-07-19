@@ -194,12 +194,48 @@ return {
     }
 
     const url = ctx.utils.buildUrl(this._base(ctx) + path, query);
-    const res = await ctx.request.get(url, {
-      headers: this._headers(ctx),
-      timeout: 25000,
-    });
-    if (!res.ok) throw new Error("Reddit RSS HTTP " + res.status + " @ " + url);
-    const xml = await res.text();
+
+    // Reddit RSS 对代理出口 IP 限流极狠:单次请求后 x-ratelimit-remaining 即 0,
+    // 复位 ~24s。用户每点一次标签/排序都发一次请求 → 立刻 429。两道防护:
+    //  1) 本页 XML 缓存(RESP:<sk>:<page>,TTL 5 分钟)—— 反复点同一标签直接命中缓存,
+    //     不再打网络,这是 429 的主因(切来切去重复拉同一个 sub/sort)。
+    //  2) 遇 429 时指数退避重试(6s→12s,与实测复位窗口对齐),而非直接抛错。
+    const RK = "resp:" + sk + ":" + page;
+    let xml;
+    try {
+      const cached = await ctx.cache.get(RK);
+      if (cached && typeof cached === "string") xml = cached;
+    } catch (e) {
+      /* ignore */
+    }
+
+    if (xml == null) {
+      let res;
+      const delays = [0, 6000, 12000];
+      for (let attempt = 0; attempt < delays.length; attempt++) {
+        if (delays[attempt]) {
+          try {
+            await ctx.utils.sleep(delays[attempt]);
+          } catch (e) {
+            /* ignore */
+          }
+        }
+        res = await ctx.request.get(url, {
+          headers: this._headers(ctx),
+          timeout: 25000,
+        });
+        if (res.status !== 429) break;
+        ctx.log && ctx.log.warn &&
+          ctx.log.warn("Reddit RSS 429,退避重试:", attempt + 1, url);
+      }
+      if (!res.ok) throw new Error("Reddit RSS HTTP " + res.status + " @ " + url);
+      xml = await res.text();
+      try {
+        await ctx.cache.set(RK, xml, 300);
+      } catch (e) {
+        /* ignore */
+      }
+    }
 
     const entries = this._parseEntries(xml);
     const list = [];

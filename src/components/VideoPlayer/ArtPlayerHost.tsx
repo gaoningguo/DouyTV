@@ -27,7 +27,7 @@ import type { Danmu } from "artplayer-plugin-danmuku";
 import Hls from "hls.js";
 import mpegts from "mpegts.js";
 import type { MediaItem } from "@/types/media";
-import { wrapWithProxy } from "@/lib/proxy";
+import { wrapWithProxy, wrapImage } from "@/lib/proxy";
 import { useProxyStore } from "@/stores/proxy";
 import { useNetliveProxyStore, resolveProxyForPlatform } from "@/stores/netliveProxy";
 import type { NetLivePlatformId } from "@/lib/netlive/types";
@@ -746,7 +746,9 @@ const ArtPlayerHost = forwardRef<VideoPlayerHandle, VideoPlayerProps>(
         container: el,
         url: wrappedUrl,
         ...(initialType ? { type: initialType } : {}),
-        ...(item.poster ? { poster: item.poster } : {}),
+        ...(item.poster
+          ? { poster: wrapImage(item.poster, item.posterHeaders) || item.poster }
+          : {}),
         volume: savedVolume,
         isLive: item.kind === "live",
         muted: mutedProp ?? false,

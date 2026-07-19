@@ -127,9 +127,10 @@ return {
    */
   async _feed(ctx, page, extra) {
     const LIMIT = 30;
+    // 注意:不再按 is_active=eq.true 过滤 —— 该标志已停止维护(实测约 1/200 才是 true),
+    // 加上它会让每页只剩几条(用户看到的"数据很少")。改为拉全部按 score 降序。
     const query = {
       select: "*",
-      is_active: "eq.true",
       order: "score.desc",
       limit: LIMIT,
       offset: (page - 1) * LIMIT,
@@ -246,7 +247,6 @@ return {
     }
     const rows = await this._getRows(ctx, {
       select: "subreddit",
-      is_active: "eq.true",
       order: "score.desc",
       limit: 500,
     });

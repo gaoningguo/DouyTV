@@ -6,6 +6,7 @@ import {
 } from "framer-motion";
 import VideoPlayer from "@/components/VideoPlayer";
 import type { MediaItem } from "@/types/media";
+import { wrapImage } from "@/lib/proxy";
 
 interface Props {
   items: MediaItem[];
@@ -244,7 +245,7 @@ export default function VideoFeed({
                       }
                     />
                   ) : (
-                    <LiveResolvingPlaceholder poster={item.poster} />
+                    <LiveResolvingPlaceholder poster={item.poster} posterHeaders={item.posterHeaders} />
                   )}
                   {renderOverlay?.(item, i)}
                 </>
@@ -259,12 +260,13 @@ export default function VideoFeed({
   );
 }
 
-function LiveResolvingPlaceholder({ poster }: { poster?: string }) {
+function LiveResolvingPlaceholder({ poster, posterHeaders }: { poster?: string; posterHeaders?: Record<string, string> }) {
+  const src = poster ? (wrapImage(poster, posterHeaders) ?? poster) : undefined;
   return (
     <div className="absolute inset-0 flex flex-col items-center justify-center bg-black text-cream-faint">
-      {poster && (
+      {src && (
         <img
-          src={poster}
+          src={src}
           alt=""
           className="absolute inset-0 h-full w-full object-cover opacity-30 blur-sm"
           referrerPolicy="no-referrer"

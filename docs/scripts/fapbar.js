@@ -119,10 +119,15 @@ return {
    */
   async getSources() {
     return [
-      { id: "girls", name: "女主播(亚洲优先)", group: "浏览" },
-      { id: "couples", name: "情侣", group: "浏览" },
-      { id: "trans", name: "变性", group: "浏览" },
-      { id: "men", name: "男主播", group: "浏览" },
+      { id: "girls", name: "女主播(亚洲优先)", group: "直播" },
+      { id: "couples", name: "情侣", group: "直播" },
+      { id: "trans", name: "变性", group: "直播" },
+      { id: "men", name: "男主播", group: "直播" },
+      // 影集 / VOD —— /videos 页 SSR 内嵌视频列表(Mouflon 加扰,与直播同款 pdkey)。
+      // 站点该页无深翻页参数,只有排序变体,故 VOD 只提供三种排序入口。
+      { id: "vod:new", name: "影集 · 最新", group: "影集" },
+      { id: "vod:likes", name: "影集 · 最赞", group: "影集" },
+      { id: "vod:trending", name: "影集 · 热门", group: "影集" },
     ];
   },
 
@@ -140,8 +145,137 @@ return {
 
   async recommend(ctx, { page, sourceId }) {
     const p = page || 1;
-    const tag = sourceId || "girls";
-    return this._feed(ctx, p, tag);
+    const id = sourceId || "girls";
+    // 影集 / VOD 分支:走 /videos SSR。该页不深翻页,只 page 1 返一屏(约 48 条)。
+    if (id.indexOf("vod:") === 0) {
+      return this._vodFeed(ctx, p, id.slice("vod:".length));
+    }
+    return this._feed(ctx, p, id);
+  },
+
+  /**
+   * VOD 列表 —— GET /api/front/v3/videos?limit=&offset=&sortBy=<mostRecent|mostLiked|trending>
+   * → { videos:[{ id, modelUsername, title, thumb(doppiocdn), videoUrl(strpst.com Mouflon
+   *     HLS master,带 md5+expires 签名), duration, likes, price, tags }], count }
+   * offset 深翻页(count 约数千);免费(price==0)项匿名可播,付费跳过。
+   * (2026-07:站点 /videos 页已改纯 SPA 壳、不再内联 SSR,故改走此 JSON API。)
+   */
+  async _vodFeed(ctx, page, sort) {
+    const limit = 24;
+    const offset = (page - 1) * limit;
+    const sortBy =
+      sort === "likes" ? "mostLiked" : sort === "trending" ? "trending" : "mostRecent";
+    let data;
+    try {
+      data = await this._getJson(ctx, "/api/front/v3/videos", {
+        limit,
+        offset,
+        sortBy,
+      });
+    } catch (e) {
+      ctx.log && ctx.log.warn && ctx.log.warn("Fap.Bar VOD 列表失败:", String(e));
+      return { list: [], page, pageCount: page, total: 0 };
+    }
+    const videos = (data && Array.isArray(data.videos) && data.videos) || [];
+    const list = [];
+    for (const v of videos) {
+      const vod = this._vodToItem(ctx, v);
+      if (vod) list.push(vod);
+    }
+    const count = (data && data.count) || 0;
+    const hasMore = videos.length >= limit && (count ? offset + limit < count : true);
+    return {
+      list,
+      page,
+      pageCount: hasMore ? page + 1 : page,
+      total: count || list.length,
+    };
+  },
+
+  /**
+   * 从 /videos 页 SSR 抠出 `"videos":[ ... ]` 数组(括号配平,跳过字符串内的括号)。
+   * 失败返空数组。
+   */
+  _parseSsrVideos(html) {
+    if (!html || typeof html !== "string") return [];
+    const key = '"videos":[';
+    const at = html.indexOf(key);
+    if (at < 0) return [];
+    const start = at + key.length - 1; // 指向 '['
+    let depth = 0;
+    let inStr = false;
+    let quote = "";
+    for (let i = start; i < html.length; i++) {
+      const c = html[i];
+      if (inStr) {
+        if (c === "\\") {
+          i++;
+          continue;
+        }
+        if (c === quote) inStr = false;
+        continue;
+      }
+      if (c === '"' || c === "'") {
+        inStr = true;
+        quote = c;
+        continue;
+      }
+      if (c === "[") depth++;
+      else if (c === "]") {
+        depth--;
+        if (depth === 0) {
+          const json = html.slice(start, i + 1);
+          try {
+            const arr = JSON.parse(json);
+            return Array.isArray(arr) ? arr : [];
+          } catch (e) {
+            return [];
+          }
+        }
+      }
+    }
+    return [];
+  },
+
+  /**
+   * SSR video 对象 → ScriptVodItem。跳过无 videoUrl / 付费(price>0)项。
+   * videoUrl 已是签名 Mouflon HLS master,直接作 playUrl(App Rust 层解扰)。
+   */
+  _vodToItem(ctx, v) {
+    if (!v || v.id == null) return null;
+    const url = v.videoUrl;
+    if (!url || typeof url !== "string") return null;
+    if (v.price && Number(v.price) > 0) return null; // 付费影集匿名放不出,跳过
+    const id = "vod_" + v.id;
+    const title = (v.title || v.userUsername || String(v.id)).toString().trim();
+    const remarks = [];
+    if (v.duration) {
+      const s = Number(v.duration) || 0;
+      const mm = Math.floor(s / 60);
+      const ss = s % 60;
+      remarks.push(mm + ":" + (ss < 10 ? "0" : "") + ss);
+    }
+    if (v.likesCount) remarks.push("♥ " + v.likesCount);
+
+    this._pendingCache = this._pendingCache || {};
+    this._pendingCache[id] = {
+      title,
+      poster: v.thumb || undefined,
+      desc: (v.description || "").trim(),
+      videoUrl: url,
+      isVod: true,
+    };
+
+    return {
+      id,
+      title,
+      poster: v.thumb || undefined,
+      poster_headers: v.thumb
+        ? { "User-Agent": this._ua(ctx), Referer: this._siteBase(ctx) + "/" }
+        : undefined,
+      desc: v.userUsername ? "@" + v.userUsername : undefined,
+      vod_remarks: remarks.length ? remarks.join(" · ") : undefined,
+    };
   },
 
   async search(ctx, { keyword, page }) {
@@ -271,6 +405,54 @@ return {
   /* ───────────────────────── 详情 / 播放 ───────────────────────── */
 
   async detail(ctx, { id, sourceId }) {
+    // VOD(影集)条目:id 形如 "vod_<videoId>",播放链已在列表阶段缓存(签名 master)。
+    if (String(id).indexOf("vod_") === 0) {
+      let info = (this._pendingCache && this._pendingCache[id]) || null;
+      if (!info) {
+        try {
+          info = await ctx.cache.get("item:" + id);
+        } catch (e) {
+          /* ignore */
+        }
+      }
+      if (!info) {
+        // 冷启动直接进详情:重扫 VOD 快照找这个 id。
+        try {
+          const list = await this._vodList(ctx, "new");
+          for (const v of list) {
+            if (v && v.id === id) break;
+          }
+          info = (this._pendingCache && this._pendingCache[id]) || null;
+        } catch (e) {
+          /* ignore */
+        }
+      }
+      if (!info || !info.videoUrl) {
+        throw new Error("Fap.Bar: 未找到该影集(可能已下架 / 链过期,请回列表重进)@ " + id);
+      }
+      return {
+        id: String(id),
+        title: info.title || String(id),
+        poster: info.poster,
+        poster_headers: info.poster
+          ? { "User-Agent": this._ua(ctx), Referer: this._siteBase(ctx) + "/" }
+          : undefined,
+        year: "",
+        desc: info.desc || "",
+        type_name: info.typeName,
+        playbacks: [
+          {
+            sourceId: sourceId || "vod",
+            sourceName: "Fap.Bar",
+            // 影集 master 已是签名 URL(带 md5+expires);Rust 代理层按 strpst/doppiocdn
+            // host 识别 → 注入 pkey + Mouflon 段名解扰(与直播同源,需 Stripchat Keys pdkey)。
+            episodes: [{ playUrl: info.videoUrl, needResolve: true, title: "完整版" }],
+            episodes_titles: ["完整版"],
+          },
+        ],
+      };
+    }
+
     // id 就是 username。优先用列表缓存的元信息,miss 才现拉 cam 端点。
     const username = String(id);
     let info;
@@ -313,6 +495,18 @@ return {
   },
 
   async resolvePlayUrl(ctx, { playUrl }) {
+    // VOD(影集):playUrl 已是 strpst.com 签名 HLS master,直接透传(Rust 层做 Mouflon 解扰)。
+    if (/^https?:\/\//i.test(String(playUrl)) && /strpst\.com|doppiocdn/i.test(String(playUrl))) {
+      return {
+        url: String(playUrl),
+        type: "hls",
+        headers: {
+          "User-Agent": this._ua(ctx),
+          Referer: this._siteBase(ctx) + "/",
+        },
+      };
+    }
+
     const username = String(playUrl).trim();
     const cam = await this._fetchCam(ctx, username);
     if (!cam) throw new Error("Fap.Bar: 未找到该主播 @ " + username);

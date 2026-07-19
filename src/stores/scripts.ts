@@ -18,6 +18,16 @@ interface ScriptStore {
   /** 批量卸载 */
   uninstallMany: (keys: string[]) => void;
   importFromJson: (json: string) => ScriptDescriptor | undefined;
+  /**
+   * 批量装载 descriptor 数组（多 .js 文件导入用）—— 校验每项，单次 persist。
+   * 返回 { added, failed }。
+   */
+  installMany: (candidates: unknown[]) => { added: number; failed: number };
+  /**
+   * 批量导入 — 接受 JSON 数组 [desc, ...] 或对象 { scripts:[...] }。
+   * 返回 { added, failed }。单次 persist。
+   */
+  importManyFromJson: (json: string) => { added: number; failed: number };
   enabled: () => ScriptDescriptor[];
 }
 
@@ -122,6 +132,59 @@ export const useScriptStore = create<ScriptStore>((set, get) => ({
       console.error("[scripts] import failed", e);
       return undefined;
     }
+  },
+  installMany: (candidates) => {
+    let added = 0;
+    let failed = 0;
+    const now = Date.now();
+    const map = new Map(get().scripts.map((s) => [s.key, s]));
+    for (const obj of candidates) {
+      if (!validateDescriptor(obj)) {
+        failed++;
+        continue;
+      }
+      const d = obj as ScriptDescriptor;
+      const existing = map.get(d.key);
+      map.set(d.key, {
+        key: d.key,
+        name: d.name,
+        description: d.description,
+        enabled: d.enabled ?? existing?.enabled ?? true,
+        type: d.type,
+        code: d.code,
+        api: d.api,
+        detail: d.detail,
+        proxyMode: d.proxyMode,
+        ua: d.ua,
+        referer: d.referer,
+        config: d.config,
+        installedAt: existing?.installedAt ?? now,
+        updatedAt: now,
+      });
+      added++;
+    }
+    if (added > 0) {
+      const all = Array.from(map.values());
+      set({ scripts: all });
+      persist(all);
+    }
+    return { added, failed };
+  },
+  importManyFromJson: (json) => {
+    let raw: unknown;
+    try {
+      raw = JSON.parse(json);
+    } catch (e) {
+      console.error("[scripts] batch import: invalid JSON", e);
+      return { added: 0, failed: 0 };
+    }
+    // 接受: 顶层数组 / { scripts:[...] } / 单个 descriptor 对象。
+    let arr: unknown[] = [];
+    if (Array.isArray(raw)) arr = raw;
+    else if (raw && typeof raw === "object" && Array.isArray((raw as { scripts?: unknown[] }).scripts))
+      arr = (raw as { scripts: unknown[] }).scripts;
+    else if (raw && typeof raw === "object") arr = [raw];
+    return get().installMany(arr);
   },
   enabled: () => get().scripts.filter((s) => s.enabled),
 }));

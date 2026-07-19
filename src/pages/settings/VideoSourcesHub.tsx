@@ -72,6 +72,8 @@ function ScriptsTab() {
   const uninstall = useScriptStore((s) => s.uninstall);
   const install = useScriptStore((s) => s.install);
   const importFromJson = useScriptStore((s) => s.importFromJson);
+  const importManyFromJson = useScriptStore((s) => s.importManyFromJson);
+  const installMany = useScriptStore((s) => s.installMany);
   const toggleMany = useScriptStore((s) => s.toggleMany);
   const uninstallMany = useScriptStore((s) => s.uninstallMany);
 
@@ -119,21 +121,56 @@ function ScriptsTab() {
     setScriptKey(s.key); setScriptName(s.name); setScriptCode(s.code || ""); setScriptEditKey(s.key);
     setDialog("add-script");
   };
-  // 从 .js/.txt 文件读入脚本内容填进文本框（内容仍可继续编辑）。
-  const handleScriptFile = async (file: File | undefined) => {
-    if (!file) return;
-    try {
-      const text = await file.text();
-      setScriptCode(text);
-      // 新增场景下用文件名兜底填充 name/key（用户可改）。
-      if (!scriptEditKey) {
-        const base = file.name.replace(/\.[^.]+$/, "").trim();
-        if (base) { if (!scriptName.trim()) setScriptName(base); if (!scriptKey.trim()) setScriptKey(base.toLowerCase().replace(/[^a-z0-9_-]/g, "")); }
-      }
-    } catch (e) { await appAlert(`读取文件失败：${(e as Error).message}`, { title: "读取失败", tone: "warning" }); }
+  // 从 .js/.txt 文件读入脚本。
+  //  - 单个文件:内容填进文本框(可继续编辑),文件名兜底 name/key。
+  //  - 多个文件:每个文件按「文件名=key/name、内容=code」独立装成一个源,单次批量安装。
+  //    (编辑现有源时禁用多选,只取第一个填框。)
+  const handleScriptFiles = async (files: File[]) => {
+    if (!files || files.length === 0) return;
+    // 编辑态 / 只选了一个 → 沿用填框行为(内容仍可编辑)。
+    if (scriptEditKey || files.length === 1) {
+      const file = files[0];
+      try {
+        const text = await file.text();
+        setScriptCode(text);
+        if (!scriptEditKey) {
+          const base = file.name.replace(/\.[^.]+$/, "").trim();
+          if (base) { if (!scriptName.trim()) setScriptName(base); if (!scriptKey.trim()) setScriptKey(slugify(base)); }
+        }
+      } catch (e) { await appAlert(`读取文件失败：${(e as Error).message}`, { title: "读取失败", tone: "warning" }); }
+      return;
+    }
+    // 多文件 → 逐个读成 script descriptor,批量安装。
+    const descs: Array<{ key: string; name: string; type: "script"; code: string; enabled: boolean }> = [];
+    let readFail = 0;
+    for (const file of files) {
+      try {
+        const text = await file.text();
+        if (!text.trim()) { readFail++; continue; }
+
+        const base = file.name.replace(/\.[^.]+$/, "").trim() || file.name;
+        const key = slugify(base) || base;
+        descs.push({ key, name: base, type: "script", code: text, enabled: true });
+      } catch { readFail++; }
+    }
+    if (descs.length === 0) { await appAlert("未能读取任何脚本文件", { title: "导入失败", tone: "warning" }); return; }
+    const { added, failed } = installMany(descs);
+    setDialog(undefined);
+    resetScriptForm();
+    await appAlert(`导入 ${added} 个脚本源${failed || readFail ? `，跳过 ${failed + readFail} 个无效/读取失败` : ""}`);
   };
   const handleImport = () => {
     setImportError(undefined);
+    const trimmed = importText.trim();
+    // 顶层数组 / {scripts:[...]} → 批量导入;单个对象 → 单源导入。
+    const isBatch = /^\[/.test(trimmed) || /"scripts"\s*:/.test(trimmed);
+    if (isBatch) {
+      const { added, failed } = importManyFromJson(importText);
+      if (added <= 0) { setImportError("未解析到任何有效源（检查 JSON 格式与字段）"); return; }
+      setImportText(""); setDialog(undefined);
+      void appAlert(`批量导入成功：${added} 个源${failed ? `，跳过 ${failed} 个无效项` : ""}`);
+      return;
+    }
     if (!importFromJson(importText)) { setImportError("JSON 格式不正确"); return; }
     setImportText(""); setDialog(undefined);
   };
@@ -240,8 +277,8 @@ function ScriptsTab() {
           <div className="flex items-center justify-between mb-1.5">
             <span className="text-[10px] font-mono text-cream-faint">脚本内容（可粘贴 / 编辑）</span>
             <label className="px-2 py-1 rounded text-[9px] font-mono font-bold tap cursor-pointer" style={{ background: "var(--ink-3)", color: "var(--cream-dim)", border: "1px solid var(--cream-line)" }}>
-              导入文件
-              <input type="file" accept=".js,.mjs,.cjs,.txt,text/javascript" className="hidden" onChange={(e) => { handleScriptFile(e.target.files?.[0]); e.target.value = ""; }} />
+              {scriptEditKey ? "导入文件" : "导入文件（可多选）"}
+              <input type="file" accept=".js,.mjs,.cjs,.txt,text/javascript" multiple={!scriptEditKey} className="hidden" onChange={(e) => { const fs = e.target.files ? Array.from(e.target.files) : []; e.target.value = ""; void handleScriptFiles(fs); }} />
             </label>
           </div>
           <textarea value={scriptCode} onChange={(e) => setScriptCode(e.target.value)} placeholder="return { meta:{...}, async search(ctx,{keyword,page}){...} }" className="w-full h-40 p-2.5 rounded text-[11px] font-mono outline-none text-cream placeholder:text-cream-faint resize-none mb-2" style={{ background: "var(--ink-3)", border: "1px solid var(--cream-line)" }} />
@@ -249,8 +286,15 @@ function ScriptsTab() {
         </DialogSheet>
       )}
       {dialog === "import-json" && (
-        <DialogSheet onClose={() => setDialog(undefined)} title="单源 JSON 导入" hint='{"key":"...","name":"...","type":"script|cms","code":"..." | "api":"..."}'>
-          <textarea value={importText} onChange={(e) => setImportText(e.target.value)} placeholder="粘贴单个源 JSON" className="w-full h-36 p-2.5 rounded text-[11px] font-mono outline-none text-cream placeholder:text-cream-faint resize-none mb-2" style={{ background: "var(--ink-3)", border: "1px solid var(--cream-line)" }} />
+        <DialogSheet onClose={() => setDialog(undefined)} title="JSON 导入（单个 / 批量）" hint='单个 {"key","name","type","code"|"api"} 或数组 [{...},{...}] / {"scripts":[...]}'>
+          <div className="flex items-center justify-between mb-1.5">
+            <span className="text-[10px] font-mono text-cream-faint">粘贴单源对象，或多源数组批量导入</span>
+            <label className="px-2 py-1 rounded text-[9px] font-mono font-bold tap cursor-pointer" style={{ background: "var(--ink-3)", color: "var(--cream-dim)", border: "1px solid var(--cream-line)" }}>
+              导入文件
+              <input type="file" accept=".json,application/json" className="hidden" onChange={async (e) => { const f = e.target.files?.[0]; e.target.value = ""; if (f) { try { setImportText(await f.text()); } catch (err) { setImportError(`读取文件失败：${(err as Error).message}`); } } }} />
+            </label>
+          </div>
+          <textarea value={importText} onChange={(e) => setImportText(e.target.value)} placeholder='单源对象或 [{...},{...}] 数组' className="w-full h-36 p-2.5 rounded text-[11px] font-mono outline-none text-cream placeholder:text-cream-faint resize-none mb-2" style={{ background: "var(--ink-3)", border: "1px solid var(--cream-line)" }} />
           {importError && <p className="text-[10px] font-mono p-2 rounded mb-2" style={{ background: "rgba(255,80,80,0.08)", color: "#FF6B6B" }}>{importError}</p>}
           <DialogActions onCancel={() => setDialog(undefined)} onConfirm={handleImport} disabled={!importText.trim()} confirmLabel="导入" />
         </DialogSheet>
@@ -406,6 +450,11 @@ function LocalTab() {
 }
 
 /* ─── Shared UI ─── */
+/** 文件名 → 合法 key(小写 + 只留字母数字下划线连字符);全被过滤时用时间戳兜底。 */
+function slugify(base: string): string {
+  return base.toLowerCase().replace(/[^a-z0-9_-]/g, "") || `src-${Date.now().toString(36)}`;
+}
+
 function SmallBtn({ onClick, children }: { onClick: () => void; children: React.ReactNode }) {
   return (
     <button type="button" onClick={onClick} className="inline-flex items-center gap-1 text-[9px] font-display font-semibold tap px-2 py-1 rounded" style={{ background: "var(--ember-soft)", color: "var(--ember)" }}>

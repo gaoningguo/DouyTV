@@ -163,6 +163,7 @@ interface AggGroup {
   title: string;
   year: string;
   poster?: string;
+  posterHeaders?: Record<string, string>;
   remarks?: string;
   type: "movie" | "tv";
   results: SearchResult[];
@@ -182,6 +183,7 @@ function aggregateResults(results: SearchResult[]): AggGroup[] {
         title: r.vod.title,
         year,
         poster: r.vod.poster,
+        posterHeaders: r.vod.poster_headers,
         remarks: r.vod.vod_remarks,
         type,
         results: [],
@@ -189,7 +191,7 @@ function aggregateResults(results: SearchResult[]): AggGroup[] {
       map.set(k, g);
       order.push(k);
     } else {
-      if (!g.poster && r.vod.poster) g.poster = r.vod.poster;
+      if (!g.poster && r.vod.poster) { g.poster = r.vod.poster; g.posterHeaders = r.vod.poster_headers; }
       if (!g.remarks && r.vod.vod_remarks) g.remarks = r.vod.vod_remarks;
     }
     g.results.push(r);
@@ -3745,7 +3747,7 @@ function CardAgg({ group }: { group: AggGroup }) {
       <div className="aspect-[3/4] relative scanlines" style={{ background: "var(--ink-3)" }}>
         {group.poster ? (
           <img
-            src={group.poster}
+            src={wrapImage(group.poster, group.posterHeaders)}
             className="w-full h-full object-cover"
             alt={group.title}
             loading="lazy"
@@ -3804,7 +3806,7 @@ function CardOne({ r }: { r: SearchResult }) {
       <div className="aspect-[3/4] relative scanlines" style={{ background: "var(--ink-3)" }}>
         {r.vod.poster ? (
           <img
-            src={r.vod.poster}
+            src={wrapImage(r.vod.poster, r.vod.poster_headers)}
             className="w-full h-full object-cover"
             alt={r.vod.title}
             loading="lazy"

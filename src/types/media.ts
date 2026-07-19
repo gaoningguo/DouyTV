@@ -7,6 +7,8 @@ export interface MediaItem {
   kind: MediaKind;
   title: string;
   poster?: string;
+  /** 封面防盗链请求头（UA / Referer）。有则封面走 wrapImage 代理带上,绕 CDN 403。 */
+  posterHeaders?: Record<string, string>;
   url?: string;
   streamType?: "auto" | "mp4" | "hls" | "dash" | "flv" | "chunked-mp4" | "sample-aes-mp4" | "agora-rtc";
   headers?: Record<string, string>;

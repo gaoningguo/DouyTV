@@ -80,8 +80,7 @@ return {
       sources.push({ id: "kw:" + a.kw, name: a.name, group: "亚洲" });
     }
     // 排序浏览入口(order 值来自站点页面内联 var order)。
-    sources.push({ id: "latest", name: "首页 Home", group: "浏览" });
-    sources.push({ id: "order:1", name: "最新 Newest", group: "浏览" });
+    sources.push({ id: "latest", name: "最新 Newest", group: "浏览" });
     sources.push({ id: "order:2", name: "热门 Popular", group: "浏览" });
     sources.push({ id: "order:3", name: "精选 Best", group: "浏览" });
     sources.push({ id: "order:4", name: "随机 Random", group: "浏览" });
@@ -100,8 +99,9 @@ return {
     if (id.indexOf("order:") === 0) {
       return this._feed(ctx, p, { order: id.slice("order:".length) });
     }
-    // 首页 / latest → order 为空。
-    return this._feed(ctx, p, { order: "" });
+    // 首页 / latest → order=1(Newest)。站点已不再接受 order=""(会返回 content:null),
+    // 只有非空 order(1~4)能拿到真实列表,故 latest 走 Newest。
+    return this._feed(ctx, p, { order: "1" });
   },
 
   /* ─────────────────────────── search ─────────────────────────── */
@@ -137,7 +137,7 @@ return {
         timeout: 20000,
       });
       if (!res.ok) throw new Error("HTTP " + res.status);
-      data = res.json();
+      data = await res.json();
     } catch (e) {
       ctx.log && ctx.log.warn && ctx.log.warn("Shorts.XXX loader2 失败:", url, String(e));
       return { list: [], page, pageCount: page, total: 0 };

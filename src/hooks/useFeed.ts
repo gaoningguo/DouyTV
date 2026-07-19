@@ -15,7 +15,7 @@ import { rankAndShuffle } from "@/lib/recommend";
 
 async function vodToMediaItem(
   script: ScriptDescriptor,
-  vod: { id: string; title: string; poster?: string; year?: string; desc?: string; vod_remarks?: string; type_name?: string; vod_class?: string },
+  vod: { id: string; title: string; poster?: string; poster_headers?: Record<string, string>; year?: string; desc?: string; vod_remarks?: string; type_name?: string; vod_class?: string },
   sourceId?: string
 ): Promise<MediaItem | undefined> {
   try {
@@ -42,6 +42,7 @@ async function vodToMediaItem(
       kind: "video",
       title: vod.title,
       poster: vod.poster,
+      posterHeaders: vod.poster_headers,
       url: resolved.url,
       streamType: resolved.type,
       headers: resolved.headers,
@@ -115,6 +116,7 @@ export function useFeed() {
             id: string;
             title: string;
             poster?: string;
+            poster_headers?: Record<string, string>;
             year?: string;
             desc?: string;
             vod_remarks?: string;

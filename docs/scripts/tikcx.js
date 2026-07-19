@@ -63,31 +63,17 @@ return {
     return res.json();
   },
 
-  async getSources(ctx) {
-    const sources = [{ id: "latest", name: "最新", group: "浏览" }];
-    let tags = [];
-    try {
-      tags = await this._fetchTags(ctx);
-    } catch (e) {
-      ctx.log && ctx.log.warn && ctx.log.warn("Tik.cx 标签抓取失败:", String(e));
-    }
-    const asian = [];
-    const other = [];
-    for (const t of tags) {
-      (this._asianRank(t.slug + " " + t.name) < 99 ? asian : other).push(t);
-    }
-    const item = (t, group) => ({ id: "tag:" + t.id, name: t.name, group });
-    for (const t of asian) sources.push(item(t, "亚洲"));
-    for (const t of other) sources.push(item(t, "标签"));
-    return sources;
+  async getSources() {
+    // 【只保留「最新」】(2026-07 实测):站点的 tag/category 分类下全是 2023 年的老帖,
+    // 其视频直链指向【已下线】的 tiktits.tik.pm 主机(连接直接 000,未迁移到新 CDN),
+    // 全都无法播放;而新内容(cdndl.xyz)不带任何 tag。所以分类/标签浏览只会呈现死链,
+    // 拉标签清单反而误导用户 —— 干脆去掉,只留能正常播放的最新流。
+    return [{ id: "latest", name: "最新", group: "浏览" }];
   },
 
-  async recommend(ctx, { page, sourceId }) {
-    const p = page || 1;
-    const id = sourceId || "latest";
-    const query = {};
-    if (id.indexOf("tag:") === 0) query.tags = id.slice("tag:".length);
-    return this._feed(ctx, p, query);
+  async recommend(ctx, { page }) {
+    // 只有「最新」全站流(WP 默认 orderby=date desc)是活的,直接拉,不带任何 tag 过滤。
+    return this._feed(ctx, page || 1, {});
   },
 
   async search(ctx, { keyword, page }) {

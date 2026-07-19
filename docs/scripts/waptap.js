@@ -88,7 +88,7 @@ return {
       timeout: 20000,
     });
     if (!res.ok) throw new Error("Waptap HTTP " + res.status + " @ " + url);
-    const body = res.json();
+    const body = await res.json();
     // 统一拆包 { code, status, uuid, data }
     if (body && typeof body === "object" && "data" in body) return body.data;
     return body;

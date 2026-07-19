@@ -108,7 +108,18 @@ return {
     let filtered = pool;
     if (id.indexOf("cat:") === 0) {
       const slug = id.slice("cat:".length).toLowerCase();
-      filtered = pool.filter((v) => (v._cats || []).indexOf(slug) >= 0);
+      // 确保 topic id→slug 映射就绪(池解析可能早于 getSources)。
+      try {
+        await this._fetchTopics(ctx);
+      } catch (e) {
+        /* ignore */
+      }
+      const map = this._topicSlugById || {};
+      filtered = pool.filter((v) => {
+        if ((v._cats || []).indexOf(slug) >= 0) return true;
+        // 兜底:用原始 primary_category id 现翻 slug 比对。
+        return v._primaryId && map[v._primaryId] === slug;
+      });
     }
     return this._slice(filtered, p);
   },
@@ -179,12 +190,23 @@ return {
   _parse(ctx, it) {
     if (!it || !it.uuid) return null;
     if (it.type && String(it.type).toLowerCase() !== "video") return null;
+    // 付费墙条目:免费预览缺失时派生的 mp4 会 403,直接跳过(免费项才收)。
+    if (it.is_paid && !it.has_free_preview_trailer) return null;
 
+    // 2026-07 起 quickies 列表项不再带 video_src / hls_master_playlist_url —— 播放 mp4
+    // 需从 video_id 派生: https://videos.sharesome.com/file/videos-out/<id>/<id>.mp4
+    // (实测匿名 206 video/mp4)。老字段仍在时优先用老字段。
     const hls = this._validUrl(it.hls_master_playlist_url) || this._validUrl(it.master_playlist);
-    const mp4 = this._validUrl(it.video_src) || this._validUrl(it.mp4_url);
+    let mp4 = this._validUrl(it.video_src) || this._validUrl(it.mp4_url);
+    if (!mp4 && it.video_id) {
+      const vid = String(it.video_id);
+      mp4 = "https://videos.sharesome.com/file/videos-out/" + vid + "/" + vid + ".mp4";
+    }
     const playUrl = hls || mp4;
     if (!playUrl) return null;
 
+    // 列表项现只带 primary_category(数字 id)/ op_topic_id,无 categories[] 数组。
+    // 用 topic id→slug 映射(_topicSlugById,getSources 时填充)把它翻成 slug 供分类过滤。
     const cats = [];
     const catNames = [];
     if (Array.isArray(it.categories)) {
@@ -193,9 +215,16 @@ return {
         if (c && c.name) catNames.push(String(c.name));
       }
     }
+    const primaryId = it.primary_category != null ? String(it.primary_category) : "";
+    if (primaryId && this._topicSlugById && this._topicSlugById[primaryId]) {
+      const s = this._topicSlugById[primaryId];
+      if (cats.indexOf(s) < 0) cats.push(s);
+    }
+
     const title = this._cleanTitle(it.text) || (it.user || "") || String(it.uuid);
     const typeName = catNames.length ? catNames[0] : undefined;
-    const thumb = this._validUrl(it.thumb) || undefined;
+    // thumb / preview_thumb 现在是协议相对(//videos.sharesome.com/...),补 https:。
+    const thumb = this._absThumb(it.thumb) || this._absThumb(it.preview_thumb) || undefined;
 
     this._pendingCache = this._pendingCache || {};
     this._pendingCache[it.uuid] = {
@@ -216,7 +245,17 @@ return {
       vod_remarks: it.duration || undefined,
     };
     const hay = ((it.text || "") + " " + catNames.join(" ") + " " + (it.user || "")).toLowerCase();
-    return { vod, _cats: cats, _hay: hay };
+    // _primaryId 存原始 primary_category 数字 id —— 若解析池时 topic 映射还没就绪,
+    // recommend 分类过滤会在拿到映射后用它兜底翻 slug(见 recommend)。
+    return { vod, _cats: cats, _primaryId: primaryId || "", _hay: hay };
+  },
+
+  /** 协议相对 // 前缀补 https:;已是绝对 URL 原样返回;空返空串。 */
+  _absThumb(u) {
+    if (!u || typeof u !== "string") return "";
+    if (u.indexOf("//") === 0) return "https:" + u;
+    if (/^https?:\/\//i.test(u)) return u;
+    return "";
   },
 
   async detail(ctx, { id, sourceId }) {
@@ -290,23 +329,42 @@ return {
     return u;
   },
 
+  /** 缩略图归一:补协议(//videos.sharesome.com/... → https:)。非 http(s)/协议相对则丢弃。 */
+  _absThumb(u) {
+    if (!u || typeof u !== "string") return "";
+    if (/^https?:\/\//i.test(u)) return u;
+    if (u.indexOf("//") === 0) return "https:" + u;
+    return "";
+  },
+
   async _fetchTopics(ctx) {
     const CK = "sharesome:topics:v1";
     try {
       const cached = await ctx.cache.get(CK);
-      if (cached && Array.isArray(cached) && cached.length) return cached;
+      if (cached && Array.isArray(cached) && cached.length) {
+        // 缓存命中也要重建 id→slug 映射(内存态可能已丢)。
+        this._topicSlugById = this._topicSlugById || {};
+        for (const t of cached) {
+          if (t && t.id && t.slug) this._topicSlugById[String(t.id)] = String(t.slug).toLowerCase();
+        }
+        return cached;
+      }
     } catch (e) {
       /* ignore */
     }
     const data = await this._getJson(ctx, "/api/topics");
     const out = [];
     const seen = {};
+    // topic id→slug 映射:列表项只带 primary_category(数字 id),靠它翻成 slug 做分类过滤。
+    this._topicSlugById = this._topicSlugById || {};
     for (const t of Array.isArray(data) ? data : []) {
       if (!t || !t.slug) continue;
       const slug = String(t.slug).toLowerCase();
+      if (t.id != null) this._topicSlugById[String(t.id)] = slug;
       if (seen[slug]) continue;
       seen[slug] = true;
       out.push({
+        id: t.id != null ? String(t.id) : "",
         slug,
         name: this._decode(t.name || slug),
         posts_no: t.posts_no || 0,

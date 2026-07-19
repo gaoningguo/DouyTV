@@ -218,7 +218,9 @@ return {
    * 播放地址在 resolvePlayUrl 时用 id 走 /?start_post 现拉。
    */
   async _feedRest(ctx, page, extraQuery) {
-    const query = { per_page: 20, page };
+    // _embed=1 让 REST 顺带返 wp:featuredmedia —— 分类/搜索卡片的封面来源。
+    // (缺它时 post JSON 不含封面,分类/标签下的卡片全是无图 —— 用户看到的"封面显示不出")。
+    const query = { per_page: 20, page, _embed: 1 };
     for (const key in extraQuery) {
       if (extraQuery[key] != null && extraQuery[key] !== "") {
         query[key] = extraQuery[key];
@@ -244,10 +246,12 @@ return {
       const id = String(post.id);
       const title =
         this._decode((post.title && post.title.rendered) || "").trim() || id;
-      // REST 无封面/直链,仅缓存标题;video url 留到解析时拿。
+      const poster = this._featured(post);
+      // REST 无直链,仅缓存标题 + 封面;video url 留到解析时拿。
       this._pendingCache = this._pendingCache || {};
-      if (!this._pendingCache[id]) this._pendingCache[id] = { title };
-      list.push({ id, title });
+      if (!this._pendingCache[id]) this._pendingCache[id] = { title, poster };
+      else if (poster && !this._pendingCache[id].poster) this._pendingCache[id].poster = poster;
+      list.push({ id, title, poster: poster || undefined });
     }
     const totalPages = parseInt(res.headers["x-wp-totalpages"] || "0", 10) || 0;
     const hasMore = totalPages ? page < totalPages : list.length >= 20;
@@ -435,6 +439,21 @@ return {
   },
 
   /* ───────────────────────── 内部工具 ───────────────────────── */
+
+  /** 从 _embed 的 wp:featuredmedia 抠封面 source_url(REST 分类/搜索项的缩略图)。 */
+  _featured(post) {
+    try {
+      const media =
+        post._embedded &&
+        post._embedded["wp:featuredmedia"] &&
+        post._embedded["wp:featuredmedia"][0];
+      if (media && media.source_url) return media.source_url;
+    } catch (e) {
+      /* ignore */
+    }
+    if (post.jetpack_featured_media_url) return post.jetpack_featured_media_url;
+    return "";
+  },
 
   /** 从 permalink slug 造一个人类可读标题(兜底,当 article 没有 strong 标题时)。 */
   _slugTitle(permalink) {

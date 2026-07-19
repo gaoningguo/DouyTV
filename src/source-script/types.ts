@@ -27,6 +27,12 @@ export interface ScriptVodItem {
   id: string;
   title: string;
   poster?: string;
+  /**
+   * 封面防盗链请求头（UA / Referer 等）。部分 CDN(BunnyCDN / doppiocdn 等)对缩略图
+   * 校验 Referer 或绑定出口国 —— 裸 <img> 直连会 403。脚本给出这组头后,App 会把封面
+   * 走 wrapImage(dyproxy /proxy/image)带上它们 + 激活代理,封面才出得来。
+   */
+  poster_headers?: Record<string, string>;
   year?: string;
   desc?: string;
   type_name?: string;
