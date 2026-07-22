@@ -154,35 +154,34 @@ return {
   },
 
   /**
-   * VOD 列表 —— GET /api/front/v3/videos?limit=&offset=&sortBy=<mostRecent|mostLiked|trending>
-   * → { videos:[{ id, modelUsername, title, thumb(doppiocdn), videoUrl(strpst.com Mouflon
-   *     HLS master,带 md5+expires 签名), duration, likes, price, tags }], count }
-   * offset 深翻页(count 约数千);免费(price==0)项匿名可播,付费跳过。
-   * (2026-07:站点 /videos 页已改纯 SPA 壳、不再内联 SSR,故改走此 JSON API。)
+   * VOD 列表。站点会在不提示的情况下更换 front API 版本，因此先从
+   * /videos 页面和前端 bundle 找真实 endpoint，再验证 JSON 结构并缓存。
+   * 当前实测真实接口为 /api/front/feed/guest/trending，参数 type=video，
+   * 返回 { posts:[{ video:{ videoUrl, coverUrl, ... } }], nextPageParams }。
    */
   async _vodFeed(ctx, page, sort) {
     const limit = 24;
     const offset = (page - 1) * limit;
     const sortBy =
       sort === "likes" ? "mostLiked" : sort === "trending" ? "trending" : "mostRecent";
-    let data;
-    try {
-      data = await this._getJson(ctx, "/api/front/v3/videos", {
-        limit,
-        offset,
-        sortBy,
-      });
-    } catch (e) {
-      ctx.log && ctx.log.warn && ctx.log.warn("Fap.Bar VOD 列表失败:", String(e));
-      return { list: [], page, pageCount: page, total: 0 };
+    const result = await this._fetchVodPage(ctx, {
+      limit,
+      offset,
+      sortBy,
+      type: "video",
+      primaryTag: "girls",
+    });
+    const data = result && result.data;
+    const videos = this._extractVodRows(data);
+    if (!videos.length && page === 1) {
+      ctx.log && ctx.log.warn && ctx.log.warn("Fap.Bar VOD: 未找到可用点播接口或列表为空");
     }
-    const videos = (data && Array.isArray(data.videos) && data.videos) || [];
     const list = [];
     for (const v of videos) {
       const vod = this._vodToItem(ctx, v);
       if (vod) list.push(vod);
     }
-    const count = (data && data.count) || 0;
+    const count = this._extractVodCount(data);
     const hasMore = videos.length >= limit && (count ? offset + limit < count : true);
     return {
       list,
@@ -190,6 +189,217 @@ return {
       pageCount: hasMore ? page + 1 : page,
       total: count || list.length,
     };
+  },
+
+  /**
+   * 探测新版点播 API。候选接口只在响应能解析出视频数组时才会被缓存，
+   * 所以 404/HTML/错误 JSON 不会污染后续请求。
+   */
+  async _fetchVodPage(ctx, query) {
+    const cacheKey = "fapbar:vod-api-path:v2";
+    const paths = [];
+    try {
+      const cached = ctx.cache && (await ctx.cache.get(cacheKey));
+      if (typeof cached === "string" && cached) paths.push(cached);
+    } catch (e) {
+      /* ignore cache miss */
+    }
+
+    // 常见版本作为低成本兜底，真实地址优先由 bundle 探测补入。
+    const fallback = [
+      "/api/front/feed/guest/trending",
+      "/api/front/v5/videos",
+      "/api/front/v4/videos",
+      "/api/front/v2/videos",
+      "/api/front/v1/videos",
+      "/api/front/videos",
+      "/api/videos",
+      "/api/front/v3/videos",
+    ];
+    for (const p of fallback) if (paths.indexOf(p) < 0) paths.push(p);
+
+    const queryVariants = [
+      query,
+      {
+        limit: query.limit,
+        offset: query.offset,
+        type: query.type || "video",
+        primaryTag: query.primaryTag || "girls",
+        sort: query.sortBy,
+      },
+      {
+        limit: query.limit,
+        offset: query.offset,
+        type: query.type || "video",
+        primaryTag: query.primaryTag || "girls",
+        order: query.sortBy,
+      },
+    ];
+    const tryPaths = async (candidatePaths) => {
+      for (const path of candidatePaths) {
+        for (const q of queryVariants) {
+          try {
+            const url = /^https?:\/\//i.test(path)
+              ? ctx.utils.buildUrl(path, q)
+              : ctx.utils.buildUrl(this._apiBase(ctx) + path, q);
+            const res = await ctx.request.get(url, {
+              headers: this._headers(ctx),
+              timeout: 20000,
+            });
+            if (!res.ok) continue;
+            const body = await res.json();
+            if (!this._extractVodRows(body).length && !this._hasVodArray(body)) continue;
+            try {
+              if (ctx.cache) await ctx.cache.set(cacheKey, path, 21600);
+            } catch (e) {
+              /* ignore cache write */
+            }
+            return { data: body, path };
+          } catch (e) {
+            // Try the next path/query shape; a stale endpoint must not abort live feeds.
+          }
+        }
+      }
+      return null;
+    };
+
+    const apiResult = await tryPaths(paths);
+    if (apiResult) return apiResult;
+
+    // Only download page bundles when the known endpoint family failed.
+    const discovered = await this._discoverVodApiPaths(ctx);
+    const discoveredResult = await tryPaths(discovered);
+    if (discoveredResult) return discoveredResult;
+
+    // Last resort for deployments that still server-render the first page.
+    try {
+      const res = await ctx.request.get(this._siteBase(ctx) + "/videos", {
+        headers: this._headers(ctx, { Accept: "text/html,application/xhtml+xml" }),
+        timeout: 20000,
+      });
+      if (res.ok) {
+        const html = await res.text();
+        const rows = this._parsePreloadedFeedPosts(html);
+        const ssrRows = rows.length ? rows : this._parseSsrVideos(html);
+        if (ssrRows.length) return { data: { videos: ssrRows, count: ssrRows.length } };
+      }
+    } catch (e) {
+      /* ignore SSR fallback failure */
+    }
+    return null;
+  },
+
+  /** Find endpoint literals in the page and its loaded JavaScript bundles. */
+  async _discoverVodApiPaths(ctx) {
+    const found = [];
+    const add = (value) => {
+      if (!value) return;
+      let p = String(value).replace(/\\u002f/g, "/");
+      const m = p.match(/(?:https?:\/\/[^/]+)?(\/api\/[^"'`\\s]+videos[^"'`\\s]*)/i);
+      if (!m) return;
+      p = m[1].replace(/[),;]+$/, "");
+      if (found.indexOf(p) < 0) found.push(p);
+    };
+    let html = "";
+    try {
+      const res = await ctx.request.get(this._siteBase(ctx) + "/videos", {
+        headers: this._headers(ctx, { Accept: "text/html,application/xhtml+xml" }),
+        timeout: 20000,
+      });
+      if (!res.ok) return found;
+      html = await res.text();
+      const literalRe = /(?:https?:\/\/[^"'`\\s]+|\/api\/[^"'`\\s]+videos[^"'`\\s]*)/gi;
+      let match;
+      while ((match = literalRe.exec(html))) add(match[0]);
+    } catch (e) {
+      return found;
+    }
+
+    const scripts = [];
+    const scriptRe = /<script[^>]+src=["']([^"']+)["']/gi;
+    let sm;
+    while ((sm = scriptRe.exec(html)) && scripts.length < 12) {
+      scripts.push(ctx.utils.joinUrl(this._siteBase(ctx), sm[1]));
+    }
+    for (const src of scripts) {
+      try {
+        const res = await ctx.request.get(src, {
+          headers: this._headers(ctx, { Accept: "application/javascript,text/javascript,*/*" }),
+          timeout: 20000,
+        });
+        if (!res.ok) continue;
+        const js = await res.text();
+        const re = /(?:https?:\/\/[^"'`\\s]+|\/api\/[^"'`\\s]+videos[^"'`\\s]*)/gi;
+        let match;
+        while ((match = re.exec(js))) add(match[0]);
+      } catch (e) {
+        /* one bundle failing must not stop discovery */
+      }
+    }
+    return found;
+  },
+
+  _extractVodRows(body) {
+    const candidates = [
+      body,
+      body && body.data,
+      body && body.result,
+      body && body.data && body.data.data,
+    ];
+    for (const c of candidates) {
+      if (Array.isArray(c)) return c;
+      if (!c || typeof c !== "object") continue;
+      for (const key of ["videos", "items", "results", "content", "list"]) {
+        if (Array.isArray(c[key])) return c[key];
+      }
+      if (Array.isArray(c.posts)) {
+        return c.posts
+          .map((post) => {
+            const video = post && (post.video || post.media);
+            if (!video || typeof video !== "object") return null;
+            return Object.assign({}, video, {
+              modelId: video.modelId || video.userId || (post.model && post.model.id),
+              modelUsername:
+                (post.model && (post.model.username || post.model.name)) ||
+                video.modelUsername ||
+                video.username,
+              likesCount: video.likes != null ? video.likes : post.likes,
+              thumb: video.thumb || video.coverUrl || video.cover_url,
+            });
+          })
+          .filter(Boolean);
+      }
+    }
+    return [];
+  },
+
+  _extractVodCount(body) {
+    const candidates = [body, body && body.data, body && body.result, body && body.data && body.data.pagination];
+    for (const c of candidates) {
+      if (!c || typeof c !== "object") continue;
+      for (const key of ["count", "total", "totalCount", "total_count"]) {
+        if (Number.isFinite(Number(c[key]))) return Number(c[key]);
+      }
+    }
+    return 0;
+  },
+
+  _hasVodArray(body) {
+    const candidates = [
+      body,
+      body && body.data,
+      body && body.result,
+      body && body.data && body.data.data,
+    ];
+    for (const c of candidates) {
+      if (Array.isArray(c)) return true;
+      if (!c || typeof c !== "object") continue;
+      for (const key of ["videos", "items", "results", "content", "list"]) {
+        if (Array.isArray(c[key])) return true;
+      }
+      if (Array.isArray(c.posts)) return true;
+    }
+    return false;
   },
 
   /**
@@ -237,43 +447,105 @@ return {
     return [];
   },
 
+  /** Parse the current SSR state: window.__PRELOADED_STATE__.feed.posts[].video. */
+  _parsePreloadedFeedPosts(html) {
+    if (!html || typeof html !== "string") return [];
+    const key = "window.__PRELOADED_STATE__ = ";
+    const at = html.indexOf(key);
+    if (at < 0) return [];
+    const start = at + key.length;
+    let depth = 0;
+    let inStr = false;
+    let escaped = false;
+    for (let i = start; i < html.length; i++) {
+      const c = html[i];
+      if (inStr) {
+        if (escaped) escaped = false;
+        else if (c === "\\") escaped = true;
+        else if (c === '"') inStr = false;
+        continue;
+      }
+      if (c === '"') inStr = true;
+      else if (c === "{") depth++;
+      else if (c === "}") {
+        depth--;
+        if (depth === 0) {
+          try {
+            const state = JSON.parse(html.slice(start, i + 1));
+            const posts = state && state.feed && state.feed.posts;
+            return Array.isArray(posts)
+              ? posts.map((post) => post && post.video).filter(Boolean)
+              : [];
+          } catch (e) {
+            return [];
+          }
+        }
+      }
+    }
+    return [];
+  },
+
   /**
-   * SSR video 对象 → ScriptVodItem。跳过无 videoUrl / 付费(price>0)项。
+   * feed/video 对象 → ScriptVodItem。跳过无 videoUrl / 付费项。
    * videoUrl 已是签名 Mouflon HLS master,直接作 playUrl(App Rust 层解扰)。
    */
   _vodToItem(ctx, v) {
-    if (!v || v.id == null) return null;
-    const url = v.videoUrl;
+    if (!v) return null;
+    const idValue = v.id != null ? v.id : v.videoId != null ? v.videoId : v.video_id;
+    if (idValue == null) return null;
+    const media = v.media && typeof v.media === "object" ? v.media : v;
+    const url =
+      media.videoUrl ||
+      media.video_url ||
+      media.hlsUrl ||
+      media.hls_url ||
+      media.playUrl ||
+      media.play_url ||
+      media.url;
     if (!url || typeof url !== "string") return null;
-    if (v.price && Number(v.price) > 0) return null; // 付费影集匿名放不出,跳过
-    const id = "vod_" + v.id;
-    const title = (v.title || v.userUsername || String(v.id)).toString().trim();
+    const cost = v.price != null ? v.price : v.cost;
+    if ((cost && Number(cost) > 0) || (v.accessMode === "paid" && !v.isPurchased)) {
+      return null; // 付费影集匿名放不出,跳过
+    }
+    const id = "vod_" + idValue;
+    const username = v.userUsername || v.username || v.modelUsername || v.model_username;
+    const title = (v.title || v.name || username || String(idValue)).toString().trim();
     const remarks = [];
-    if (v.duration) {
-      const s = Number(v.duration) || 0;
+    if (v.duration || v.durationSeconds) {
+      const s = Number(v.duration || v.durationSeconds) || 0;
       const mm = Math.floor(s / 60);
       const ss = s % 60;
       remarks.push(mm + ":" + (ss < 10 ? "0" : "") + ss);
     }
-    if (v.likesCount) remarks.push("♥ " + v.likesCount);
+    const likes = v.likesCount != null ? v.likesCount : v.likes != null ? v.likes : v.like_count;
+    if (likes) remarks.push("likes " + likes);
+    const poster =
+      v.thumb ||
+      v.thumbnail ||
+      v.thumbnailUrl ||
+      v.thumbnail_url ||
+      v.coverUrl ||
+      v.cover_url ||
+      v.poster;
 
     this._pendingCache = this._pendingCache || {};
     this._pendingCache[id] = {
       title,
-      poster: v.thumb || undefined,
-      desc: (v.description || "").trim(),
+      poster: poster || undefined,
+      desc: (v.description || v.desc || "").trim(),
       videoUrl: url,
+      modelId: v.modelId || v.userId || undefined,
       isVod: true,
     };
 
     return {
       id,
       title,
-      poster: v.thumb || undefined,
-      poster_headers: v.thumb
+      poster: poster || undefined,
+      poster_headers: poster
         ? { "User-Agent": this._ua(ctx), Referer: this._siteBase(ctx) + "/" }
         : undefined,
-      desc: v.userUsername ? "@" + v.userUsername : undefined,
+      desc: username ? "@" + username : undefined,
       vod_remarks: remarks.length ? remarks.join(" · ") : undefined,
     };
   },
@@ -418,10 +690,14 @@ return {
       if (!info) {
         // 冷启动直接进详情:重扫 VOD 快照找这个 id。
         try {
-          const list = await this._vodList(ctx, "new");
-          for (const v of list) {
-            if (v && v.id === id) break;
-          }
+          const result = await this._fetchVodPage(ctx, {
+            limit: 24,
+            offset: 0,
+            sortBy: "mostRecent",
+            type: "video",
+            primaryTag: "girls",
+          });
+          this._extractVodRows(result && result.data).forEach((v) => this._vodToItem(ctx, v));
           info = (this._pendingCache && this._pendingCache[id]) || null;
         } catch (e) {
           /* ignore */
@@ -444,9 +720,16 @@ return {
           {
             sourceId: sourceId || "vod",
             sourceName: "Fap.Bar",
-            // 影集 master 已是签名 URL(带 md5+expires);Rust 代理层按 strpst/doppiocdn
-            // host 识别 → 注入 pkey + Mouflon 段名解扰(与直播同源,需 Stripchat Keys pdkey)。
-            episodes: [{ playUrl: info.videoUrl, needResolve: true, title: "完整版" }],
+            // 只传稳定的 id;resolvePlayUrl 会用 v2 详情接口重新签名,避免旧 URL 过期。
+            episodes: [
+              {
+                playUrl: info.modelId
+                  ? "fapvod:" + id + ":" + info.modelId
+                  : info.videoUrl,
+                needResolve: true,
+                title: "完整版",
+              },
+            ],
             episodes_titles: ["完整版"],
           },
         ],
@@ -495,7 +778,33 @@ return {
   },
 
   async resolvePlayUrl(ctx, { playUrl }) {
-    // VOD(影集):playUrl 已是 strpst.com 签名 HLS master,直接透传(Rust 层做 Mouflon 解扰)。
+    // VOD:用稳定 id 现拉新签名,不要复用列表阶段可能已过期的 URL。
+    if (/^fapvod:/i.test(String(playUrl))) {
+      const parts = String(playUrl).split(":");
+      const id = parts[1] && parts[1].replace(/^vod_/, "");
+      const modelId = parts[2];
+      if (id && modelId) {
+        try {
+          const fresh = await this._fetchVodInfo(ctx, modelId, id);
+          const freshUrl = fresh && fresh.videoUrl;
+          if (freshUrl) {
+            return {
+              url: freshUrl,
+              type: "hls",
+              headers: {
+                "User-Agent": this._ua(ctx),
+                Referer: this._siteBase(ctx) + "/",
+              },
+            };
+          }
+        } catch (e) {
+          ctx.log && ctx.log.warn && ctx.log.warn("Fap.Bar VOD 签名刷新失败:", String(e));
+        }
+      }
+      throw new Error("Fap.Bar: 未能刷新影集播放签名 @ " + playUrl);
+    }
+
+    // 兼容旧缓存:playUrl 已是 strpst.com 签名 HLS master,直接透传。
     if (/^https?:\/\//i.test(String(playUrl)) && /strpst\.com|doppiocdn/i.test(String(playUrl))) {
       return {
         url: String(playUrl),
@@ -533,6 +842,23 @@ return {
         Referer: this._siteBase(ctx) + "/",
       },
     };
+  },
+
+  /** GET /api/front/v2/users/<modelId>/videos/<videoId> → { video }。 */
+  async _fetchVodInfo(ctx, modelId, videoId) {
+    const url =
+      this._apiBase(ctx) +
+      "/api/front/v2/users/" +
+      encodeURIComponent(String(modelId)) +
+      "/videos/" +
+      encodeURIComponent(String(videoId));
+    const res = await ctx.request.get(url, {
+      headers: this._headers(ctx),
+      timeout: 20000,
+    });
+    if (!res.ok) throw new Error("Fap.Bar VOD detail HTTP " + res.status);
+    const data = await res.json();
+    return (data && data.video) || data || null;
   },
 
   /** GET /api/front/v2/models/username/<username>/cam → cam({ isCamAvailable, streamName })。 */

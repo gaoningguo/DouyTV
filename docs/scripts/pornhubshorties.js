@@ -59,16 +59,24 @@ return {
       isAjax: 1,
     });
     const html = await this._fetchHtml(ctx, url);
-    const keys = this._parseViewkeys(html);
+    // 富解析:cheerio 抽 viewkey + 封面(与 pornhub.js 列表同款);
+    // 结构不匹配时回落到纯 viewkey 正则(此时 poster 留空,交 App 首帧兜底)。
+    const cards = this._parseCards(ctx, html);
 
     const list = [];
-    for (const vkey of keys) {
-      if (seen[vkey]) continue;
+    for (const c of cards) {
+      const vkey = c.id;
+      if (!vkey || seen[vkey]) continue;
       seen[vkey] = 1;
       list.push({
         id: vkey,
-        title: "Shorties " + vkey,
-        // shorties 列表页不带干净封面,交给 App 用视频首帧兜底。
+        title: c.title || "Shorties " + vkey,
+        poster: c.poster || undefined,
+        // PH 缩略图 CDN(ci.phncdn.com)可能校验 Referer,带上头走代理更稳。
+        poster_headers: c.poster
+          ? { "User-Agent": this._ua(ctx), Referer: "https://www.pornhub.com/" }
+          : undefined,
+        vod_remarks: c.duration || undefined,
       });
     }
 
@@ -79,7 +87,7 @@ return {
     }
 
     // 页间重叠 —— 只要本页 HTML 里还有 vkey(不管是否新),就认为还能继续翻。
-    const hasMore = keys.length > 0;
+    const hasMore = cards.length > 0;
     return {
       list,
       page: p,
@@ -247,6 +255,78 @@ return {
     const reHref = /viewkey=([a-z0-9]+)/gi;
     while ((m = reHref.exec(html)) !== null) push(m[1]);
     return out;
+  },
+
+  /**
+   * 富解析 shorties 列表卡片 —— 抽 { id(viewkey), title, poster, duration }。
+   *
+   * shorties 服务端渲染的卡片与主站视频列表同款(li.pcVideoListItem / li.videoBox /
+   * div.phimage,内含 a[href*=viewkey=] + img[data-src|data-thumb_url|src])。用 cheerio
+   * 解 DOM 拿封面;缩略图挂在 ci.phncdn.com,懒加载时真图在 data-src / data-thumb_url。
+   *
+   * 若页面结构与选择器不匹配(拿不到任何卡片),回落到 _parseViewkeys 的纯正则,
+   * 至少保证列表不空(poster 留空,由 App 首帧兜底)—— 不会比原来更差。
+   */
+  _parseCards(ctx, html) {
+    const out = [];
+    const seen = {};
+    let $ = null;
+    try {
+      $ = ctx.html.load(html);
+    } catch (e) {
+      $ = null;
+    }
+
+    if ($) {
+      const self = this;
+      $("li.pcVideoListItem, li.videoBox, div.phimage, div.pcVideoListItem").each(
+        function () {
+          const $el = $(this);
+          const $a = $el.find('a[href*="viewkey="]').first();
+          const href = $a.attr("href") || "";
+          const mk = href.match(/viewkey=([a-z0-9]+)/i);
+          if (!mk) return;
+          const vkey = mk[1];
+          if (seen[vkey]) return;
+          seen[vkey] = true;
+
+          const $img = $el.find("img").first();
+          // 懒加载图片真图优先取 data-src / data-thumb_url,回落 src;跳过 data: 占位。
+          let poster =
+            $img.attr("data-src") ||
+            $img.attr("data-thumb_url") ||
+            $img.attr("data-mediabook") ||
+            $img.attr("src") ||
+            "";
+          if (/^data:/i.test(poster)) poster = "";
+          if (poster && poster.indexOf("//") === 0) poster = "https:" + poster;
+
+          const title =
+            ($a.attr("title") || "").trim() ||
+            ($img.attr("alt") || "").trim() ||
+            $el.find(".title a").first().text().trim() ||
+            "";
+          const duration = $el.find(".duration").first().text().trim();
+
+          out.push({
+            id: vkey,
+            title: title.replace(/\s+/g, " "),
+            poster: poster || "",
+            duration: duration || "",
+          });
+        }
+      );
+    }
+
+    if (out.length) return out;
+
+    // 兜底:结构变了 / 卡片没解出来 —— 用纯 viewkey 正则,poster 留空。
+    return this._parseViewkeys(html).map((vkey) => ({
+      id: vkey,
+      title: "",
+      poster: "",
+      duration: "",
+    }));
   },
 
   /* ─── 以下 flashvars / 候选收集 / 探活,与 pornhub.js 同源 ─── */

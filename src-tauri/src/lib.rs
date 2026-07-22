@@ -1820,6 +1820,7 @@ fn proxy_fetch(
     referer: Option<&str>,
     proxy: Option<&str>,
     timeout_secs: Option<u64>,
+    send_origin: bool,
 ) -> Result<FetchResult, String> {
     let agent = agent_for(proxy)?;
     let mut req = agent.get(target);
@@ -1850,16 +1851,20 @@ fn proxy_fetch(
     // Origin 头:浏览器对跨域 HLS 请求会自动发,部分 CDN(如 chaturbate 的 mmcdn.com)
     // 严格校验它,缺失就 403。从 Referer 推断 Origin —— Referer 是 URL,
     // Origin 是 `scheme://host[:port]`,直接截断 path 即可。
-    if let Some(r) = referer {
-        if !r.is_empty() {
-            if let Ok(u) = Url::parse(r) {
-                let origin = format!(
-                    "{}://{}{}",
-                    u.scheme(),
-                    u.host_str().unwrap_or(""),
-                    u.port().map(|p| format!(":{p}")).unwrap_or_default()
-                );
-                req = req.set("Origin", &origin);
+    // 但【图片(海报/封面)不能带 Origin】—— 浏览器加载 <img> 从不发 Origin,
+    // 部分 CDN(如 pin.porn 的截图站)反而对带 Origin 的请求一律 403。故 image 端点关闭它。
+    if send_origin {
+        if let Some(r) = referer {
+            if !r.is_empty() {
+                if let Ok(u) = Url::parse(r) {
+                    let origin = format!(
+                        "{}://{}{}",
+                        u.scheme(),
+                        u.host_str().unwrap_or(""),
+                        u.port().map(|p| format!(":{p}")).unwrap_or_default()
+                    );
+                    req = req.set("Origin", &origin);
+                }
             }
         }
     }
@@ -1909,6 +1914,7 @@ async fn proxy_fetch_h2(
     referer: Option<&str>,
     proxy: Option<&str>,
     timeout_secs: Option<u64>,
+    send_origin: bool,
 ) -> Result<FetchResult, String> {
     let client = h2_client_for(proxy)?;
     let mut req = client.get(target);
@@ -1918,14 +1924,19 @@ async fn proxy_fetch_h2(
     req = req.header("User-Agent", ua.unwrap_or(DEFAULT_UA));
     let referer_val = referer.filter(|s| !s.is_empty()).unwrap_or("https://movie.douban.com/");
     req = req.header("Referer", referer_val);
-    if let Ok(u) = Url::parse(referer_val) {
-        let origin = format!(
-            "{}://{}{}",
-            u.scheme(),
-            u.host_str().unwrap_or(""),
-            u.port().map(|p| format!(":{p}")).unwrap_or_default()
-        );
-        req = req.header("Origin", &origin);
+    // Origin 头:跨域 HLS/媒体请求浏览器会自动带,部分 CDN(chaturbate mmcdn 等)严格校验。
+    // 但图片(<img>)浏览器【从不】发 Origin —— 有些 CDN(如 pin.porn 封面)反而拒带 Origin 的请求(403)。
+    // 故 image 路径 send_origin=false,不注入。
+    if send_origin {
+        if let Ok(u) = Url::parse(referer_val) {
+            let origin = format!(
+                "{}://{}{}",
+                u.scheme(),
+                u.host_str().unwrap_or(""),
+                u.port().map(|p| format!(":{p}")).unwrap_or_default()
+            );
+            req = req.header("Origin", &origin);
+        }
     }
     req = req.header("Accept", "*/*");
     req = req.header("Accept-Language", "zh-CN,zh;q=0.9,en-US;q=0.8,en;q=0.7");
@@ -2050,7 +2061,7 @@ fn extract_and_fetch_cenc_key(
     eprintln!("[cenc_decrypt] fetching key from: {}", key_url.split('?').next().unwrap_or(&key_url));
 
     // 拉 key bytes(同步,在 spawn_blocking 内)
-    let key_bytes = match proxy_fetch(&key_url, ua, referer, proxy, None) {
+    let key_bytes = match proxy_fetch(&key_url, ua, referer, proxy, None, true) {
         Ok(r) if r.status == 200 && r.bytes.len() >= 16 => r.bytes,
         Ok(r) => {
             eprintln!("[cenc_decrypt] key fetch failed: status={} len={}", r.status, r.bytes.len());
@@ -3252,6 +3263,7 @@ pub fn run() {
                                 referer,
                                 proxy,
                                 timeout_override,
+                                !is_image_path,
                             ));
                             if !host_skips_m3u8_cache {
                                 if let Ok(ref r) = result {
@@ -3297,10 +3309,11 @@ pub fn run() {
                             referer,
                             proxy,
                             timeout_override,
+                            !is_image_path,
                         ))
                     }
                 } else {
-                    proxy_fetch(target_url, ua, referer, proxy, timeout_override)
+                    proxy_fetch(target_url, ua, referer, proxy, timeout_override, !is_image_path)
                 };
 
                 let resp = match fetch_result {
