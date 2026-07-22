@@ -185,7 +185,9 @@ function buildImageUrl(resolved: ResolvedSuwayomiConfig, pathOrUrl: string): str
   const abs = /^https?:\/\//i.test(pathOrUrl)
     ? pathOrUrl
     : `${resolved.serverBaseUrl}${pathOrUrl.startsWith("/") ? "" : "/"}${pathOrUrl}`;
-  return wrapImage(abs) || abs;
+  // Suwayomi 多为自建/局域网服务器(127.0.0.1 或内网 IP),图片必须直连;走外部系统代理
+  // (Clash 等)反而连不上,导致书架/最近阅读/详情封面全空。
+  return wrapImage(abs, undefined, { bypassProxy: true }) || abs;
 }
 
 export class SuwayomiClient {
