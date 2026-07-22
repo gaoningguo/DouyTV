@@ -17,10 +17,12 @@ import {
   IconChevronRight,
   IconChevronUp,
   IconGrid,
+  IconHistoryClock,
   IconList,
   IconManga,
   IconSearch,
   IconSettings,
+  IconTrash,
 } from "@/components/Icon";
 import {
   getMangaSources,
@@ -44,14 +46,21 @@ import type {
   MangaReadRecord,
   MangaShelfItem,
 } from "@/lib/manga/types";
-import { appAlert } from "@/components/AppDialog";
+import { appAlert, appConfirm } from "@/components/AppDialog";
 import { wrapImage } from "@/lib/proxy";
 import type { DiscoverItem } from "@/lib/discover";
 import {
   fetchMangaHome,
   BILI_MANGA_REFERER,
+  fetchMangaRanking,
+  fetchMangaClassify,
   type MangaHomeData,
+  type MangaLabels,
+  type MangaLabelOption,
+  type MangaRankPage,
+  type MangaClassifyQuery,
   type BannerCard,
+  type ClassifyComic,
 } from "@/lib/mangaDiscover";
 import {
   titleVariants,
@@ -73,6 +82,9 @@ export default function Manga() {
       <Route path="/" element={<MangaHome />} />
       <Route path="search" element={<MangaSearch />} />
       <Route path="ranking" element={<MangaRanking />} />
+      <Route path="classify" element={<MangaClassify />} />
+      <Route path="mine" element={<MangaMine />} />
+      <Route path="mine" element={<MangaMine />} />
       <Route path="browse" element={<MangaBrowse />} />
       <Route path="detail/:sourceId/:mangaId" element={<MangaDetailView />} />
       <Route
@@ -165,6 +177,8 @@ function MangaCover({
   onContextMenu?: (e: React.MouseEvent) => void;
 }) {
   const [failed, setFailed] = useState(false);
+  // Suwayomi 封面常是本地/局域网服务器,直连不过代理;渲染时过 wrapImage 顺带拆掉历史双层包装。
+  const src = wrapImage(cover, undefined, { bypassProxy: true });
   return (
     <button
       type="button"
@@ -179,9 +193,9 @@ function MangaCover({
         className="relative aspect-[3/4] w-full overflow-hidden rounded-lg"
         style={{ background: "var(--ink-2)", border: "1px solid var(--cream-line)" }}
       >
-        {cover && !failed ? (
+        {src && !failed ? (
           <img
-            src={cover}
+            src={src}
             alt={title}
             loading="lazy"
             onError={() => setFailed(true)}
@@ -1022,32 +1036,90 @@ function MangaChooser({
   );
 }
 
-// 榜单"查看全部"页:某区全部 ~50 名。
+// 高能排行"查看全部"页(照 B站 /ranking):官方榜 tab 行(新作/男生/女生/国漫/日漫/
+// 韩漫/宝藏/完结/原创)+ 当前榜 ~50 名网格。数据走 SSR 免签名接口,点条目走用户源解析。
 function MangaRanking() {
   const navigate = useNavigate();
-  const [params] = useSearchParams();
-  const region = (params.get("region") as RankRegion) || "JP";
-  const [home, setHome] = useState<MangaHomeData | null>(null);
+  const [params, setParams] = useSearchParams();
+  const urlId = Number(params.get("id"));
+  const [activeId, setActiveId] = useState<number>(
+    Number.isFinite(urlId) ? urlId : 1
+  );
+  const [page, setPage] = useState<MangaRankPage | null>(null);
+  const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
   const { resolvingId, chooser, setChooser, openItem, gotoDetail } = useMangaResolve();
 
   useEffect(() => {
-    fetchMangaHome()
-      .then(setHome)
-      .catch((e) => setError((e as Error).message));
-  }, []);
+    let alive = true;
+    setLoading(true);
+    setError("");
+    fetchMangaRanking(activeId)
+      .then((p) => {
+        if (alive) setPage(p);
+      })
+      .catch((e) => {
+        if (alive) setError((e as Error).message);
+      })
+      .finally(() => {
+        if (alive) setLoading(false);
+      });
+    return () => {
+      alive = false;
+    };
+  }, [activeId]);
 
-  const label = region === "JP" ? "日漫榜" : region === "CN" ? "国漫榜" : "韩漫榜";
-  const items = home?.ranking[region] || [];
+  const selectTab = (id: number) => {
+    setActiveId(id);
+    setParams({ id: String(id) }, { replace: true });
+  };
+
+  const tabs = page?.tabs || [];
+  const curName = tabs.find((t) => t.id === activeId)?.name;
 
   return (
-    <PageShell title={`高能排行 · ${label}`} eyebrow="MANGA · RANKING" onBack={() => navigate(-1)}>
+    <PageShell
+      title={curName ? `高能排行 · ${curName}` : "高能排行"}
+      eyebrow="MANGA · RANKING"
+      onBack={() => navigate(-1)}
+    >
+      {/* 榜 tab 行(照 B站 ranking 顶部) */}
+      {tabs.length > 0 && (
+        <div className="mb-4 flex gap-2 overflow-x-auto scrollbar-hide -mx-1 px-1">
+          {tabs.map((t) => {
+            const active = t.id === activeId;
+            return (
+              <button
+                key={t.id}
+                type="button"
+                onClick={() => selectTab(t.id)}
+                className="shrink-0 rounded-full px-4 py-1.5 text-sm font-display tap transition-colors"
+                style={{
+                  background: active ? "var(--ember)" : "var(--ink-2)",
+                  color: active ? "var(--ink)" : "var(--cream-dim)",
+                  border: `1px solid ${active ? "var(--ember)" : "var(--cream-line)"}`,
+                }}
+              >
+                {t.name}
+              </button>
+            );
+          })}
+        </div>
+      )}
+
       {error ? (
         <p className="text-sm text-ember">{error}</p>
-      ) : !home ? (
-        <p className="text-sm text-cream-faint">加载中…</p>
+      ) : loading && !page ? (
+        <div className="grid grid-cols-3 sm:grid-cols-4 md:grid-cols-6 gap-3">
+          {Array.from({ length: 12 }).map((_, i) => (
+            <div key={i} className="space-y-1.5">
+              <div className="aspect-[3/4] rounded-lg animate-pulse" style={{ background: "var(--ink-2)" }} />
+              <div className="h-3 w-3/4 rounded animate-pulse" style={{ background: "var(--ink-2)" }} />
+            </div>
+          ))}
+        </div>
       ) : (
-        <RankList items={items} resolvingId={resolvingId} onOpen={openItem} />
+        <RankList items={page?.list || []} resolvingId={resolvingId} onOpen={openItem} />
       )}
       <MangaChooser
         chooser={chooser}
@@ -1065,7 +1137,248 @@ function MangaRanking() {
   );
 }
 
-function MangaDiscover() {
+// ─── 分类页(照 B站 classify 布局)───────────────────────
+// 筛选项(题材/地区/进度/排序/收费)走 B站官方 AllLabel 接口(免签名),不自己编。
+// 列表数据走 gaia WASM 签名接口拿不到,用首页免签名数据聚合出的本地目录(catalog)做筛选。
+// 布局照搬 B站:多行筛选 chips + 封面网格。点卡片走同一套多级解析到用户配置的源。
+type ClassifyFilters = {
+  style: number; // 官方 style id,-1 = 全部
+  area: number; // 官方 area id,-1 = 全部
+  status: number; // 官方 status id(0=连载 1=完结),-1 = 全部
+  order: number; // 官方 order id(0=人气 1=更新 3=上架)
+  price: number; // 官方 price id,-1 = 全部(本地目录无收费信息,仅照布局展示)
+};
+
+function classifyToDiscover(c: ClassifyComic): DiscoverItem {
+  return {
+    id: c.id,
+    title: c.title,
+    cover: c.cover,
+    author: c.author,
+    cat: c.styles.slice(0, 2).join(" ") || undefined,
+    finished: c.finished,
+    episodes: c.total,
+    metaSegs: c.finished
+      ? [{ text: "完结" }, ...(c.total ? [{ text: `共 ${c.total} 话` }] : [])]
+      : c.total
+        ? [{ text: `共 ${c.total} 话` }]
+        : undefined,
+  };
+}
+
+function FilterRow({
+  label,
+  options,
+  value,
+  onChange,
+}: {
+  label: string;
+  options: { value: number; label: string }[];
+  value: number;
+  onChange: (v: number) => void;
+}) {
+  return (
+    <div className="flex items-start gap-3 py-1.5">
+      <span className="shrink-0 pt-1.5 text-sm text-cream-faint w-9">{label}</span>
+      <div className="flex flex-wrap gap-x-1.5 gap-y-1.5">
+        {options.map((o) => {
+          const active = o.value === value;
+          return (
+            <button
+              key={o.value}
+              type="button"
+              onClick={() => onChange(o.value)}
+              className="rounded-md px-3 py-1.5 text-sm tap transition-colors"
+              style={{
+                background: active ? "var(--ember-soft)" : "transparent",
+                color: active ? "var(--ember)" : "var(--cream-dim)",
+              }}
+            >
+              {o.label}
+            </button>
+          );
+        })}
+      </div>
+    </div>
+  );
+}
+
+const CLASSIFY_PAGE_SIZE = 24; // 每批渲染数(客户端"加载更多")
+
+function MangaClassify() {
+  const navigate = useNavigate();
+  const [params] = useSearchParams();
+  const [list, setList] = useState<ClassifyComic[]>([]);
+  const [labels, setLabels] = useState<MangaLabels | null>(null);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState("");
+  const [visible, setVisible] = useState(CLASSIFY_PAGE_SIZE);
+  const sentinelRef = useRef<HTMLDivElement | null>(null);
+  const reqRef = useRef(0);
+  // 官方筛选项一律用 id(SSR tabListData 返回)。-1 = 全部;orders 默认 0(人气推荐)。
+  const initStyle = Number(params.get("style"));
+  const [f, setF] = useState<ClassifyFilters>({
+    style: Number.isFinite(initStyle) && initStyle > 0 ? initStyle : -1,
+    area: -1,
+    status: -1,
+    price: -1,
+    order: 0,
+  });
+  const { resolvingId, chooser, setChooser, openItem, gotoDetail } = useMangaResolve();
+
+  // 每次筛选变化 → 去 B站移动端 SSR 查真实、随筛选变化的数据(合并 3 种排序去重)。
+  useEffect(() => {
+    const token = ++reqRef.current;
+    setLoading(true);
+    setError("");
+    const q: MangaClassifyQuery = {
+      styles: f.style,
+      areas: f.area,
+      status: f.status,
+      prices: f.price,
+      special: 0,
+      orders: f.order,
+    };
+    fetchMangaClassify(q)
+      .then((res) => {
+        if (token !== reqRef.current) return;
+        setList(res.list);
+        if (res.labels) setLabels(res.labels);
+        setVisible(CLASSIFY_PAGE_SIZE);
+      })
+      .catch((e) => {
+        if (token === reqRef.current) setError((e as Error).message);
+      })
+      .finally(() => {
+        if (token === reqRef.current) setLoading(false);
+      });
+  }, [f]);
+
+  // 官方 chips → FilterRow options(前置「全部」= -1)。
+  const withAll = (opts: MangaLabelOption[] | undefined) => [
+    { value: -1, label: "全部" },
+    ...(opts || []).map((o) => ({ value: o.id, label: o.name })),
+  ];
+
+  // 客户端"加载更多":每批 CLASSIFY_PAGE_SIZE 部,滚到底再放一批。
+  const shown = list.slice(0, visible);
+  const hasMore = visible < list.length;
+  useEffect(() => {
+    const el = sentinelRef.current;
+    if (!el || !hasMore) return;
+    const io = new IntersectionObserver(
+      (obs) => {
+        if (obs[0]?.isIntersecting) {
+          setVisible((v) => Math.min(v + CLASSIFY_PAGE_SIZE, list.length));
+        }
+      },
+      { rootMargin: "400px" }
+    );
+    io.observe(el);
+    return () => io.disconnect();
+  }, [hasMore, list.length]);
+
+  return (
+    <PageShell title="全部漫画" eyebrow="MANGA · CLASSIFY" onBack={() => navigate(-1)}>
+      {error && list.length === 0 ? (
+        <p className="text-sm text-ember">{error}</p>
+      ) : loading && list.length === 0 ? (
+        <div className="grid grid-cols-3 sm:grid-cols-4 md:grid-cols-6 gap-3">
+          {Array.from({ length: 12 }).map((_, i) => (
+            <div key={i} className="space-y-1.5">
+              <div className="aspect-[3/4] rounded-lg animate-pulse" style={{ background: "var(--ink-2)" }} />
+              <div className="h-3 w-3/4 rounded animate-pulse" style={{ background: "var(--ink-2)" }} />
+            </div>
+          ))}
+        </div>
+      ) : (
+        <>
+          {/* 筛选区(官方 AllLabel 数据 + B站 classify 布局):题材/地区/进度/收费/排序 */}
+          <div
+            className="mb-4 rounded-xl p-2 sm:p-3"
+            style={{ background: "var(--ink-2)", border: "1px solid var(--cream-line)" }}
+          >
+            <FilterRow
+              label="题材"
+              value={f.style}
+              onChange={(v) => setF((s) => ({ ...s, style: v }))}
+              options={withAll(labels?.styles)}
+            />
+            <FilterRow
+              label="地区"
+              value={f.area}
+              onChange={(v) => setF((s) => ({ ...s, area: v }))}
+              options={withAll(labels?.areas)}
+            />
+            <FilterRow
+              label="进度"
+              value={f.status}
+              onChange={(v) => setF((s) => ({ ...s, status: v }))}
+              options={withAll(labels?.status)}
+            />
+            <FilterRow
+              label="收费"
+              value={f.price}
+              onChange={(v) => setF((s) => ({ ...s, price: v }))}
+              options={withAll(labels?.prices)}
+            />
+            {labels?.orders && labels.orders.length > 0 && (
+              <FilterRow
+                label="排序"
+                value={f.order}
+                onChange={(v) => setF((s) => ({ ...s, order: v }))}
+                options={labels.orders.map((o) => ({ value: o.id, label: o.name }))}
+              />
+            )}
+          </div>
+
+          {/* 结果数 */}
+          <p className="mb-3 text-xs text-cream-faint font-mono">
+            共 {list.length} 部
+          </p>
+
+          {list.length === 0 ? (
+            <EmptyState icon={<IconManga size={48} />} title="没有符合条件的漫画" subtitle="换个筛选条件试试。" />
+          ) : (
+            <>
+              <div className="grid grid-cols-3 sm:grid-cols-4 md:grid-cols-6 gap-x-3 gap-y-1">
+                {shown.map((c) => (
+                  <DiscoverCover
+                    key={c.id}
+                    item={classifyToDiscover(c)}
+                    resolving={resolvingId === c.id}
+                    onClick={() => openItem(classifyToDiscover(c))}
+                  />
+                ))}
+              </div>
+              <div ref={sentinelRef} className="h-10" />
+              {hasMore && (
+                <p className="text-center text-xs text-cream-faint py-3 font-mono">加载中…</p>
+              )}
+              {!hasMore && list.length > CLASSIFY_PAGE_SIZE && (
+                <p className="text-center text-xs text-cream-faint py-3 font-mono">没有更多了</p>
+              )}
+            </>
+          )}
+        </>
+      )}
+      <MangaChooser
+        chooser={chooser}
+        onClose={() => setChooser(null)}
+        onPick={(m) => {
+          gotoDetail(m);
+          setChooser(null);
+        }}
+        onManual={(t) => {
+          setChooser(null);
+          navigate(`/manga/search?q=${encodeURIComponent(t)}`);
+        }}
+      />
+    </PageShell>
+  );
+}
+
+function MangaDiscover({ recentSlot }: { recentSlot?: React.ReactNode }) {
   const navigate = useNavigate();
   const [home, setHome] = useState<MangaHomeData | null>(null);
   const [loading, setLoading] = useState(false);
@@ -1127,7 +1440,7 @@ function MangaDiscover() {
               <button
                 key={c.id}
                 type="button"
-                onClick={() => navigate("/manga/browse")}
+                onClick={() => navigate(`/manga/classify?style=${encodeURIComponent(c.name)}`)}
                 className="text-sm font-display tap text-cream-dim hover:text-ember"
               >
                 {c.name}
@@ -1135,13 +1448,15 @@ function MangaDiscover() {
             ))}
             <button
               type="button"
-              onClick={() => navigate("/manga/browse")}
+              onClick={() => navigate("/manga/classify")}
               className="flex items-center gap-0.5 text-sm font-display text-cream tap"
             >
               全部 <IconChevronRight size={13} />
             </button>
           </div>
         )}
+
+        {recentSlot}
 
         <RecommendPanel items={home.recommendation} resolvingId={resolvingId} onOpen={openItem} />
         <ArrowRow anchorId="mg-hot" title="畅销热门" subtitle="物有所值的真香漫画" items={home.hotSeller} resolvingId={resolvingId} onOpen={openItem} />
@@ -1177,7 +1492,11 @@ function MangaDiscover() {
               </div>
               <button
                 type="button"
-                onClick={() => navigate(`/manga/ranking?region=${rankRegion}`)}
+                onClick={() =>
+                  navigate(
+                    `/manga/ranking?id=${rankRegion === "JP" ? 0 : rankRegion === "CN" ? 1 : 2}`
+                  )
+                }
                 className="flex items-center gap-0.5 rounded-full px-3 py-1.5 text-xs font-display tap shrink-0"
                 style={{ background: "var(--ember-soft)", color: "var(--ember)" }}
               >
@@ -1211,27 +1530,52 @@ function MangaHome() {
   const navigate = useNavigate();
   const shelf = useMangaStore((s) => s.shelf);
   const history = useMangaStore((s) => s.history);
-  const isOnShelf = useMangaStore((s) => s.isOnShelf);
-  const toggleShelf = useMangaStore((s) => s.toggleShelf);
-  const removeHistory = useMangaStore((s) => s.removeHistory);
+  const clearHistory = useMangaStore((s) => s.clearHistory);
   const config = useMangaStore((s) => s.config);
-  // 长按/右键的历史记录操作菜单目标。
-  const [actionTarget, setActionTarget] = useState<MangaReadRecord | null>(null);
 
   const configured = isMangaConfigured(config);
+
+  // 最近阅读小卡横条(放在为你推荐上方),带清空。
+  const recentSlot =
+    configured && history.length > 0 ? (
+      <RecentReadStrip
+        history={history}
+        onOpen={(h) =>
+          navigate(
+            `/manga/reader/${encodeURIComponent(h.sourceId)}/${encodeURIComponent(h.mangaId)}/${encodeURIComponent(h.chapterId)}?title=${encodeURIComponent(h.title)}&cover=${encodeURIComponent(h.cover)}&sourceName=${encodeURIComponent(h.sourceName)}&chapterName=${encodeURIComponent(h.chapterName)}`
+          )
+        }
+        onClear={async () => {
+          const ok = await appConfirm("确定清空全部最近阅读记录?", { tone: "warning" });
+          if (ok) clearHistory();
+        }}
+        onMore={() => navigate("/manga/mine")}
+      />
+    ) : undefined;
 
   const trailing = (
     <div className="flex items-center gap-2">
       {configured && (
-        <button
-          type="button"
-          onClick={() => navigate("/manga/browse")}
-          className="w-9 h-9 flex items-center justify-center rounded-full tap text-cream-dim"
-          style={{ background: "var(--ink-2)", border: "1px solid var(--cream-line)" }}
-          aria-label="源站寻书"
-        >
-          <IconGrid size={16} />
-        </button>
+        <>
+          <button
+            type="button"
+            onClick={() => navigate("/manga/mine")}
+            className="w-9 h-9 flex items-center justify-center rounded-full tap text-cream-dim"
+            style={{ background: "var(--ink-2)", border: "1px solid var(--cream-line)" }}
+            aria-label="我的数据"
+          >
+            <IconBookmark size={16} />
+          </button>
+          <button
+            type="button"
+            onClick={() => navigate("/manga/browse")}
+            className="w-9 h-9 flex items-center justify-center rounded-full tap text-cream-dim"
+            style={{ background: "var(--ink-2)", border: "1px solid var(--cream-line)" }}
+            aria-label="源站寻书"
+          >
+            <IconGrid size={16} />
+          </button>
+        </>
       )}
       <button
         type="button"
@@ -1257,8 +1601,8 @@ function MangaHome() {
   return (
     <PageShell title="漫画" eyebrow="MANGA · SUWAYOMI" trailing={trailing}>
       <div className="space-y-6">
-        {/* 官方发现区(壳子)—— 不依赖 Suwayomi,常驻展示 */}
-        <MangaDiscover />
+        {/* 官方发现区(壳子)—— 不依赖 Suwayomi,常驻展示。最近阅读小条插在为你推荐上方 */}
+        <MangaDiscover recentSlot={recentSlot} />
 
         {/* 未配置 Suwayomi:细提示条(阅读需要源) */}
         {!configured && (
@@ -1280,81 +1624,236 @@ function MangaHome() {
           </div>
         )}
 
-        {configured && (
-          <>
-          {shelf.length > 0 && (
-            <section>
-              <h2 className="font-display font-bold text-sm text-cream mb-3">
-                我的书架
-              </h2>
-              <div className="grid grid-cols-3 sm:grid-cols-4 md:grid-cols-6 gap-3">
-                {shelf.map((item) => (
-                  <MangaCover
-                    key={`${item.sourceId}:${item.mangaId}`}
-                    cover={item.cover}
-                    title={item.title}
-                    badge={
-                      item.unreadChapterCount && item.unreadChapterCount > 0 ? (
-                        <span
-                          className="rounded px-1.5 py-0.5 text-[10px] font-mono font-bold glow-ember"
-                          style={{ background: "var(--ember)", color: "var(--ink)" }}
-                        >
-                          +{item.unreadChapterCount}
-                        </span>
-                      ) : undefined
-                    }
-                    onClick={() =>
-                      navigate(
-                        `/manga/detail/${encodeURIComponent(item.sourceId)}/${encodeURIComponent(item.mangaId)}`
-                      )
-                    }
-                  />
-                ))}
-              </div>
-            </section>
-          )}
+        {configured && shelf.length > 0 && (
+          <section>
+            <div className="flex items-center justify-between mb-3">
+              <h2 className="font-display font-bold text-sm text-cream">我的书架</h2>
+              <button
+                type="button"
+                onClick={() => navigate("/manga/mine")}
+                className="flex items-center gap-0.5 text-xs font-display text-cream-dim tap hover:text-ember"
+              >
+                全部 <IconChevronRight size={12} />
+              </button>
+            </div>
+            <div className="grid grid-cols-3 sm:grid-cols-4 md:grid-cols-6 gap-3">
+              {shelf.slice(0, 6).map((item) => (
+                <MangaCover
+                  key={`${item.sourceId}:${item.mangaId}`}
+                  cover={item.cover}
+                  title={item.title}
+                  badge={
+                    item.unreadChapterCount && item.unreadChapterCount > 0 ? (
+                      <span
+                        className="rounded px-1.5 py-0.5 text-[10px] font-mono font-bold glow-ember"
+                        style={{ background: "var(--ember)", color: "var(--ink)" }}
+                      >
+                        +{item.unreadChapterCount}
+                      </span>
+                    ) : undefined
+                  }
+                  onClick={() =>
+                    navigate(
+                      `/manga/detail/${encodeURIComponent(item.sourceId)}/${encodeURIComponent(item.mangaId)}`
+                    )
+                  }
+                />
+              ))}
+            </div>
+          </section>
+        )}
+      </div>
+    </PageShell>
+  );
+}
 
-          {history.length > 0 && (
-            <section>
-              <h2 className="font-display font-bold text-sm text-cream mb-3">
-                最近阅读
-              </h2>
-              <div className="grid grid-cols-3 sm:grid-cols-4 md:grid-cols-6 gap-3">
-                {history.slice(0, 12).map((h) => (
-                  <MangaHistoryCard
-                    key={`${h.sourceId}:${h.mangaId}`}
-                    record={h}
-                    onOpen={() =>
-                      navigate(
-                        `/manga/reader/${encodeURIComponent(h.sourceId)}/${encodeURIComponent(h.mangaId)}/${encodeURIComponent(h.chapterId)}?title=${encodeURIComponent(h.title)}&cover=${encodeURIComponent(h.cover)}&sourceName=${encodeURIComponent(h.sourceName)}&chapterName=${encodeURIComponent(h.chapterName)}`
-                      )
-                    }
-                    onLongPress={() => setActionTarget(h)}
+// 最近阅读小卡横条(放首页为你推荐上方):比书架卡小一圈,横向滚动,带清空 + 全部。
+function RecentReadStrip({
+  history,
+  onOpen,
+  onClear,
+  onMore,
+}: {
+  history: MangaReadRecord[];
+  onOpen: (h: MangaReadRecord) => void;
+  onClear: () => void;
+  onMore: () => void;
+}) {
+  return (
+    <section>
+      <div className="flex items-center justify-between mb-2.5">
+        <div className="flex items-center gap-1.5">
+          <IconHistoryClock size={15} />
+          <h2 className="font-display font-bold text-sm text-cream">最近阅读</h2>
+        </div>
+        <div className="flex items-center gap-3">
+          <button
+            type="button"
+            onClick={onClear}
+            className="flex items-center gap-0.5 text-xs font-display text-cream-faint tap hover:text-ember"
+            aria-label="清空最近阅读"
+          >
+            <IconTrash size={12} /> 清空
+          </button>
+          <button
+            type="button"
+            onClick={onMore}
+            className="flex items-center gap-0.5 text-xs font-display text-cream-dim tap hover:text-ember"
+          >
+            全部 <IconChevronRight size={12} />
+          </button>
+        </div>
+      </div>
+      <div className="flex gap-3 overflow-x-auto scrollbar-hide -mx-1 px-1 pb-1">
+        {history.slice(0, 15).map((h) => {
+          const pct = h.pageCount > 0 ? Math.round(((h.pageIndex + 1) / h.pageCount) * 100) : 0;
+          return (
+            <button
+              key={`${h.sourceId}:${h.mangaId}`}
+              type="button"
+              onClick={() => onOpen(h)}
+              className="group shrink-0 w-[76px] sm:w-[88px] text-left tap"
+            >
+              <div
+                className="relative aspect-[3/4] w-full overflow-hidden rounded-lg"
+                style={{ background: "var(--ink-2)", border: "1px solid var(--cream-line)" }}
+              >
+                {h.cover ? (
+                  <img
+                    src={wrapImage(h.cover, undefined, { bypassProxy: true })}
+                    alt={h.title}
+                    loading="lazy"
+                    className="w-full h-full object-cover"
                   />
-                ))}
+                ) : (
+                  <div className="w-full h-full grid place-items-center text-cream-faint">
+                    <IconManga size={22} />
+                  </div>
+                )}
+                {pct > 0 && (
+                  <div className="absolute inset-x-0 bottom-0 h-1" style={{ background: "rgba(0,0,0,0.5)" }}>
+                    <div className="h-full" style={{ width: `${pct}%`, background: "var(--ember)" }} />
+                  </div>
+                )}
               </div>
-            </section>
-          )}
+              <p className="mt-1 text-[11px] font-display line-clamp-1 text-cream-dim group-hover:text-cream">
+                {h.title}
+              </p>
+            </button>
+          );
+        })}
+      </div>
+    </section>
+  );
+}
 
-          </>
+// ─── 我的数据(完整书架 + 最近阅读 + 管理)──────────────────
+function MangaMine() {
+  const navigate = useNavigate();
+  const shelf = useMangaStore((s) => s.shelf);
+  const history = useMangaStore((s) => s.history);
+  const isOnShelf = useMangaStore((s) => s.isOnShelf);
+  const toggleShelf = useMangaStore((s) => s.toggleShelf);
+  const removeHistory = useMangaStore((s) => s.removeHistory);
+  const clearHistory = useMangaStore((s) => s.clearHistory);
+  const [tab, setTab] = useState<"shelf" | "history">("shelf");
+  const [actionTarget, setActionTarget] = useState<MangaReadRecord | null>(null);
+
+  const openReader = (h: MangaReadRecord) =>
+    navigate(
+      `/manga/reader/${encodeURIComponent(h.sourceId)}/${encodeURIComponent(h.mangaId)}/${encodeURIComponent(h.chapterId)}?title=${encodeURIComponent(h.title)}&cover=${encodeURIComponent(h.cover)}&sourceName=${encodeURIComponent(h.sourceName)}&chapterName=${encodeURIComponent(h.chapterName)}`
+    );
+
+  const list: [typeof tab, string, number][] = [
+    ["shelf", "我的书架", shelf.length],
+    ["history", "最近阅读", history.length],
+  ];
+
+  return (
+    <PageShell title="我的数据" eyebrow="MANGA · LIBRARY" onBack={() => navigate(-1)}>
+      {/* tab 切换 */}
+      <div className="flex items-center gap-2 mb-4">
+        {list.map(([k, label, n]) => (
+          <button
+            key={k}
+            type="button"
+            onClick={() => setTab(k)}
+            className="rounded-full px-4 py-1.5 text-sm font-display font-semibold tap"
+            style={{
+              background: tab === k ? "var(--ember)" : "var(--ink-2)",
+              color: tab === k ? "var(--ink)" : "var(--cream-dim)",
+              border: `1px solid ${tab === k ? "var(--ember)" : "var(--cream-line)"}`,
+            }}
+          >
+            {label} {n > 0 && <span className="font-mono">{n}</span>}
+          </button>
+        ))}
+        {tab === "history" && history.length > 0 && (
+          <button
+            type="button"
+            onClick={async () => {
+              const ok = await appConfirm("确定清空全部最近阅读记录?", { tone: "warning" });
+              if (ok) clearHistory();
+            }}
+            className="ml-auto flex items-center gap-0.5 text-xs font-display text-cream-faint tap hover:text-ember"
+          >
+            <IconTrash size={13} /> 清空
+          </button>
         )}
       </div>
 
+      {tab === "shelf" ? (
+        shelf.length === 0 ? (
+          <EmptyState icon={<IconBookmark size={48} />} title="书架还是空的" subtitle="在详情页点「加入书架」收藏漫画。" />
+        ) : (
+          <div className="grid grid-cols-3 sm:grid-cols-4 md:grid-cols-6 gap-3">
+            {shelf.map((item) => (
+              <MangaCover
+                key={`${item.sourceId}:${item.mangaId}`}
+                cover={item.cover}
+                title={item.title}
+                badge={
+                  item.unreadChapterCount && item.unreadChapterCount > 0 ? (
+                    <span
+                      className="rounded px-1.5 py-0.5 text-[10px] font-mono font-bold glow-ember"
+                      style={{ background: "var(--ember)", color: "var(--ink)" }}
+                    >
+                      +{item.unreadChapterCount}
+                    </span>
+                  ) : undefined
+                }
+                onClick={() =>
+                  navigate(
+                    `/manga/detail/${encodeURIComponent(item.sourceId)}/${encodeURIComponent(item.mangaId)}`
+                  )
+                }
+              />
+            ))}
+          </div>
+        )
+      ) : history.length === 0 ? (
+        <EmptyState icon={<IconHistoryClock size={48} />} title="还没有阅读记录" subtitle="读过的漫画会出现在这里。" />
+      ) : (
+        <div className="grid grid-cols-3 sm:grid-cols-4 md:grid-cols-6 gap-3">
+          {history.map((h) => (
+            <MangaHistoryCard
+              key={`${h.sourceId}:${h.mangaId}`}
+              record={h}
+              onOpen={() => openReader(h)}
+              onLongPress={() => setActionTarget(h)}
+            />
+          ))}
+        </div>
+      )}
+
       {/* 历史记录操作菜单 */}
       {actionTarget && (
-        <Sheet
-          open={!!actionTarget}
-          onClose={() => setActionTarget(null)}
-          side="bottom"
-          title={actionTarget.title}
-        >
+        <Sheet open={!!actionTarget} onClose={() => setActionTarget(null)} side="bottom" title={actionTarget.title}>
           <div className="p-3 space-y-1">
             <button
               type="button"
               onClick={() => {
-                navigate(
-                  `/manga/reader/${encodeURIComponent(actionTarget.sourceId)}/${encodeURIComponent(actionTarget.mangaId)}/${encodeURIComponent(actionTarget.chapterId)}?title=${encodeURIComponent(actionTarget.title)}&cover=${encodeURIComponent(actionTarget.cover)}&sourceName=${encodeURIComponent(actionTarget.sourceName)}&chapterName=${encodeURIComponent(actionTarget.chapterName)}`
-                );
+                openReader(actionTarget);
                 setActionTarget(null);
               }}
               className="w-full text-left px-4 py-3 rounded-lg text-sm tap text-cream"
@@ -1616,6 +2115,7 @@ function MangaDetailView() {
   const [detail, setDetail] = useState<MangaDetail | null>(null);
   const [error, setError] = useState("");
   const [descOrder, setDescOrder] = useState(true);
+  const [descOpen, setDescOpen] = useState(false);
 
   const onShelf = isOnShelf(sourceId, mangaId);
   const record = getHistory(sourceId, mangaId);
@@ -1673,6 +2173,16 @@ function MangaDetailView() {
     (detail?.chapters.find((c) => c.id === record.chapterId) ||
       chapters[chapters.length - 1]);
 
+  const genres = (detail?.genre || "")
+    .split(/[,，、]/)
+    .map((g) => g.trim())
+    .filter(Boolean)
+    .slice(0, 6);
+  const readProgress =
+    record && record.pageCount > 0
+      ? Math.round(((record.pageIndex + 1) / record.pageCount) * 100)
+      : 0;
+
   return (
     <PageShell
       title={detail?.title || params.get("title") || "漫画详情"}
@@ -1680,131 +2190,229 @@ function MangaDetailView() {
       onBack={() => navigate(-1)}
     >
       {error ? (
-        <p className="text-sm text-ember">{error}</p>
+        <div className="flex flex-col items-center gap-3 py-16 text-center">
+          <IconManga size={40} />
+          <p className="text-sm text-ember">{error}</p>
+        </div>
       ) : !detail ? (
-        <p className="text-sm text-cream-faint">加载中…</p>
-      ) : (
         <div className="space-y-5">
           <div className="flex gap-4">
-            <div className="w-28 sm:w-36 shrink-0">
-              <div
-                className="aspect-[3/4] rounded-lg overflow-hidden"
-                style={{
-                  background: "var(--ink-2)",
-                  border: "1px solid var(--cream-line)",
-                }}
-              >
-                {detail.cover && (
-                  <img
-                    src={detail.cover}
-                    alt={detail.title}
-                    className="w-full h-full object-cover"
-                  />
-                )}
-              </div>
+            <div className="w-28 sm:w-36 aspect-[3/4] rounded-xl animate-pulse shrink-0" style={{ background: "var(--ink-2)" }} />
+            <div className="flex-1 space-y-3 pt-2">
+              <div className="h-5 w-2/3 rounded animate-pulse" style={{ background: "var(--ink-2)" }} />
+              <div className="h-3 w-1/3 rounded animate-pulse" style={{ background: "var(--ink-2)" }} />
+              <div className="h-3 w-full rounded animate-pulse" style={{ background: "var(--ink-2)" }} />
+              <div className="h-3 w-4/5 rounded animate-pulse" style={{ background: "var(--ink-2)" }} />
             </div>
-            <div className="flex-1 min-w-0 space-y-2">
-              <h2 className="font-display font-bold text-lg text-cream leading-tight">
-                {detail.title}
-              </h2>
-              <div className="flex flex-wrap gap-1.5 text-[11px]">
-                {detail.author && (
-                  <span className="chip-ch">{detail.author}</span>
+          </div>
+        </div>
+      ) : (
+        <div className="-m-4">
+          {/* 头图区:模糊封面背景 + 渐隐,前景封面卡 + 信息 */}
+          <div className="relative overflow-hidden">
+            {detail.cover && (
+              <div
+                className="absolute inset-0 pointer-events-none"
+                style={{
+                  backgroundImage: `url(${detail.cover})`,
+                  backgroundSize: "cover",
+                  backgroundPosition: "center",
+                  filter: "blur(28px) saturate(1.2)",
+                  transform: "scale(1.2)",
+                  opacity: 0.35,
+                }}
+              />
+            )}
+            <div
+              className="absolute inset-0 pointer-events-none"
+              style={{
+                background:
+                  "linear-gradient(180deg, rgba(14,15,17,0.55) 0%, rgba(14,15,17,0.85) 65%, var(--ink) 100%)",
+              }}
+            />
+            <div className="relative p-4 pt-5 flex gap-4">
+              <div
+                className="w-28 sm:w-36 shrink-0 aspect-[3/4] rounded-xl overflow-hidden shadow-lg"
+                style={{ background: "var(--ink-2)", border: "1px solid var(--cream-line)" }}
+              >
+                {detail.cover ? (
+                  <img src={detail.cover} alt={detail.title} className="w-full h-full object-cover" />
+                ) : (
+                  <div className="w-full h-full grid place-items-center text-cream-faint">
+                    <IconManga size={32} />
+                  </div>
                 )}
-                {detail.status && (
-                  <span className="chip-ch">{detail.status}</span>
-                )}
-                <span className="chip-ch">{detail.sourceName}</span>
               </div>
-              {detail.description && (
-                <p className="text-xs text-cream-faint leading-relaxed line-clamp-5">
-                  {detail.description}
-                </p>
-              )}
-              <div className="flex flex-wrap gap-2 pt-1">
-                {continueChapter && (
+              <div className="flex-1 min-w-0 flex flex-col">
+                <h2 className="font-display font-extrabold text-xl sm:text-2xl text-cream leading-tight line-clamp-3">
+                  {detail.title}
+                </h2>
+                {detail.author && (
+                  <p className="mt-1.5 text-sm text-cream-dim line-clamp-1">{detail.author}</p>
+                )}
+                <div className="mt-2 flex flex-wrap items-center gap-1.5">
+                  {detail.status && (
+                    <span
+                      className="rounded px-2 py-0.5 text-[11px] font-mono"
+                      style={{ background: "var(--ember-soft)", color: "var(--ember)" }}
+                    >
+                      {detail.status}
+                    </span>
+                  )}
+                  <span className="rounded px-2 py-0.5 text-[11px] font-mono text-cream-dim" style={{ background: "var(--ink-2)", border: "1px solid var(--cream-line)" }}>
+                    {detail.sourceName}
+                  </span>
+                  <span className="text-[11px] font-mono text-cream-faint">
+                    {detail.chapters.length} 话
+                  </span>
+                </div>
+                {/* 桌面端把操作按钮放头图内 */}
+                <div className="mt-auto hidden sm:flex flex-wrap gap-2 pt-3">
+                  {continueChapter && (
+                    <button
+                      type="button"
+                      onClick={() => openChapter(continueChapter)}
+                      className="px-5 py-2.5 rounded-lg text-sm font-display font-bold tap glow-ember"
+                      style={{ background: "var(--ember)", color: "var(--ink)" }}
+                    >
+                      {record ? `继续阅读 · ${record.chapterName}` : "开始阅读"}
+                    </button>
+                  )}
                   <button
                     type="button"
-                    onClick={() => openChapter(continueChapter)}
-                    className="px-4 py-2 rounded-lg text-sm font-display font-semibold tap"
-                    style={{ background: "var(--ember)", color: "var(--ink)" }}
+                    onClick={handleShelf}
+                    className="px-4 py-2.5 rounded-lg text-sm font-display font-semibold tap flex items-center gap-1.5"
+                    style={{
+                      background: "var(--ink-2)",
+                      border: `1px solid ${onShelf ? "var(--ember)" : "var(--cream-line)"}`,
+                      color: onShelf ? "var(--ember)" : "var(--cream-dim)",
+                    }}
                   >
-                    {record ? "继续阅读" : "开始阅读"}
+                    {onShelf ? <IconBookmarkFill size={16} /> : <IconBookmark size={16} />}
+                    {onShelf ? "已在书架" : "加入书架"}
                   </button>
-                )}
-                <button
-                  type="button"
-                  onClick={handleShelf}
-                  className="px-4 py-2 rounded-lg text-sm font-display font-semibold tap flex items-center gap-1.5"
-                  style={{
-                    background: "var(--ink-2)",
-                    border: "1px solid var(--cream-line)",
-                    color: onShelf ? "var(--ember)" : "var(--cream-dim)",
-                  }}
-                >
-                  {onShelf ? (
-                    <IconBookmarkFill size={16} />
-                  ) : (
-                    <IconBookmark size={16} />
-                  )}
-                  {onShelf ? "已在书架" : "加入书架"}
-                </button>
+                </div>
               </div>
             </div>
           </div>
 
-          <section>
-            <div className="flex items-center justify-between mb-2">
-              <h3 className="font-display font-bold text-sm text-cream">
-                章节 ({detail.chapters.length})
-              </h3>
+          <div className="p-4 space-y-5">
+            {/* 移动端操作按钮(全宽) */}
+            <div className="flex sm:hidden gap-2">
+              {continueChapter && (
+                <button
+                  type="button"
+                  onClick={() => openChapter(continueChapter)}
+                  className="flex-1 px-4 py-3 rounded-lg text-sm font-display font-bold tap glow-ember"
+                  style={{ background: "var(--ember)", color: "var(--ink)" }}
+                >
+                  {record ? "继续阅读" : "开始阅读"}
+                </button>
+              )}
               <button
                 type="button"
-                onClick={() => setDescOrder((v) => !v)}
-                className="flex items-center gap-1 text-xs text-cream-dim tap"
+                onClick={handleShelf}
+                className="px-4 py-3 rounded-lg text-sm font-display font-semibold tap flex items-center gap-1.5 shrink-0"
+                style={{
+                  background: "var(--ink-2)",
+                  border: `1px solid ${onShelf ? "var(--ember)" : "var(--cream-line)"}`,
+                  color: onShelf ? "var(--ember)" : "var(--cream-dim)",
+                }}
               >
-                {descOrder ? (
-                  <IconChevronDown size={14} />
-                ) : (
-                  <IconChevronUp size={14} />
-                )}
-                {descOrder ? "倒序" : "正序"}
+                {onShelf ? <IconBookmarkFill size={18} /> : <IconBookmark size={18} />}
               </button>
             </div>
-            <div className="space-y-1">
-              {chapters.map((chapter) => {
-                const isCurrent = record?.chapterId === chapter.id;
-                return (
-                  <button
-                    key={chapter.id}
-                    type="button"
-                    onClick={() => openChapter(chapter)}
-                    className="w-full text-left px-3 py-2.5 rounded-lg tap flex items-center justify-between gap-2"
-                    style={{
-                      background: isCurrent
-                        ? "var(--ember-soft)"
-                        : "var(--ink-2)",
-                      border: "1px solid var(--cream-line)",
-                    }}
-                  >
-                    <span
-                      className="text-sm line-clamp-1"
+
+            {/* 继续阅读进度条 */}
+            {record && readProgress > 0 && (
+              <div
+                className="rounded-lg p-3 flex items-center gap-3"
+                style={{ background: "var(--ink-2)", border: "1px solid var(--cream-line)" }}
+              >
+                <div className="flex-1 min-w-0">
+                  <p className="text-xs text-cream-dim line-clamp-1">{record.chapterName}</p>
+                  <div className="mt-1.5 h-1 rounded-full overflow-hidden" style={{ background: "var(--ink)" }}>
+                    <div className="h-full rounded-full" style={{ width: `${readProgress}%`, background: "var(--ember)" }} />
+                  </div>
+                </div>
+                <span className="font-mono text-xs text-cream-faint shrink-0">{readProgress}%</span>
+              </div>
+            )}
+
+            {/* 题材 chips */}
+            {genres.length > 0 && (
+              <div className="flex flex-wrap gap-1.5">
+                {genres.map((g) => (
+                  <span key={g} className="chip-ch">{g}</span>
+                ))}
+              </div>
+            )}
+
+            {/* 简介(可展开) */}
+            {detail.description && (
+              <div>
+                <p
+                  className={`text-sm text-cream-dim leading-relaxed ${descOpen ? "" : "line-clamp-3"}`}
+                >
+                  {detail.description}
+                </p>
+                <button
+                  type="button"
+                  onClick={() => setDescOpen((v) => !v)}
+                  className="mt-1 text-xs text-ember tap"
+                >
+                  {descOpen ? "收起" : "展开"}
+                </button>
+              </div>
+            )}
+
+            {/* 章节 */}
+            <section>
+              <div className="flex items-center justify-between mb-3">
+                <h3 className="font-display font-bold text-base text-cream">
+                  章节 <span className="text-cream-faint font-mono text-sm">({detail.chapters.length})</span>
+                </h3>
+                <button
+                  type="button"
+                  onClick={() => setDescOrder((v) => !v)}
+                  className="flex items-center gap-1 rounded-full px-2.5 py-1 text-xs tap text-cream-dim"
+                  style={{ background: "var(--ink-2)", border: "1px solid var(--cream-line)" }}
+                >
+                  {descOrder ? <IconChevronDown size={13} /> : <IconChevronUp size={13} />}
+                  {descOrder ? "倒序" : "正序"}
+                </button>
+              </div>
+              <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-2">
+                {chapters.map((chapter) => {
+                  const isCurrent = record?.chapterId === chapter.id;
+                  return (
+                    <button
+                      key={chapter.id}
+                      type="button"
+                      onClick={() => openChapter(chapter)}
+                      className="text-left px-3 py-2.5 rounded-lg tap min-w-0"
                       style={{
-                        color: isCurrent ? "var(--ember)" : "var(--cream-dim)",
+                        background: isCurrent ? "var(--ember-soft)" : "var(--ink-2)",
+                        border: `1px solid ${isCurrent ? "var(--ember)" : "var(--cream-line)"}`,
                       }}
                     >
-                      {chapter.name}
-                    </span>
-                    {chapter.scanlator && (
-                      <span className="text-[10px] text-cream-faint shrink-0">
-                        {chapter.scanlator}
+                      <span
+                        className="block text-sm line-clamp-1"
+                        style={{ color: isCurrent ? "var(--ember)" : "var(--cream-dim)" }}
+                      >
+                        {chapter.name}
                       </span>
-                    )}
-                  </button>
-                );
-              })}
-            </div>
-          </section>
+                      {chapter.scanlator && (
+                        <span className="block mt-0.5 text-[10px] text-cream-faint line-clamp-1">
+                          {chapter.scanlator}
+                        </span>
+                      )}
+                    </button>
+                  );
+                })}
+              </div>
+            </section>
+          </div>
         </div>
       )}
     </PageShell>

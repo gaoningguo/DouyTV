@@ -276,17 +276,47 @@ export function wrapSegment(
  */
 export function wrapImage(
   imgUrl: string | undefined,
-  headers?: Record<string, string>
+  headers?: Record<string, string>,
+  opts?: { bypassProxy?: boolean }
 ): string | undefined {
   if (!imgUrl) return imgUrl;
   if (!isTauri) return imgUrl;
-  // 图片也走激活的代理(与 scriptFetch 一致)——否则 B站/起点等 CDN 在需代理的网络下
-  // 会直连超时(os error 10060)。
-  return buildProxyUrl("image", imgUrl, {
+  // 递归拆包:不管传进来包了几层 dyproxy(含历史遗留的双层数据),都剥到最内层真实 URL,
+  // 再干净地重包一层。杜绝二次包装 → Rust 拿到的 url 一定是真实上游。
+  // 场景:search 返回的 cover 已包装,存进书架 / 作为 ?cover= 传参 → getMangaDetail 回退用它
+  // 当 input.cover → buildImageUrl 又包一次 → 套多层,Rust 拿外层 url(dyproxy 地址)抓 → 404/502。
+  const real = unwrapProxyUrl(imgUrl);
+  // 图片默认走激活的系统代理(与 scriptFetch 一致)——否则 B站/起点等 CDN 在需代理的
+  // 网络下会直连超时(os error 10060)。
+  // bypassProxy:自建/局域网服务器(如 Suwayomi 漫画服务器,常是 127.0.0.1 或内网 IP)
+  // 的图片必须直连,走外部代理(Clash 等)反而连不上 → 封面全空。
+  return buildProxyUrl("image", real, {
     ua: getHeader(headers, "User-Agent"),
     referer: getHeader(headers, "Referer"),
-    proxyUrl: getActiveProxyUrl(),
+    bypassSystemProxy: opts?.bypassProxy,
+    proxyUrl: opts?.bypassProxy ? undefined : getActiveProxyUrl(),
   });
+}
+
+/**
+ * 递归剥离 dyproxy 包装,返回最内层真实上游 URL。
+ * 处理形如 http://dyproxy.localhost/proxy/image?url=<encoded 内层>(内层可能又是 dyproxy)。
+ * 非代理 URL 原样返回。
+ */
+function unwrapProxyUrl(url: string): string {
+  let cur = url;
+  // 最多剥 5 层,防脏数据死循环。
+  for (let i = 0; i < 5; i++) {
+    if (!/\/proxy\/(image|segment|stream|m3u8|key)\?/.test(cur)) break;
+    try {
+      const inner = new URL(cur).searchParams.get("url");
+      if (!inner) break;
+      cur = inner;
+    } catch {
+      break;
+    }
+  }
+  return cur;
 }
 
 function musicReferer(platform?: string, url?: string): string {
