@@ -1,20 +1,22 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useState } from "react";
 import { Link, useNavigate, useParams } from "react-router-dom";
 import { useDetail } from "@/hooks/useDetail";
+import { usePlayback } from "@/hooks/usePlayback";
+import { usePlaybackPrefetch } from "@/hooks/usePlaybackPrefetch";
+import { useDanmakuAutoLoad } from "@/hooks/useDanmakuAutoLoad";
 import { useLibraryStore } from "@/stores/library";
 import { useVodAssetsStore } from "@/stores/vodAssets";
-import { useDanmakuStore } from "@/stores/danmaku";
-import { callResolvePlayUrl } from "@/source-script/runtime";
+import { useVodBrowseStore } from "@/stores/vodBrowse";
+import { useScriptStore } from "@/stores/scripts";
+import { callDetail } from "@/source-script/runtime";
+import { Sheet } from "@/components/Sheet";
+import { wrapImage } from "@/lib/proxy";
+import { appAlert } from "@/components/AppDialog";
 import { resumeVodDownload, startVodDownload } from "@/lib/vodDownload";
 import VideoPlayer from "@/components/VideoPlayer";
-import DanmakuPanel, {
-  loadDanmakuMemory,
-} from "@/components/DanmakuPanel";
+import { readAutoNext } from "@/components/VideoPlayer/ArtPlayerHost";
+import DanmakuPanel from "@/components/DanmakuPanel";
 import SourceSwitcher from "@/components/SourceSwitcher";
-import { convertDanmakuFormat, getDanmakuById, getEpisodes, searchAnime } from "@/lib/danmaku/api";
-import type { Danmu } from "artplayer-plugin-danmuku";
-import type { DanmakuSelection } from "@/lib/danmaku/types";
-import type { MediaItem } from "@/types/media";
 import {
   IconArrowLeft,
   IconDanmaku,
@@ -24,6 +26,8 @@ import {
   IconDownload,
   IconCheck,
   IconShare,
+  IconList,
+  IconFilm,
 } from "@/components/Icon";
 
 export default function Play() {
@@ -43,41 +47,76 @@ export default function Play() {
   const hydrateVodAssets = useVodAssetsStore((s) => s.hydrate);
   const downloads = useVodAssetsStore((s) => s.downloads);
   const addDownloadTask = useVodAssetsStore((s) => s.addDownloadTask);
-  const danmakuStore = useDanmakuStore();
-  const hydrateDanmaku = useDanmakuStore((s) => s.hydrate);
 
-  const [item, setItem] = useState<MediaItem | undefined>(undefined);
-  const [resolving, setResolving] = useState(false);
-  const [resolveError, setResolveError] = useState<string | undefined>(undefined);
-
-  // 弹幕状态
-  const [showDanmakuPanel, setShowDanmakuPanel] = useState(false);
-  const [danmakuSelection, setDanmakuSelection] = useState<DanmakuSelection | null>(
-    null
-  );
-  const [danmuComments, setDanmuComments] = useState<Danmu[]>([]);
-  // 弹幕显示开关 — 跨视频跨重启持久化
-  const [danmakuVisible, setDanmakuVisible] = useState<boolean>(() => {
-    try {
-      const v = localStorage.getItem("douytv:player-danmaku-visible");
-      return v == null ? true : v === "1" || v === "true";
-    } catch {
-      return true;
-    }
+  // 解析播放地址（抽到共享 hook，详情页内嵌播放器也用）
+  const { item, resolving, resolveError } = usePlayback({
+    script,
+    detail,
+    scriptKey,
+    vodId,
+    pbIdx,
+    epIdx,
   });
-  useEffect(() => {
-    try {
-      localStorage.setItem(
-        "douytv:player-danmaku-visible",
-        danmakuVisible ? "1" : "0"
-      );
-    } catch {
-      /* private */
-    }
-  }, [danmakuVisible]);
+
+  // 弹幕自动加载（抽到共享 hook）
+  const {
+    danmuComments,
+    danmakuSelection,
+    danmakuVisible,
+    setDanmakuVisible,
+    danmakuEnabled,
+    videoTitle,
+    handleSelect: handleDanmakuAutoSelect,
+  } = useDanmakuAutoLoad(detail?.title, vodId, epIdx);
+  const [showDanmakuPanel, setShowDanmakuPanel] = useState(false);
 
   // 换源 / 线路切换状态
   const [showSourceSwitcher, setShowSourceSwitcher] = useState(false);
+
+  // 播放列表抽屉 —— 读「源站寻片」列表，快速切下一个视频，直接开播。
+  const [showPlaylist, setShowPlaylist] = useState(false);
+  const [openingId, setOpeningId] = useState<string | undefined>(undefined);
+  const browseResults = useVodBrowseStore((s) => s.results);
+  const browseHasMore = useVodBrowseStore((s) => s.hasMore);
+  const browseLoading = useVodBrowseStore((s) => s.loading);
+  const loadMoreBrowse = useVodBrowseStore((s) => s.loadMore);
+  const allScripts = useScriptStore((s) => s.scripts);
+
+  // 播放接近结尾时预取下一集 / 下一条，切换丝滑（放进 onProgress 调）。
+  const maybePrefetch = usePlaybackPrefetch({
+    script,
+    detail,
+    vodId,
+    pbIdx,
+    epIdx,
+    browseResults,
+  });
+
+  // 抽屉里点一个视频：后台取详情第一条可播线路，直接跳到播放页开播（不进详情）。
+  const openBrowseRow = async (row: (typeof browseResults)[number]) => {
+    const rowId = `${row.scriptKey}:${row.vod.id}`;
+    if (openingId) return;
+    if (rowId === itemId) {
+      setShowPlaylist(false);
+      return;
+    }
+    const desc = allScripts.find((s) => s.key === row.scriptKey);
+    if (!desc) return;
+    setOpeningId(rowId);
+    try {
+      const d = await callDetail(desc, { id: row.vod.id });
+      const playbackIdx = d.playbacks.findIndex((pb) => pb.episodes.length > 0);
+      if (playbackIdx < 0) throw new Error("该视频没有可播放剧集");
+      setShowPlaylist(false);
+      navigate(
+        `/play/${encodeURIComponent(row.scriptKey)}/${encodeURIComponent(row.vod.id)}/${playbackIdx}/0`
+      );
+    } catch (e) {
+      void appAlert((e as Error)?.message ?? String(e), { tone: "warning" });
+    } finally {
+      setOpeningId(undefined);
+    }
+  };
 
   const playback = detail?.playbacks[pbIdx];
   const episode = playback?.episodes[epIdx];
@@ -100,8 +139,7 @@ export default function Play() {
   useEffect(() => {
     hydrate();
     hydrateVodAssets();
-    hydrateDanmaku();
-  }, [hydrate, hydrateVodAssets, hydrateDanmaku]);
+  }, [hydrate, hydrateVodAssets]);
 
   const handleFavorite = () => {
     if (!item) return;
@@ -152,92 +190,6 @@ export default function Play() {
     }
   };
 
-  // 自动加载上次选过的弹幕（按 title 记忆 + autoLoad 偏好）
-  const videoTitle = useMemo(
-    () => detail?.title || vodId,
-    [detail?.title, vodId]
-  );
-  // 自动加载弹幕：
-  //   1) 优先用上次的手动选择（loadDanmakuMemory by title）
-  //   2) 没有记忆时 fallback 到 searchAnime(title) 取第一个结果 + 当前集
-  //   3) 用户可随时点 "选择弹幕" 按钮在 DanmakuPanel 里换源
-  useEffect(() => {
-    if (!danmakuStore.hydrated || !danmakuStore.autoLoad || !videoTitle) return;
-    if (!danmakuStore.enabled) return;
-    if (danmakuSelection) return;
-    let cancelled = false;
-    (async () => {
-      const mem = loadDanmakuMemory(videoTitle);
-      if (mem) {
-        const comments = await getDanmakuById(mem.episodeId, videoTitle, epIdx, {
-          animeId: mem.animeId,
-          animeTitle: mem.animeTitle,
-          episodeTitle: mem.episodeTitle,
-        });
-        if (cancelled) return;
-        setDanmakuSelection({
-          animeId: mem.animeId,
-          episodeId: mem.episodeId,
-          animeTitle: mem.animeTitle,
-          episodeTitle: mem.episodeTitle,
-          searchKeyword: mem.searchKeyword,
-          danmakuCount: comments.length,
-        });
-        setDanmuComments(convertDanmakuFormat(comments));
-        return;
-      }
-      // 没记忆：按标题搜，取第一个 anime + 当前集
-      const sr = await searchAnime(videoTitle);
-      if (cancelled || !sr.success || sr.animes.length === 0) return;
-      const anime = sr.animes[0];
-      const er = await getEpisodes(anime.animeId);
-      if (cancelled || !er.success || er.bangumi.episodes.length === 0) return;
-      const ep = er.bangumi.episodes[epIdx] ?? er.bangumi.episodes[0];
-      const comments = await getDanmakuById(ep.episodeId, videoTitle, epIdx, {
-        animeId: anime.animeId,
-        animeTitle: anime.animeTitle,
-        episodeTitle: ep.episodeTitle,
-      });
-      if (cancelled || comments.length === 0) return;
-      setDanmakuSelection({
-        animeId: anime.animeId,
-        episodeId: ep.episodeId,
-        animeTitle: anime.animeTitle,
-        episodeTitle: ep.episodeTitle,
-        danmakuCount: comments.length,
-      });
-      setDanmuComments(convertDanmakuFormat(comments));
-    })();
-    return () => {
-      cancelled = true;
-    };
-  }, [
-    danmakuStore.hydrated,
-    danmakuStore.autoLoad,
-    danmakuStore.enabled,
-    videoTitle,
-    epIdx,
-    danmakuSelection,
-  ]);
-
-  const handleDanmakuSelect = async (selection: DanmakuSelection) => {
-    setShowDanmakuPanel(false);
-    setDanmakuSelection(selection);
-    const comments = await getDanmakuById(
-      selection.episodeId,
-      videoTitle,
-      epIdx,
-      {
-        animeId: selection.animeId,
-        animeTitle: selection.animeTitle,
-        episodeTitle: selection.episodeTitle,
-      }
-    );
-    setDanmakuSelection({ ...selection, danmakuCount: comments.length });
-    setDanmuComments(convertDanmakuFormat(comments));
-    setDanmakuVisible(true);
-  };
-
   const handlePickPlayback = (newPbIdx: number) => {
     setShowSourceSwitcher(false);
     if (newPbIdx === pbIdx) return;
@@ -247,64 +199,6 @@ export default function Play() {
       { replace: true }
     );
   };
-
-  useEffect(() => {
-    if (!script || !playback || episode === undefined) return;
-    let aborted = false;
-    const playUrl = typeof episode === "string" ? episode : episode.playUrl;
-    const needResolve =
-      typeof episode === "string" ? true : episode.needResolve !== false;
-
-    setResolving(true);
-    setResolveError(undefined);
-
-    (async () => {
-      try {
-        let resolved: {
-          url: string;
-          type: "auto" | "mp4" | "hls" | "dash" | "flv";
-          headers: Record<string, string>;
-        } = { url: playUrl, type: "auto", headers: {} };
-        if (needResolve) {
-          const r = await callResolvePlayUrl(script, {
-            playUrl,
-            sourceId: playback.sourceId,
-            episodeIndex: epIdx,
-          });
-          resolved = {
-            url: r.url,
-            type: (r.type ?? "auto") as typeof resolved.type,
-            headers: r.headers ?? {},
-          };
-        }
-        if (aborted) return;
-        setItem({
-          id: `${scriptKey}:${vodId}`,
-          kind: "video",
-          title: detail?.title || vodId,
-          poster: detail?.poster,
-          url: resolved.url,
-          streamType: resolved.type,
-          headers: resolved.headers,
-          sourceId: playback.sourceId,
-          sourceName: playback.sourceName,
-          episodes: playback.episodes,
-          episodesTitles: playback.episodes_titles,
-          currentEpisodeIndex: epIdx,
-          scriptKey,
-          vodId,
-        });
-      } catch (e) {
-        if (!aborted) setResolveError((e as Error)?.message ?? String(e));
-      } finally {
-        if (!aborted) setResolving(false);
-      }
-    })();
-
-    return () => {
-      aborted = true;
-    };
-  }, [script?.key, vodId, pbIdx, epIdx, detail?.title]);
 
   if (resolveError) {
     return (
@@ -502,6 +396,22 @@ export default function Play() {
             </span>
           </button>
         )}
+        {browseResults.length > 0 && (
+          <button
+            type="button"
+            onClick={() => setShowPlaylist(true)}
+            className="px-3 h-9 flex items-center gap-1.5 rounded-full backdrop-blur-md tap font-display text-xs"
+            style={{
+              background: "rgba(14,15,17,0.6)",
+              border: "1px solid var(--cream-line)",
+              color: "var(--cream)",
+            }}
+            title="播放列表"
+          >
+            <IconList size={14} />
+            <span className="hidden sm:inline">播放列表</span>
+          </button>
+        )}
       </div>
 
       <VideoPlayer
@@ -510,9 +420,10 @@ export default function Play() {
         loop={false}
         muted={false}
         controls
+        autoFullscreen
         startPosition={continueFrom}
         danmuComments={danmuComments}
-        danmakuVisible={danmakuVisible && danmakuStore.enabled}
+        danmakuVisible={danmakuVisible && danmakuEnabled}
         onPrevEpisode={
           epIdx > 0
             ? () =>
@@ -536,19 +447,29 @@ export default function Play() {
             ? () => setShowSourceSwitcher(true)
             : undefined
         }
-        onProgress={(pos, dur) =>
+        onProgress={(pos, dur) => {
           upsertHistory(item, {
             position: pos,
             duration: dur,
             episodeIndex: epIdx,
-          })
-        }
+          });
+          maybePrefetch(pos, dur);
+        }}
         onEnded={() => {
+          // 自动连播（受播放器设置菜单开关控制）：有下一集先切集，
+          // 否则（末集/单集）跳到源站列表里的下一个视频（直接开播）。
+          if (!readAutoNext()) return;
           if (epIdx + 1 < totalEps) {
             navigate(
               `/play/${encodeURIComponent(scriptKey)}/${encodeURIComponent(vodId)}/${pbIdx}/${epIdx + 1}`
             );
+            return;
           }
+          const idx = browseResults.findIndex(
+            (r) => `${r.scriptKey}:${r.vod.id}` === itemId
+          );
+          const next = browseResults[idx + 1];
+          if (next) void openBrowseRow(next);
         }}
       />
 
@@ -577,7 +498,10 @@ export default function Play() {
         videoTitle={videoTitle}
         currentEpisodeIndex={epIdx}
         currentSelection={danmakuSelection}
-        onSelect={(s) => void handleDanmakuSelect(s)}
+        onSelect={(s) => {
+          setShowDanmakuPanel(false);
+          void handleDanmakuAutoSelect(s);
+        }}
         onClose={() => setShowDanmakuPanel(false)}
       />
 
@@ -598,6 +522,92 @@ export default function Play() {
         }}
         onClose={() => setShowSourceSwitcher(false)}
       />
+
+      {/* 播放列表抽屉 —— 源站寻片列表，快速切下一个视频（直接开播）+ 翻页 */}
+      <Sheet
+        open={showPlaylist}
+        onClose={() => setShowPlaylist(false)}
+        side="right"
+        title="播放列表"
+      >
+        <div className="p-3 space-y-2">
+          {browseResults.map((row) => {
+            const rowId = `${row.scriptKey}:${row.vod.id}`;
+            const isCurrent = rowId === itemId;
+            const isOpening = openingId === rowId;
+            return (
+              <button
+                key={rowId}
+                type="button"
+                onClick={() => void openBrowseRow(row)}
+                className="w-full flex gap-3 rounded-lg overflow-hidden p-2 text-left tap"
+                style={{
+                  background: isCurrent ? "var(--ember-soft)" : "var(--ink)",
+                  border: `1px solid ${
+                    isCurrent ? "var(--ember)" : "var(--cream-line)"
+                  }`,
+                }}
+              >
+                <div
+                  className="w-14 h-20 shrink-0 rounded overflow-hidden scanlines relative"
+                  style={{ background: "var(--ink-3)" }}
+                >
+                  {row.vod.poster ? (
+                    <img
+                      src={wrapImage(row.vod.poster, row.vod.poster_headers)}
+                      className="w-full h-full object-cover"
+                      alt={row.vod.title}
+                      loading="lazy"
+                    />
+                  ) : (
+                    <div className="absolute inset-0 grid place-items-center text-cream-faint">
+                      <IconFilm size={20} />
+                    </div>
+                  )}
+                  {isOpening && (
+                    <div className="absolute inset-0 grid place-items-center bg-black/50">
+                      <span className="signal-bars" style={{ height: 14 }}>
+                        <span></span>
+                        <span></span>
+                        <span></span>
+                      </span>
+                    </div>
+                  )}
+                </div>
+                <div className="flex-1 min-w-0 flex flex-col justify-center">
+                  <p
+                    className="text-sm font-display line-clamp-2"
+                    style={{ color: isCurrent ? "var(--ember)" : "var(--cream)" }}
+                  >
+                    {row.vod.title}
+                  </p>
+                  <p className="font-mono text-[10px] text-cream-faint mt-1 line-clamp-1">
+                    {isCurrent ? "正在播放" : `@${row.scriptName}`}
+                    {row.vod.year && ` · ${row.vod.year}`}
+                  </p>
+                </div>
+              </button>
+            );
+          })}
+          {browseHasMore && (
+            <div className="pt-1 flex justify-center">
+              <button
+                type="button"
+                onClick={() => void loadMoreBrowse()}
+                disabled={browseLoading}
+                className="px-5 py-2 rounded-full text-xs font-display font-semibold tap disabled:opacity-50"
+                style={{
+                  background: "var(--ink)",
+                  border: "1px solid var(--cream-line)",
+                  color: "var(--cream)",
+                }}
+              >
+                {browseLoading ? "加载中..." : "加载更多"}
+              </button>
+            </div>
+          )}
+        </div>
+      </Sheet>
     </div>
   );
 }

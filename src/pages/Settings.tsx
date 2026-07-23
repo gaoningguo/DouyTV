@@ -7,6 +7,7 @@ import { useEpgStore } from "@/stores/epg";
 import { useConfigSubStore } from "@/stores/configSubscription";
 import { useLibraryStore } from "@/stores/library";
 import { useProxyStore } from "@/stores/proxy";
+import { useProxyPoolStore } from "@/stores/proxyPool";
 import { useDanmakuStore } from "@/stores/danmaku";
 import { useSyncStore } from "@/stores/sync";
 import { useDownloadSettingsStore } from "@/stores/downloadSettings";
@@ -117,6 +118,9 @@ export default function Settings() {
   const proxyManualUrl = useProxyStore((s) => s.manualUrl);
   const proxySystemUrl = useProxyStore((s) => s.systemProxyUrl);
   const hydrateProxy = useProxyStore((s) => s.hydrate);
+  const poolEnabled = useProxyPoolStore((s) => s.enabled);
+  const poolServer = useProxyPoolStore((s) => s.server);
+  const hydratePool = useProxyPoolStore((s) => s.hydrate);
   const danmakuEnabled = useDanmakuStore((s) => s.enabled);
   const danmakuSource = useDanmakuStore((s) => s.sourceType);
   const hydrateDanmaku = useDanmakuStore((s) => s.hydrate);
@@ -144,6 +148,7 @@ export default function Settings() {
     hydrateEpg();
     hydrateConfigSub();
     hydrateProxy();
+    hydratePool();
     hydrateDanmaku();
     void hydrateLibrary();
     hydrateSync();
@@ -156,6 +161,7 @@ export default function Settings() {
     hydrateEpg,
     hydrateConfigSub,
     hydrateProxy,
+    hydratePool,
     hydrateDanmaku,
     hydrateLibrary,
     hydrateSync,
@@ -281,6 +287,19 @@ export default function Settings() {
                       : "AUTO · 未检测到系统代理"
               }
               accent="vhs"
+            />
+            <SettingsRow
+              to="/settings/proxy-pool"
+              Icon={IconWave}
+              title="代理池"
+              subtitle={
+                !poolServer
+                  ? "未配置服务端"
+                  : poolEnabled
+                    ? `ON · ${poolServer}`
+                    : `OFF · ${poolServer}`
+              }
+              accent="phosphor"
             />
             <SettingsRow
               to="/settings/danmaku"

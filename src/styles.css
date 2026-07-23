@@ -2979,13 +2979,25 @@ textarea:focus-visible {
     --feed-control-bottom: var(--bottom-tab-h, calc(56px + env(safe-area-inset-bottom)));
   }
 }
-/* 首页视频：默认显示进度条，其他控件在鼠标/触摸到底部工具栏区域时显示。 */
+/* 首页视频：默认进度条贴画面最底，其他控件在鼠标/触摸到底部工具栏区域时显示。 */
 .art-host-feed-video .art-video-player .art-bottom {
   opacity: 1 !important;
 }
+/* 默认态：进度条 + 控件行整体下移，进度条落到最底、控件行被 overflow 裁掉。 */
+.art-host-feed-video .art-video-player .art-bottom .art-progress,
+.art-host-feed-video .art-video-player .art-bottom .art-controls {
+  transform: translateY(calc(var(--art-control-height) + var(--art-bottom-gap))) !important;
+  transition: transform 220ms ease, opacity 220ms ease;
+}
 .art-host-feed-video .art-video-player .art-controls {
   opacity: 0 !important;
-  transition: opacity 220ms ease;
+}
+/* hover 底部热区 / active：进度条上移，控件行回到进度条下方显示。 */
+.art-host-feed-video .art-video-player .art-bottom:hover .art-progress,
+.art-host-feed-video.art-host-feed-active .art-video-player .art-bottom .art-progress,
+.art-host-feed-video .art-video-player .art-bottom:hover .art-controls,
+.art-host-feed-video.art-host-feed-active .art-video-player .art-bottom .art-controls {
+  transform: translateY(0) !important;
 }
 .art-host-feed-video .art-video-player .art-bottom:hover .art-controls,
 .art-host-feed-video.art-host-feed-active .art-video-player .art-controls {
@@ -3019,16 +3031,100 @@ textarea:focus-visible {
     padding-bottom: 8px;
   }
 }
+/* 默认态：进度条 + 控件行整体下移一个控件高度 —— 进度条落到画面最底，
+   控件行被推出可视区（.art-bottom 自带 overflow:hidden 裁掉）。控件同时 opacity:0
+   避免下移途中露出。 */
+.art-host-play-chrome .art-video-player .art-bottom .art-progress,
+.art-host-play-chrome .art-video-player .art-bottom .art-controls {
+  transform: translateY(calc(var(--art-control-height) + var(--art-bottom-gap))) !important;
+  transition: transform 220ms ease, opacity 220ms ease;
+}
 .art-host-play-chrome .art-video-player .art-controls {
   opacity: 0 !important;
-  transition: opacity 220ms ease;
+}
+/* hover 底部热区 / active：进度条上移，控件行回到进度条下方显示。 */
+.art-host-play-chrome .art-video-player .art-bottom:hover .art-progress,
+.art-host-play-chrome.art-host-feed-active .art-video-player .art-bottom .art-progress,
+.art-host-play-chrome .art-video-player .art-bottom:hover .art-controls,
+.art-host-play-chrome.art-host-feed-active .art-video-player .art-bottom .art-controls {
+  transform: translateY(0) !important;
 }
 .art-host-play-chrome .art-video-player .art-bottom:hover .art-controls,
 .art-host-play-chrome.art-host-feed-active .art-video-player .art-controls {
   opacity: 1 !important;
 }
+/* 移动端锁屏：控件保持隐藏。 */
 .art-host-play-chrome .art-video-player.art-mobile.art-lock .art-controls {
   opacity: 0 !important;
+}
+
+/* 默认竖向音量弹出面板隐藏 —— 改用下方内联横向音量控件（dy-volume）。
+   默认面板绝对定位在按钮上方，会被 .art-bottom overflow:hidden 裁切，且和相邻
+   控件互相遮挡。 */
+.art-video-player .art-control-volume {
+  display: none !important;
+}
+
+/* 内联横向音量控件：静音图标 + 横向滑块，随控件行排布，不浮层不遮挡。 */
+.art-video-player .dy-volume {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 0 6px;
+  height: 100%;
+}
+.art-video-player .dy-volume-btn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  color: var(--cream-dim);
+  transition: color 140ms ease;
+}
+.art-video-player .dy-volume-btn:hover {
+  color: var(--ember);
+}
+/* 横向滑块：默认收窄，hover/操作时展开，避免占满控件行。用 ember 填充已选部分。 */
+.art-video-player .dy-volume-range {
+  -webkit-appearance: none;
+  appearance: none;
+  width: 64px;
+  height: 4px;
+  border-radius: 2px;
+  outline: none;
+  cursor: pointer;
+  background: linear-gradient(
+    to right,
+    var(--ember) 0%,
+    var(--ember) var(--dy-vol, 100%),
+    rgba(242, 232, 213, 0.22) var(--dy-vol, 100%),
+    rgba(242, 232, 213, 0.22) 100%
+  );
+}
+.art-video-player .dy-volume-range::-webkit-slider-thumb {
+  -webkit-appearance: none;
+  appearance: none;
+  width: 11px;
+  height: 11px;
+  border-radius: 50%;
+  background: var(--ember);
+  box-shadow: 0 0 6px var(--ember-glow);
+  cursor: pointer;
+}
+.art-video-player .dy-volume-range::-moz-range-thumb {
+  width: 11px;
+  height: 11px;
+  border: none;
+  border-radius: 50%;
+  background: var(--ember);
+  box-shadow: 0 0 6px var(--ember-glow);
+  cursor: pointer;
+}
+/* 窄屏隐藏横向滑块，只留静音按钮，省空间。 */
+@media (max-width: 767px) {
+  .art-video-player .dy-volume-range {
+    display: none;
+  }
 }
 
 /* 进度条：高亮用 ember，buffered 用 ink-edge，背景透明 */

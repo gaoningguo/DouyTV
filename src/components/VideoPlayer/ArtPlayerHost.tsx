@@ -98,6 +98,8 @@ export interface VideoPlayerProps {
   controls?: boolean;
   /** Feed 模式的控制层策略：视频默认露出进度条，直播默认全隐藏。 */
   feedChrome?: "video" | "live";
+  /** 挂载后自动进网页全屏（fullscreenWeb）—— 全屏播放页 /play 用。 */
+  autoFullscreen?: boolean;
   startPosition?: number;
   onMutedChange?: (muted: boolean) => void;
   onProgress?: (position: number, duration: number) => void;
@@ -129,6 +131,18 @@ const BUFFER_KEY = "douytv:buffer-strategy";
 // 弹幕显示开关由 Play.tsx 自己读写 douytv:player-danmaku-visible
 const VOLUME_KEY = "douytv:player-volume";
 const RATE_KEY = "douytv:player-playback-rate";
+// 自动连播下一集开关 —— 播放器设置菜单里 toggle，Play / Detail 的 onEnded 读它决定
+// 是否自动切下一集。默认开。
+export const AUTO_NEXT_KEY = "douytv:player-auto-next";
+
+/** 读「自动连播下一集」偏好（默认 true）。Play / Detail 在 onEnded 里调它。 */
+export function readAutoNext(): boolean {
+  try {
+    return localStorage.getItem(AUTO_NEXT_KEY) !== "0";
+  } catch {
+    return true;
+  }
+}
 type BufferStrategy = "low" | "medium" | "high" | "ultra";
 
 function getBufferConfig(strategy: BufferStrategy) {
@@ -319,13 +333,12 @@ const ArtPlayerHost = forwardRef<VideoPlayerHandle, VideoPlayerProps>(
       feedChrome: feedChromeProp,
       startPosition,
       onMutedChange,
-      onProgress,
-      onEnded,
       onError,
       onRequestReresolve,
       onRequestSwitchSource,
       danmuComments,
       danmakuVisible = true,
+      autoFullscreen = false,
       netlivePlatform,
     } = props;
     const feedChrome = feedChromeProp ?? (item.kind === "live" ? "live" : "video");
@@ -349,6 +362,9 @@ const ArtPlayerHost = forwardRef<VideoPlayerHandle, VideoPlayerProps>(
     // schedule leave。
     const agoraContainerRef = useRef<HTMLElement | null>(null);
     const lastProgressTs = useRef(0);
+    // 「已触发 onEnded」标记 —— 兜底的接近结尾检测 + 原生 ended 可能都触发，
+    // 用它去重，避免连跳两集。切 item 时在 mount effect 里重置。
+    const endedFiredRef = useRef(false);
     const feedChromeTimerRef = useRef<number | null>(null);
     const proxyEnabled = useProxyStore((s) => s.mode !== "off");
     const proxyUrl = useProxyStore((s) =>
@@ -371,6 +387,7 @@ const ArtPlayerHost = forwardRef<VideoPlayerHandle, VideoPlayerProps>(
     const feedRefreshNonce = useDanmakuStore((s) => s.feedRefreshNonce);
 
     const [filterAds, setFilterAds] = useState<boolean>(readFilterAds);
+    const [autoNext, setAutoNext] = useState<boolean>(readAutoNext);
     const [error, setError] = useState<string | null>(null);
     const [feedChromeActive, setFeedChromeActive] = useState(false);
     const wrappedUrl = useMemo(
@@ -832,6 +849,50 @@ const ArtPlayerHost = forwardRef<VideoPlayerHandle, VideoPlayerProps>(
               el.style.display = propsRef.current.onNextEpisode ? "" : "none";
             },
           },
+          {
+            // 内联横向音量控件 —— 取代 ArtPlayer 默认竖向弹出面板（会被 .art-bottom
+            // overflow:hidden 裁切、且和其他控件互相遮挡）。静音图标 + 横向 range，
+            // 随控件行排布，不浮层。默认音量面板由 CSS 隐藏（.art-control-volume）。
+            name: "volume-inline",
+            position: "left",
+            html:
+              '<div class="dy-volume">' +
+              '<span class="dy-volume-btn" role="button" aria-label="静音">' +
+              '<svg class="dy-volume-on" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M11 5L6 9H2v6h4l5 4V5z"/><path d="M15.5 8.5a5 5 0 010 7"/><path d="M18.5 5.5a9 9 0 010 13"/></svg>' +
+              '<svg class="dy-volume-off" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" style="display:none"><path d="M11 5L6 9H2v6h4l5 4V5z"/><path d="M22 9l-6 6M16 9l6 6"/></svg>' +
+              "</span>" +
+              '<input class="dy-volume-range" type="range" min="0" max="1" step="0.01" aria-label="音量" />' +
+              "</div>",
+            mounted: (el: HTMLElement) => {
+              const art = artRef.current;
+              const range = el.querySelector<HTMLInputElement>(".dy-volume-range");
+              const btn = el.querySelector<HTMLElement>(".dy-volume-btn");
+              const iconOn = el.querySelector<HTMLElement>(".dy-volume-on");
+              const iconOff = el.querySelector<HTMLElement>(".dy-volume-off");
+              if (!art || !range || !btn || !iconOn || !iconOff) return;
+              const sync = () => {
+                const v = art.muted ? 0 : art.volume;
+                range.value = String(v);
+                range.style.setProperty("--dy-vol", `${Math.round(v * 100)}%`);
+                const silent = art.muted || art.volume === 0;
+                iconOn.style.display = silent ? "none" : "";
+                iconOff.style.display = silent ? "" : "none";
+              };
+              range.addEventListener("input", () => {
+                const v = Number(range.value);
+                art.muted = false;
+                art.volume = v;
+                sync();
+              });
+              btn.addEventListener("click", () => {
+                art.muted = !art.muted;
+                sync();
+              });
+              art.on("video:volumechange", sync);
+              art.once("ready", sync);
+              sync();
+            },
+          },
         ],
         plugins: [
           artplayerPluginDanmuku({
@@ -864,6 +925,22 @@ const ArtPlayerHost = forwardRef<VideoPlayerHandle, VideoPlayerProps>(
                 /* private */
               }
               setFilterAds(newVal);
+              return newVal;
+            },
+          },
+          {
+            html: "自动连播",
+            icon: '<svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M5 4l8 8-8 8V4zM16 4v16"/></svg>',
+            tooltip: autoNext ? "已开启" : "已关闭",
+            switch: autoNext,
+            onSwitch(item) {
+              const newVal = !item.switch;
+              try {
+                localStorage.setItem(AUTO_NEXT_KEY, newVal ? "1" : "0");
+              } catch {
+                /* private */
+              }
+              setAutoNext(newVal);
               return newVal;
             },
           },
@@ -948,6 +1025,8 @@ const ArtPlayerHost = forwardRef<VideoPlayerHandle, VideoPlayerProps>(
         try {
           if (savedRate !== 1) art.playbackRate = savedRate;
           if (startPosition && startPosition > 0) art.currentTime = startPosition;
+          // 进 /play 自动进网页全屏（CSS 全屏，铺满视口，无需用户手势）。
+          if (autoFullscreen) art.fullscreenWeb = true;
         } catch {
           /* duration 还没出来 */
         }
@@ -963,12 +1042,19 @@ const ArtPlayerHost = forwardRef<VideoPlayerHandle, VideoPlayerProps>(
         writeNumberPref(RATE_KEY, art.playbackRate);
       });
 
+      // 去重触发 onEnded —— 兜底检测和原生 ended 可能都命中，只放行一次。
+      const fireEnded = () => {
+        if (endedFiredRef.current) return;
+        endedFiredRef.current = true;
+        propsRef.current.onEnded?.();
+      };
+
       // 进度上报（节流 2s，对齐原 VideoPlayer）
       art.on("video:timeupdate", () => {
         const now = Date.now();
         if (now - lastProgressTs.current < 2000) return;
         lastProgressTs.current = now;
-        onProgress?.(art.currentTime, art.duration || 0);
+        propsRef.current.onProgress?.(art.currentTime, art.duration || 0);
 
         // 自动跳过片头/片尾
         const marks = readSkipMarks(item.id);
@@ -980,13 +1066,24 @@ const ArtPlayerHost = forwardRef<VideoPlayerHandle, VideoPlayerProps>(
           art.duration > 0 &&
           art.currentTime >= art.duration - marks.outro
         ) {
-          onEnded?.();
+          fireEnded();
+          return;
+        }
+        // 兜底：HLS(m3u8) VOD 播到结尾时 hls.js 常不触发原生 `ended`（最后一段
+        // 时长对不齐，currentTime 到不了 duration）。这里在剩余 <0.6s 时主动收尾，
+        // 让「自动连播下一集」在 HLS 源也能生效。
+        if (
+          art.duration > 0 &&
+          art.currentTime >= art.duration - 0.6 &&
+          art.currentTime > 0
+        ) {
+          fireEnded();
         }
       });
 
       art.on("video:ended", () => {
-        onProgress?.(art.duration || 0, art.duration || 0);
-        onEnded?.();
+        propsRef.current.onProgress?.(art.duration || 0, art.duration || 0);
+        fireEnded();
       });
 
       // 注意：以前在容器上 addEventListener("pointerdown", stopPropagation, true)

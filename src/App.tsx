@@ -4,6 +4,7 @@ import Home from "@/pages/Home";
 import Library from "@/pages/Library";
 import Search from "@/pages/Search";
 import Browse from "@/pages/Browse";
+import SourceBrowse from "@/pages/SourceBrowse";
 import Douban from "@/pages/Douban";
 import Duanju from "@/pages/Duanju";
 import Detail from "@/pages/Detail";
@@ -18,6 +19,7 @@ import { DesktopLyric } from "@/pages/music/DesktopLyric";
 import Settings from "@/pages/Settings";
 import SettingsLocalScan from "@/pages/settings/LocalScan";
 import SettingsProxy from "@/pages/settings/Proxy";
+import SettingsProxyPool from "@/pages/settings/ProxyPool";
 import SettingsDanmaku from "@/pages/settings/Danmaku";
 import SettingsSync from "@/pages/settings/Sync";
 import SettingsUpdates from "@/pages/settings/Updates";
@@ -198,6 +200,7 @@ export default function App() {
           />
           <Route path="/settings/local-scan" element={<SettingsLocalScan />} />
           <Route path="/settings/proxy" element={<SettingsProxy />} />
+          <Route path="/settings/proxy-pool" element={<SettingsProxyPool />} />
           <Route path="/settings/danmaku" element={<SettingsDanmaku />} />
           <Route path="/settings/sync" element={<SettingsSync />} />
           <Route path="/settings/updates" element={<SettingsUpdates />} />
@@ -206,6 +209,7 @@ export default function App() {
           <Route path="/douban" element={<Douban />} />
           <Route path="/duanju" element={<Duanju />} />
           <Route path="/browse/:key" element={<Browse />} />
+          <Route path="/browse-source" element={<SourceBrowse />} />
           <Route path="/live" element={<Live />} />
           <Route path="/music/*" element={<Music />} />
           <Route path="/manga/*" element={<Manga />} />

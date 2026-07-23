@@ -1,6 +1,11 @@
 import { invoke } from "@tauri-apps/api/core";
 import type { ScriptFetchInit, ScriptFetchResponse } from "./types";
 import { getActiveProxyUrl } from "@/stores/proxy";
+import {
+  isPoolActive,
+  getCurrentPoolProxy,
+  rotatePoolProxy,
+} from "@/stores/proxyPool";
 
 const isTauri =
   typeof window !== "undefined" && "__TAURI_INTERNALS__" in window;
@@ -164,16 +169,27 @@ async function openCfChallengeDedup(
 
 async function tauriFetchRaw(
   url: string,
-  init: ScriptFetchInit
+  init: ScriptFetchInit,
+  poolProxyOverride?: string
 ): Promise<RustHttpResponse> {
   const finalUrl = appendQuery(url, init.query);
   const { bodyStr, headers } = buildBody(init);
   const method = init.method ?? (bodyStr !== null ? "POST" : "GET");
-  // proxyOverride: undefined → 全局, string → 显式, null → 强制直连
-  const proxyUrl =
-    init.proxyOverride === null
-      ? null
-      : (init.proxyOverride ?? getActiveProxyUrl() ?? null);
+  // 优先级:调用方显式 proxyOverride > 代理池成员(poolProxyOverride)> 全局代理 > 直连。
+  //   - proxyOverride === null       → 强制直连(忽略池)
+  //   - proxyOverride === string     → 显式代理(忽略池)
+  //   - poolProxyOverride === string → 代理池轮换出的成员
+  //   - 否则                          → 全局 getActiveProxyUrl()
+  let proxyUrl: string | null;
+  if (init.proxyOverride === null) {
+    proxyUrl = null;
+  } else if (init.proxyOverride != null) {
+    proxyUrl = init.proxyOverride;
+  } else if (poolProxyOverride) {
+    proxyUrl = poolProxyOverride;
+  } else {
+    proxyUrl = getActiveProxyUrl() ?? null;
+  }
 
   return invoke<RustHttpResponse>(
     init.http2 ? "script_http_h2" : "script_http",
@@ -190,12 +206,21 @@ async function tauriFetchRaw(
   );
 }
 
-async function tauriFetch(
-  url: string,
-  init: ScriptFetchInit
-): Promise<ScriptFetchResponse> {
-  let res = await tauriFetchRaw(url, init);
+/** 响应是否应触发代理池轮换重试(限速 / 网关 / 被墙拦截)。 */
+function shouldRotateOnStatus(status: number): boolean {
+  return status === 429 || status === 403 || (status >= 500 && status < 600);
+}
 
+/**
+ * 收尾:处理 Cloudflare 人机验证(检测 → 弹窗过验 → 重试原请求一次),再归一成
+ * ScriptFetchResponse。CF 重试走不带池成员的普通路径(全局代理),因为人机验证的
+ * clearance 绑定的是全局出口。
+ */
+async function finishTauriResponse(
+  url: string,
+  init: ScriptFetchInit,
+  res: RustHttpResponse
+): Promise<ScriptFetchResponse> {
   if (looksLikeCfChallenge(res)) {
     console.info(
       "[cf-challenge] detected on",
@@ -234,6 +259,49 @@ async function tauriFetch(
   const lowered: Record<string, string> = {};
   for (const [k, v] of Object.entries(res.headers)) lowered[k.toLowerCase()] = v;
   return makeResponse(res.url, res.status, lowered, res.body);
+}
+
+async function tauriFetch(
+  url: string,
+  init: ScriptFetchInit
+): Promise<ScriptFetchResponse> {
+  // 代理池【反应式】介入:仅当池启用、且调用方未显式指定 proxyOverride 时。
+  //   - 平时:用 current 代理(被封后切到的那个;没有则 undefined = 直连/全局);
+  //   - 若这次请求遇到 429/403(被封/限速)→ 抓一个随机代理切过去,重试一次;
+  //     重试仍被封就返回该结果(下一次请求会再触发一次换新)。
+  const usePool = isPoolActive() && init.proxyOverride === undefined;
+  if (usePool) {
+    const current = getCurrentPoolProxy();
+    try {
+      const r = await tauriFetchRaw(url, init, current);
+      if (shouldRotateOnStatus(r.status)) {
+        // 被封/限速 → 抓随机代理换新,拿到就重试一次。
+        const fresh = await rotatePoolProxy();
+        if (fresh && fresh !== current) {
+          try {
+            const r2 = await tauriFetchRaw(url, init, fresh);
+            return await finishTauriResponse(url, init, r2);
+          } catch {
+            // 新代理网络异常 → 返回首次结果(下次请求会再换)。
+          }
+        }
+      }
+      return await finishTauriResponse(url, init, r);
+    } catch (e) {
+      // 当前代理网络异常:若正用着某个池代理,抓新的重试一次;否则照常抛。
+      if (current) {
+        const fresh = await rotatePoolProxy();
+        if (fresh && fresh !== current) {
+          const r2 = await tauriFetchRaw(url, init, fresh);
+          return await finishTauriResponse(url, init, r2);
+        }
+      }
+      throw e;
+    }
+  }
+
+  const res = await tauriFetchRaw(url, init);
+  return finishTauriResponse(url, init, res);
 }
 
 async function browserFetch(

@@ -5,6 +5,7 @@ import {
   type PanInfo,
 } from "framer-motion";
 import VideoPlayer from "@/components/VideoPlayer";
+import { readAutoNext } from "@/components/VideoPlayer/ArtPlayerHost";
 import type { MediaItem } from "@/types/media";
 import { wrapImage } from "@/lib/proxy";
 
@@ -215,8 +216,16 @@ export default function VideoFeed({
                       loop={!(item.episodes && item.episodes.length > 1)}
                       onProgress={(pos, dur) => onProgress?.(item, pos, dur)}
                       onEnded={
-                        i === index && onItemEnded
-                          ? () => onItemEnded(item)
+                        i === index
+                          ? () => {
+                              // 有下一集 → 交给 parent 切集；否则（末集 / 单条）
+                              // 在 autoNext 开启时自动滑到下一条推荐。
+                              if (hasEps && curEp < totalEp - 1) {
+                                onItemEnded?.(item);
+                              } else if (readAutoNext()) {
+                                jumpTo(index + 1);
+                              }
+                            }
                           : undefined
                       }
                       hotkeys={active && i === index}
