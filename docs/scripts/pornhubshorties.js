@@ -260,14 +260,20 @@ return {
   /**
    * 富解析 shorties 列表卡片 —— 抽 { id(viewkey), title, poster, duration }。
    *
-   * shorties 服务端渲染的卡片与主站视频列表同款(li.pcVideoListItem / li.videoBox /
-   * div.phimage,内含 a[href*=viewkey=] + img[data-src|data-thumb_url|src])。用 cheerio
-   * 解 DOM 拿封面;缩略图挂在 ci.phncdn.com,懒加载时真图在 data-src / data-thumb_url。
+   * 【实测 2026-07】shorties 列表【不是】主站的 li.pcVideoListItem DOM 卡片,而是页面里
+   * 一段内联 JS 数组 `JSON_SHORTIES = insertAfterNthPosition([{...}, ...], ...)`,每个元素
+   * 带 { vkey, videoTitle, imageUrl(封面), largePreviewUrl, mediaDefinitions, ... }。
+   * 之前脚本找 li.pcVideoListItem 选择器全都匹配不到 → 回落纯 vkey 正则 → 封面为空
+   * (用户报的"没有封面")。现优先解 JSON_SHORTIES 拿到 imageUrl 封面。
    *
-   * 若页面结构与选择器不匹配(拿不到任何卡片),回落到 _parseViewkeys 的纯正则,
-   * 至少保证列表不空(poster 留空,由 App 首帧兜底)—— 不会比原来更差。
+   * 解不出 JSON_SHORTIES(结构又变)时,依次回落 DOM 卡片 / 纯 vkey 正则,保证不退化。
    */
   _parseCards(ctx, html) {
+    // 1) 优先:内联 JSON_SHORTIES 数组(带 vkey + imageUrl 封面)。
+    const fromJson = this._parseShortiesJson(html);
+    if (fromJson.length) return fromJson;
+
+    // 2) 回落:主站式 DOM 卡片(结构若回归旧版时仍可用)。
     const out = [];
     const seen = {};
     let $ = null;
@@ -276,7 +282,6 @@ return {
     } catch (e) {
       $ = null;
     }
-
     if ($) {
       const self = this;
       $("li.pcVideoListItem, li.videoBox, div.phimage, div.pcVideoListItem").each(
@@ -317,16 +322,66 @@ return {
         }
       );
     }
-
     if (out.length) return out;
 
-    // 兜底:结构变了 / 卡片没解出来 —— 用纯 viewkey 正则,poster 留空。
+    // 3) 兜底:纯 viewkey 正则,poster 留空(由 App 首帧兜底)。
     return this._parseViewkeys(html).map((vkey) => ({
       id: vkey,
       title: "",
       poster: "",
       duration: "",
     }));
+  },
+
+  /**
+   * 解页面内联 `JSON_SHORTIES = insertAfterNthPosition([ {...}, ... ]`。
+   * 从 "JSON_SHORTIES" 处找到第一个 '[',括号配平(跳过字符串内的括号)截出数组,
+   * JSON.parse 后逐条抽 { vkey, videoTitle, imageUrl }。
+   * imageUrl 是 pix-cdn77.phncdn.com 带 hash/validto 的封面直链(需 UA/Referer 走代理)。
+   */
+  _parseShortiesJson(html) {
+    const out = [];
+    if (typeof html !== "string") return out;
+    const at = html.indexOf("JSON_SHORTIES");
+    if (at < 0) return out;
+    const br = html.indexOf("[", at);
+    if (br < 0) return out;
+    const json = this._sliceBalanced(html, br, "[", "]");
+    if (!json) return out;
+    let arr;
+    try {
+      arr = JSON.parse(json);
+    } catch (e) {
+      return out;
+    }
+    if (!Array.isArray(arr)) return out;
+    const seen = {};
+    for (const it of arr) {
+      const vkey = it && (it.vkey || it.viewkey);
+      if (!vkey || seen[vkey]) continue;
+      seen[vkey] = true;
+      let poster = (it.imageUrl || it.largePreviewUrl || "").toString();
+      poster = this._decodeEntities(poster);
+      if (poster.indexOf("//") === 0) poster = "https:" + poster;
+      out.push({
+        id: String(vkey),
+        title: this._decodeEntities((it.videoTitle || "").toString()).replace(/\s+/g, " ").trim(),
+        poster: /^https?:\/\//i.test(poster) ? poster : "",
+        duration: "",
+      });
+    }
+    return out;
+  },
+
+  /** 解 HTML 实体(JSON_SHORTIES 的 imageUrl/title 里 & 被转义成 &amp;)。 */
+  _decodeEntities(s) {
+    if (!s || typeof s !== "string") return "";
+    return s
+      .replace(/&amp;/g, "&")
+      .replace(/&quot;/g, '"')
+      .replace(/&#0*39;|&apos;/g, "'")
+      .replace(/&lt;/g, "<")
+      .replace(/&gt;/g, ">");
   },
 
   /* ─── 以下 flashvars / 候选收集 / 探活,与 pornhub.js 同源 ─── */

@@ -556,72 +556,80 @@ return {
   },
 
   /**
-   * 列表 —— GET /api/front/v2/models,把响应里所有 block 的 models 摊平 + 按 id 去重,
-   * 再减去会话级 seen-set(避免翻页重复;mostPopularModels 会重排)。offset=(page-1)*48。
+   * 列表 —— GET /api/front/v2/models。
+   *
+   * 【翻页重复根因(2026-07 复测)】该接口返回 7 个 block:
+   *   countryGenderModels / mostPopularModels / couplesModels / mobileStreaming /
+   *   newModel / vrModels 这 6 个是【静态货架】——【完全忽略 offset】,任何 offset
+   *   都返回同一批 48 条;只有 `topStreamsModels`(每块 12 条)才真正按 offset 翻页
+   *   (offset 0/12/24… 干净推进、零重叠,可一直翻到 total≈2000)。
+   *   旧实现把 7 个 block 全摊平 + offset 步长 48,于是每页都被 288 条静态货架灌满、
+   *   排序后吐出的又是同一批热门 → 【第 2 页原样重复第 1 页】(即用户报的问题)。
+   *   会话级 seen-set 理论上能滤掉,但依赖 localStorage 跨调用持久化,不稳。
+   *
+   * 【修复】翻页只认 topStreamsModels(唯一真正分页的流),offset=(page-1)*12:
+   *   - 第 1 页:合并全部 block(静态货架给一屏丰富首页,~200 条去重后);
+   *   - 第 2 页起:只取 topStreamsModels(确定性窗口,不依赖 seen-set,天然不重复)。
    */
   async _feed(ctx, page, tag) {
-    const limit = 48;
-    const offset = (page - 1) * limit;
+    const STRIDE = 12; // topStreamsModels 每块 12 条,offset 以此为步长
+    const offset = (page - 1) * STRIDE;
     const data = await this._getJson(ctx, "/api/front/v2/models", {
-      limit,
+      limit: 48,
       offset,
       primaryTag: tag,
     });
 
-    // 会话级已见 id(page===1 视为新会话清空)。缓存 30 分钟。
-    const SEEN = "feed:seen:" + tag;
-    let seen = {};
-    try {
-      const s = await ctx.cache.get(SEEN);
-      if (s && typeof s === "object") seen = s;
-    } catch (e) {
-      /* ignore */
-    }
-    if (page <= 1) seen = {};
-
     const blocks = (data && Array.isArray(data.blocks) && data.blocks) || [];
+    const findTop = () =>
+      blocks.find((b) => b && b.id === "topStreamsModels") || null;
+
+    // 收集本页候选:第 1 页用全部 block(丰富首页),第 2 页起只用 topStreamsModels
+    // (唯一按 offset 推进的流;静态货架已在首页展示过,再取只会重复)。
     const merged = [];
     const localSeen = {};
-    for (const b of blocks) {
-      const models = (b && Array.isArray(b.models) && b.models) || [];
-      for (const m of models) {
+    const collect = (models) => {
+      for (const m of models || []) {
         const id = m && (m.id != null ? m.id : m.username);
         if (id == null) continue;
         const key = String(id);
-        if (localSeen[key] || seen[key]) continue;
+        if (localSeen[key]) continue;
         localSeen[key] = 1;
         merged.push(m);
       }
+    };
+    if (page <= 1) {
+      for (const b of blocks) collect(b && b.models);
+    } else {
+      const top = findTop();
+      collect(top && top.models);
     }
 
-    // 亚洲优先 + 在播优先。
-    merged.sort((a, b) => {
-      const ra = this._asianRank(a.country);
-      const rb = this._asianRank(b.country);
-      if (ra !== rb) return ra - rb;
-      const la = a.isLive ? 0 : 1;
-      const lb = b.isLive ? 0 : 1;
-      if (la !== lb) return la - lb;
-      return (b.viewersCount || 0) - (a.viewersCount || 0);
-    });
+    // 亚洲优先 + 在播优先(仅第 1 页多 block 混排时有意义;topStreams 已按热度排序)。
+    if (page <= 1) {
+      merged.sort((a, b) => {
+        const ra = this._asianRank(a.country);
+        const rb = this._asianRank(b.country);
+        if (ra !== rb) return ra - rb;
+        const la = a.isLive ? 0 : 1;
+        const lb = b.isLive ? 0 : 1;
+        if (la !== lb) return la - lb;
+        return (b.viewersCount || 0) - (a.viewersCount || 0);
+      });
+    }
 
     const list = [];
     for (const m of merged) {
       const vod = this._itemToVod(ctx, m);
-      if (vod) {
-        list.push(vod);
-        seen[vod.id] = 1;
-      }
+      if (vod) list.push(vod);
     }
 
-    try {
-      await ctx.cache.set(SEEN, seen, 1800);
-    } catch (e) {
-      /* ignore */
-    }
-
+    // topStreams 满块(12 条)且 offset 未越过 total → 还有下一页。
+    const top = findTop();
+    const topCount = (top && Array.isArray(top.models) && top.models.length) || 0;
     const total = (data && data.totalCount) || 0;
-    const hasMore = list.length > 0 && offset + limit < total;
+    const hasMore =
+      topCount >= STRIDE && (total ? offset + STRIDE < total : true);
     return {
       list,
       page,

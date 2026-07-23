@@ -41,12 +41,18 @@ return {
     return (typeof b === "string" && b) || "https://sharesome.com";
   },
 
-  /** 一次性拉取的池大小(服务端上限 ~300)。可用 config.pool 覆盖。 */
+  /**
+   * 一次性拉取的池大小(服务端上限 ~300)。可用 config.pool 覆盖。
+   * 【重要】/api/posts?quickies=1 的响应【极慢】——服务端有 ~25s 固定基线延迟:
+   * limit=80 约 26s、limit=200 约 37s(实测经代理)。且 offset/page/skip 全被忽略
+   * (quickies 是固定池),所以无法用"小分页多次拉"绕开慢——只能一次拉一个池。
+   * 默认降到 120(约 26s,配合下方 90s 超时)平衡首屏等待与池深度。
+   */
   _poolSize(ctx) {
     const n = ctx.config && ctx.config.get && ctx.config.get("pool");
     const v = Number(n);
     if (v >= 20 && v <= 300) return Math.floor(v);
-    return 200;
+    return 120;
   },
 
   /** App 每页条数。 */
@@ -72,11 +78,17 @@ return {
     };
   },
 
-  async _getJson(ctx, path, query) {
+  async _getJson(ctx, path, query, timeout) {
     const url = ctx.utils.buildUrl(this._base(ctx) + path, query || {});
     const res = await ctx.request.get(url, {
       headers: this._headers(ctx),
-      timeout: 20000,
+      // quickies 池极慢(见 _poolSize):默认 90s,足够 limit=120(~26s)含波动;
+      // topics/single 等快接口由调用方传更短超时。
+      timeout: timeout || 90000,
+      // sharesome 走 Cloudflare —— ureq(HTTP/1.1 + rustls 默认指纹)会被握手层拦
+      // (与 nudetik 同类:TLS "unexpected end of file" / 空响应)。走 reqwest(http2)
+      // 栈更接近浏览器,实测 API 在浏览器指纹下 200 正常返回。
+      http2: true,
     });
     if (!res.ok) throw new Error("Sharesome HTTP " + res.status + " @ " + url);
     return res.json();
@@ -221,7 +233,11 @@ return {
       if (cats.indexOf(s) < 0) cats.push(s);
     }
 
-    const title = this._cleanTitle(it.text) || (it.user || "") || String(it.uuid);
+    // 2026-07 起 item.user 从字符串变成【对象】({username,name,display_name,...})。
+    // 直接把它塞进 title/desc/vod_remarks 会让 React 尝试渲染对象 → 报
+    // "Objects are not valid as a React child"。统一用 _userName 归一成字符串。
+    const userName = this._userName(it.user);
+    const title = this._cleanTitle(it.text) || userName || String(it.uuid);
     const typeName = catNames.length ? catNames[0] : undefined;
     // thumb / preview_thumb 现在是协议相对(//videos.sharesome.com/...),补 https:。
     const thumb = this._absThumb(it.thumb) || this._absThumb(it.preview_thumb) || undefined;
@@ -234,7 +250,7 @@ return {
       title,
       desc: (it.text || "").trim(),
       typeName,
-      user: it.user || "",
+      user: userName,
     };
 
     const vod = {
@@ -244,10 +260,25 @@ return {
       type_name: typeName,
       vod_remarks: it.duration || undefined,
     };
-    const hay = ((it.text || "") + " " + catNames.join(" ") + " " + (it.user || "")).toLowerCase();
+    const hay = ((it.text || "") + " " + catNames.join(" ") + " " + userName).toLowerCase();
     // _primaryId 存原始 primary_category 数字 id —— 若解析池时 topic 映射还没就绪,
     // recommend 分类过滤会在拿到映射后用它兜底翻 slug(见 recommend)。
     return { vod, _cats: cats, _primaryId: primaryId || "", _hay: hay };
+  },
+
+  /**
+   * item.user 归一成用户名字符串。老接口是字符串;新接口(2026-07)是对象
+   * { username, name, display_name, ... } —— 取 display_name/name/username。
+   * 非字符串/对象则返空串,绝不返回对象(否则 App 渲染报 React child 错误)。
+   */
+  _userName(u) {
+    if (!u) return "";
+    if (typeof u === "string") return u;
+    if (typeof u === "object") {
+      const v = u.display_name || u.name || u.username || "";
+      return typeof v === "string" ? v : "";
+    }
+    return "";
   },
 
   /** 协议相对 // 前缀补 https:;已是绝对 URL 原样返回;空返空串。 */
@@ -264,7 +295,7 @@ return {
       // 池未命中(如冷启动直接进详情)—— 用 single 端点拉单条。
       let it;
       try {
-        const raw = await this._getJson(ctx, "/api/posts", { single: id });
+        const raw = await this._getJson(ctx, "/api/posts", { single: id }, 20000);
         it = raw && Array.isArray(raw.data) && raw.data[0];
       } catch (e) {
         /* ignore */
@@ -352,7 +383,7 @@ return {
     } catch (e) {
       /* ignore */
     }
-    const data = await this._getJson(ctx, "/api/topics");
+    const data = await this._getJson(ctx, "/api/topics", null, 20000);
     const out = [];
     const seen = {};
     // topic id→slug 映射:列表项只带 primary_category(数字 id),靠它翻成 slug 做分类过滤。

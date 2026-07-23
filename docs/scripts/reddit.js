@@ -62,6 +62,50 @@ return {
   },
 
   /**
+   * Reddit RSS 的 base 池 —— 用于 429 轮换(「CDN 代理池」)。
+   *  - 第一个永远是 _base(config.base 或官方 www.reddit.com);
+   *  - config.mirrors(逗号分隔)追加 Reddit RSS 兼容镜像/反代前缀,例如
+   *      https://old.reddit.com , https://www.reddit.com  或用户自建的 CF Worker 反代。
+   *    要求:镜像必须把 /r/<sub>/<sort>.rss?... 原样透传并返回同款 Atom XML。
+   *  - 不填 mirrors → 池里只有官方 base,行为与旧版完全一致,不退化。
+   *
+   * 【为什么这样做代理池】站点注释说明 429 是数据中心出口 IP 段被 Reddit 限速,
+   * 单靠退避只能等复位窗口(~24s)。真正分摊压力要靠【不同出口 IP / 不同前端域】——
+   * 即多个反代镜像轮换。脚本侧无法自带公共镜像清单(时效性差、无法在此验证可用性),
+   * 故做成 config 驱动:你在「脚本设置」填自己可用的反代前缀,脚本负责轮换 + 遇 429 换下一个。
+   */
+  _baseList(ctx) {
+    const list = [this._base(ctx)];
+    const raw = ctx.config && ctx.config.get && ctx.config.get("mirrors");
+    if (typeof raw === "string" && raw.trim()) {
+      for (const m of raw.split(",")) {
+        const b = m.trim().replace(/\/+$/, "");
+        if (b && /^https?:\/\//i.test(b) && list.indexOf(b) < 0) list.push(b);
+      }
+    }
+    return list;
+  },
+
+  /**
+   * 从 429 响应头解出复位秒数(x-ratelimit-reset,值形如 "9" / "9.0")。
+   * 拿不到 / 非法则返 0(调用方退回固定退避档位)。响应头 key 已被 fetch 层小写化。
+   */
+  _parseResetSeconds(res) {
+    try {
+      const h = res && res.headers;
+      if (!h) return 0;
+      const raw =
+        h["x-ratelimit-reset"] ||
+        h["X-Ratelimit-Reset"] ||
+        (typeof h.get === "function" && h.get("x-ratelimit-reset"));
+      const n = parseFloat(String(raw || ""));
+      return isFinite(n) && n > 0 ? Math.ceil(n) : 0;
+    } catch (e) {
+      return 0;
+    }
+  },
+
+  /**
    * 必须是【真实浏览器 UA】—— Reddit RSS 对空/脚本 UA 会 429。可 config.ua 覆盖。
    */
   _ua(ctx) {
@@ -193,13 +237,20 @@ return {
       query.after = after;
     }
 
-    const url = ctx.utils.buildUrl(this._base(ctx) + path, query);
-
-    // Reddit RSS 对代理出口 IP 限流极狠:单次请求后 x-ratelimit-remaining 即 0,
-    // 复位 ~24s。用户每点一次标签/排序都发一次请求 → 立刻 429。两道防护:
-    //  1) 本页 XML 缓存(RESP:<sk>:<page>,TTL 5 分钟)—— 反复点同一标签直接命中缓存,
-    //     不再打网络,这是 429 的主因(切来切去重复拉同一个 sub/sort)。
-    //  2) 遇 429 时指数退避重试(6s→12s,与实测复位窗口对齐),而非直接抛错。
+    // Reddit RSS 按【出口 IP】限流(所有 reddit 子域 www/old/np/new 共享同一个桶,
+    // 实测每窗口只放 1 次请求;命中后 x-ratelimit-remaining=0,复位窗口【实测 ~20s】
+    // ——比旧注释的 24s 略短,但旧的 6s/12s 退避档位累计才 18s,几乎每次都在窗口内
+    // 重试 → 仍 429,这是"切分类必 429"的直接原因)。用户每点一次标签/排序发一次请求
+    // → 立刻 429。四道防护:
+    //  1) 本页 XML 缓存(RESP:<sk>:<page>,TTL 10 分钟)—— 反复点同一标签直接命中缓存,
+    //     不打网络。这是最有效的一道:429 主因就是切来切去重复拉同一 sub/sort。
+    //  2) 【代理池轮换】遇 429 先换 _baseList 里的下一个镜像(不同出口 IP / 前端域)——
+    //     不同 IP 有独立限流桶,能真正分摊。池只有官方 base(未配 mirrors)时退化成单域。
+    //     ★ reddit 官方各子域共享 IP 桶,轮换它们无效;真正有效的是用户自建的
+    //       不同出口反代(CF Worker / VPS),填在「脚本设置 → mirrors」。
+    //  3) 用响应里的 x-ratelimit-reset 秒数做【精确退避】(拿不到头才退回固定档位),
+    //     退避档位对齐实测 ~20s 复位窗口(0 → 20s → 22s),而非之前不够长的 6s/12s。
+    //  4) 全部尝试仍 429 → 若有本页【过期缓存】则降级返回它(过期总比空列表 + 报错好)。
     const RK = "resp:" + sk + ":" + page;
     let xml;
     try {
@@ -210,9 +261,17 @@ return {
     }
 
     if (xml == null) {
+      const bases = this._baseList(ctx);
+      // 轮换起点按 sk 散列错开 —— 不同 sub/sort 从不同镜像起步,避免都挤第一个。
+      let rot = 0;
+      for (let i = 0; i < sk.length; i++) rot = (rot + sk.charCodeAt(i)) % bases.length;
+
       let res;
-      const delays = [0, 6000, 12000];
-      for (let attempt = 0; attempt < delays.length; attempt++) {
+      let lastErr;
+      // 每个退避档位跑「一整轮镜像」;档位 0 不等待,后续档位对齐实测 ~20s 复位窗口
+      // (旧的 6s/12s 累计 18s < 20s,几乎必落在窗口内 → 仍 429)。
+      const delays = [0, 20000, 22000];
+      outer: for (let attempt = 0; attempt < delays.length; attempt++) {
         if (delays[attempt]) {
           try {
             await ctx.utils.sleep(delays[attempt]);
@@ -220,20 +279,55 @@ return {
             /* ignore */
           }
         }
-        res = await ctx.request.get(url, {
-          headers: this._headers(ctx),
-          timeout: 25000,
-        });
-        if (res.status !== 429) break;
-        ctx.log && ctx.log.warn &&
-          ctx.log.warn("Reddit RSS 429,退避重试:", attempt + 1, url);
+        for (let j = 0; j < bases.length; j++) {
+          const base = bases[(rot + j) % bases.length];
+          const url = ctx.utils.buildUrl(base + path, query);
+          try {
+            res = await ctx.request.get(url, {
+              headers: this._headers(ctx),
+              timeout: 25000,
+            });
+          } catch (e) {
+            // 单个镜像网络异常(反代挂了/超时)不致命,记下换下一个。
+            lastErr = e;
+            ctx.log && ctx.log.warn &&
+              ctx.log.warn("Reddit RSS 镜像请求失败,换下一个:", base, String(e));
+            continue;
+          }
+          if (res.status !== 429) break outer; // 拿到非 429(含 2xx/其它错误)即结束轮换
+          // 429:若本轮是最后一个镜像且还有下一档退避,用响应头的精确复位秒数覆盖固定档位。
+          if (j === bases.length - 1 && attempt + 1 < delays.length) {
+            const reset = this._parseResetSeconds(res);
+            if (reset > 0) delays[attempt + 1] = Math.min(reset * 1000 + 1500, 30000);
+          }
+          ctx.log && ctx.log.warn &&
+            ctx.log.warn("Reddit RSS 429,换镜像:", base, "(轮", attempt + 1, ")");
+        }
       }
-      if (!res.ok) throw new Error("Reddit RSS HTTP " + res.status + " @ " + url);
-      xml = await res.text();
-      try {
-        await ctx.cache.set(RK, xml, 300);
-      } catch (e) {
-        /* ignore */
+      if (!res) throw new Error("Reddit RSS 无可用镜像 @ " + path + (lastErr ? " — " + String(lastErr) : ""));
+      if (res.status === 429) {
+        // 仍被限流 —— 有过期缓存就降级用它,避免直接空列表 + 报错。
+        let stale;
+        try {
+          stale = await ctx.cache.get(RK + ":stale");
+        } catch (e) {
+          /* ignore */
+        }
+        if (stale && typeof stale === "string") {
+          ctx.log && ctx.log.warn && ctx.log.warn("Reddit RSS 持续 429,降级返回过期缓存");
+          xml = stale;
+        }
+      }
+      if (xml == null) {
+        if (!res.ok) throw new Error("Reddit RSS HTTP " + res.status + " @ " + path);
+        xml = await res.text();
+        try {
+          await ctx.cache.set(RK, xml, 600);
+          // 另存一份长效副本(6 小时)供持续限流时降级。
+          await ctx.cache.set(RK + ":stale", xml, 21600);
+        } catch (e) {
+          /* ignore */
+        }
       }
     }
 

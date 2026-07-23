@@ -198,16 +198,20 @@ return {
   /* ───────────────────────── API 调用 ───────────────────────── */
 
   /**
-   * 双层加密 POST。内层 data = encrypt(params, no-gzip);
-   * 外层 body = encrypt({data, token, deviceId}, gzip)。应答 decrypt(gzip)。
+   * 加密 POST。body = encrypt({data: <明文参数对象>, token, deviceId}, gzip)。应答 decrypt(gzip)。
+   *
+   * 【关键】站点是【单层】加密:整个 {data, token, deviceId} 一次性 gzip+AES-CBC。
+   * data 字段就是【明文参数对象本身】(不是二次加密的字符串)。之前脚本对 data 做了
+   * 二次加密 → 服务端读不到 cate_id/keyword,只能回退默认列表,导致"所有分类内容一样"。
+   * (逆向自 /_nuxt 运行时 Cl.encryptData: JSON.stringify({data:rawParams,token,deviceId})
+   *  → gzip → AES-CBC(随机IV前置) → base64,与 recommend 侥幸能用但分类失效的现象吻合。)
    */
   async _api(ctx, path, params) {
     const requestId = this._uuid();
     const keyBytes = await this._deriveKey(requestId);
 
-    const inner = await this._encrypt(params || {}, keyBytes, false);
     const outer = await this._encrypt(
-      { data: inner, token: "", deviceId: "web" },
+      { data: params || {}, token: "", deviceId: "web" },
       keyBytes,
       true
     );
@@ -379,11 +383,13 @@ return {
     const id = sourceId || "latest";
     // 分类:id 直接是 "cat_id_9" / "tag_id_843"(每个唯一,无公共前缀 —— 否则 App 用
     // id.split(":")[0] 判同类高亮时,同前缀会让选中一个就全高亮)。
-    // /movie/selected 的过滤参数名是 code,值 = 带前缀完整串 cat_id_9 / tag_id_843
-    // (响应 filter[].code 字段明示;传纯数字或 cate_id 参数名均被服务端忽略 → 回退推荐流)。
+    // /movie/selected 的过滤参数名是 cate_id,值 = 带前缀完整串 cat_id_9 / tag_id_843
+    // (逆向自 /selected/:cate 页组件 _0x3c6013 = {cate_id: 路由段, page, page_size};
+    //  实测单层加密下 cate_id=cat_id_9 → total 451、cat_id_22 → 1181、tag_id_843 → 589,
+    //  各分类列表 id 互不相同 —— 修复"所有分类内容一样")。
     if (id !== "latest" && /^(cat|tag)_id_/.test(id)) {
       return this._feed(ctx, "/movie/selected", {
-        code: id,
+        cate_id: id,
         page: String(p),
         page_size: "20",
       });
@@ -398,7 +404,8 @@ return {
     const p = page || 1;
     const kw = String(keyword || "").trim();
     if (!kw) return { list: [], page: p, pageCount: p, total: 0 };
-    return this._feed(ctx, "/movie/search", {
+    // 搜索端点是 /search/movie(不是 /movie/search —— 后者返 404-2)。
+    return this._feed(ctx, "/search/movie", {
       keyword: kw,
       page: String(p),
       page_size: "20",
@@ -424,25 +431,6 @@ return {
     for (const it of arr) {
       const vod = this._toVod(it);
       if (vod) list.push(vod);
-    }
-    // 【调试】打印本次请求的端点/参数/首条,定位"每个分类内容一样"问题。
-    try {
-      const fs = arr[0] && (arr[0].name || arr[0].id);
-      const dbg =
-        "[douyin18] " +
-        path +
-        " params=" +
-        JSON.stringify(params) +
-        " total=" +
-        (data && data.total) +
-        " n=" +
-        arr.length +
-        " first=" +
-        fs;
-      if (ctx.log && ctx.log.info) ctx.log.info(dbg);
-      else if (typeof console !== "undefined") console.log(dbg);
-    } catch (e) {
-      /* ignore */
     }
     // 翻页用服务端返回的 last_page/current_page(每页实际条数 <请求 page_size,
     // 用 arr.length>=size 会误判为尾页 → 无法翻页)。缺字段时退回启发式。
