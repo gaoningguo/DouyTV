@@ -113,6 +113,9 @@ return {
     const res = await ctx.request.get(this._base(ctx) + "/categories", {
       headers: this._headers(ctx, "html"),
       timeout: 20000,
+      // nsfwswipe 走 Cloudflare —— ureq(HTTP/1.1 + rustls 默认指纹)会被 bot 检测层
+      // 403/连接重置。走 reqwest(http2)栈更接近浏览器,实测在浏览器指纹下正常。
+      http2: true,
     });
     if (!res.ok) throw new Error("NSFWSwipe categories HTTP " + res.status);
     const html = await res.text();
@@ -187,6 +190,7 @@ return {
         headers: this._headers(ctx, "ajax"),
         body,
         timeout: 25000,
+        http2: true,
       }
     );
     if (!res.ok) throw new Error("NSFWSwipe more HTTP " + res.status);
@@ -327,6 +331,7 @@ return {
       const res = await ctx.request.get(url, {
         headers: this._headers(ctx, "html"),
         timeout: 20000,
+        http2: true,
       });
       if (!res.ok) return null;
       html = await res.text();

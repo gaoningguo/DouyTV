@@ -115,6 +115,9 @@ return {
       const res = await ctx.request.get(url, {
         headers: this._headers(ctx, "json"),
         timeout: 25000,
+        // xhs18 走 Cloudflare —— ureq(HTTP/1.1 + rustls 默认指纹)会被 bot 检测层
+        // 403(与 nudetik/sharesome 同类)。走 reqwest(http2)栈更接近浏览器。
+        http2: true,
       });
       if (!res.ok) throw new Error("xhs18 hot HTTP " + res.status);
       const data = await res.json();
@@ -173,6 +176,7 @@ return {
     const res = await ctx.request.get(url, {
       headers: this._headers(ctx, "json"),
       timeout: 20000,
+      http2: true,
     });
     if (!res.ok) throw new Error("xhs18 feed HTTP " + res.status + " @ " + url);
     const data = await res.json();
@@ -213,6 +217,8 @@ return {
       poster,
       author,
       thumbId: this._thumbId(it.thumbnail || ""),
+      // 原帖 x.com status id —— resolvePlayUrl 优先走 X syndication 直取 mp4,免抓 SSR。
+      statusId: this._statusId(it.source_url || ""),
       desc: this._decode(it.description || "").trim(),
     };
 
@@ -256,19 +262,41 @@ return {
     const cached = this._pendingCache && this._pendingCache[slug];
     const wantId = cached && cached.thumbId;
 
+    // ① 首选:原帖就在 X 上 —— 走 X 公开 syndication 接口直取 mp4(无需登录/guest token),
+    //    免抓一整页 xhs18 SSR,且不受该站前端结构变动影响。缓存里有 statusId 就先试;
+    //    slug 本身若是 x.com 链接也能就地取。失败(删帖/无视频/网络)静默回退到 SSR。
+    let statusId = cached && cached.statusId;
+    if (!statusId) statusId = this._statusId(slug);
+    if (statusId) {
+      try {
+        const mp4 = await this._syndicationMp4(ctx, statusId);
+        if (mp4) return this._twimgResult(ctx, mp4);
+      } catch (e) {
+        ctx.log &&
+          ctx.log.warn &&
+          ctx.log.warn("xhs18: syndication 取直链失败,回退 SSR:", String(e));
+      }
+    }
+
+    // ② 回退:抓 xhs18 详情页 SSR,从 flight 数据里解 twimg 直链。
     const pageUrl = /^https?:\/\//.test(slug)
       ? slug
       : this._base(ctx) + "/posts/" + encodeURIComponent(slug);
     const res = await ctx.request.get(pageUrl, {
       headers: this._headers(ctx, "html"),
       timeout: 20000,
+      http2: true,
     });
     if (!res.ok) throw new Error("xhs18: 详情页 HTTP " + res.status);
     const html = await res.text();
 
     const mp4 = this._extractMp4(html, wantId);
     if (!mp4) throw new Error("xhs18: 未从详情页解出 twimg 直链(SSR 结构可能已变)");
+    return this._twimgResult(ctx, mp4);
+  },
 
+  /** twimg mp4 → resolvePlayUrl 返回体(统一 Referer / type 处理)。 */
+  _twimgResult(ctx, mp4) {
     return {
       url: mp4,
       type: /\.m3u8(\?|$)/i.test(mp4) ? "hls" : "mp4",
@@ -279,6 +307,85 @@ return {
         Referer: "https://x.com/",
       },
     };
+  },
+
+  /**
+   * X 公开 syndication 接口取该推文最高码率 mp4。
+   *   GET cdn.syndication.twimg.com/tweet-result?id=<statusId>&token=<t>&lang=en
+   * token 算法同 react-tweet:((id/1e15)*π) 转 36 进制后去掉 0 和小数点。
+   * 该接口匿名可读(embed 用途),返回 JSON;video.variants 里挑 bitrate 最高的 mp4。
+   * 删帖 / 非视频 / 受限帖会返 404 或无 video 字段 —— 返回空串让上层回退。
+   */
+  async _syndicationMp4(ctx, statusId) {
+    const id = String(statusId).replace(/[^0-9]/g, "");
+    if (!id) return "";
+    const token = this._syndToken(id);
+    const url = ctx.utils.buildUrl(
+      "https://cdn.syndication.twimg.com/tweet-result",
+      { id, token, lang: "en" }
+    );
+    const res = await ctx.request.get(url, {
+      headers: {
+        "User-Agent": this._ua(ctx),
+        Accept: "application/json",
+        Referer: "https://platform.twitter.com/",
+      },
+      timeout: 20000,
+      http2: true,
+    });
+    if (!res.ok) return "";
+    let data;
+    try {
+      data = await res.json();
+    } catch (e) {
+      return "";
+    }
+    return this._pickMp4FromTweet(data);
+  },
+
+  /** react-tweet 的 token 算法:((id/1e15)*Math.PI).toString(36),去掉全部 0 和小数点。 */
+  _syndToken(id) {
+    const n = Number(id) / 1e15;
+    return (n * Math.PI).toString(6 ** 2).replace(/(0+|\.)/g, "");
+  },
+
+  /**
+   * 从 syndication tweet JSON 里挑 mp4 直链。
+   * 视频挂在 mediaDetails[]/video.variants[] 或顶层 video.variants[](旧结构),
+   * variants 混有 m3u8 与多档 mp4 —— 取 bitrate 最高的 mp4;没有 mp4 就退 m3u8。
+   */
+  _pickMp4FromTweet(data) {
+    if (!data || typeof data !== "object") return "";
+    const pools = [];
+    const md = Array.isArray(data.mediaDetails) ? data.mediaDetails : [];
+    for (const m of md) {
+      const vs = m && m.video_info && m.video_info.variants;
+      if (Array.isArray(vs)) pools.push(vs);
+    }
+    if (data.video && Array.isArray(data.video.variants)) {
+      pools.push(data.video.variants);
+    }
+    let bestMp4 = null;
+    let bestRate = -1;
+    let anyHls = "";
+    for (const variants of pools) {
+      for (const v of variants) {
+        if (!v || !v.url) continue;
+        const type = String(v.content_type || v.type || "");
+        const isMp4 = /mp4/i.test(type) || /\.mp4(\?|$)/i.test(v.url);
+        const isHls = /mpegurl/i.test(type) || /\.m3u8(\?|$)/i.test(v.url);
+        if (isMp4) {
+          const rate = Number(v.bitrate || v.bit_rate || 0) || 0;
+          if (rate > bestRate) {
+            bestRate = rate;
+            bestMp4 = v.url;
+          }
+        } else if (isHls && !anyHls) {
+          anyHls = v.url;
+        }
+      }
+    }
+    return bestMp4 || anyHls || "";
   },
 
   /**
@@ -315,6 +422,15 @@ return {
   },
 
   /* ───────────────────────── 内部工具 ───────────────────────── */
+
+  /**
+   * 从 x.com 原帖链接(source_url,形如 https://x.com/<user>/status/<id> 或
+   * twitter.com/i/web/status/<id>)抠出推文 status id —— syndication 接口的 key。
+   */
+  _statusId(url) {
+    const m = String(url || "").match(/(?:status(?:es)?|statuses)\/(\d{5,})/i);
+    return m ? m[1] : "";
+  },
 
   /** 从 amplify_video_thumb/<id>/ 抠出 amplify 视频 id(join key)。 */
   _thumbId(thumb) {

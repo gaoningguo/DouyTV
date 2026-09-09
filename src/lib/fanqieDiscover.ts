@@ -1,0 +1,266 @@
+/**
+ * 番茄小说发现源 —— 小说首页主布局数据(编辑推荐 / 本周强推 / 男女生精选 / 最近更新 / 名家)。
+ *
+ * 数据来源:fanqienovel.com 首页(SSR)。整页数据内联在 `window.__INITIAL_STATE__ = {...}` 里 ——
+ * 是**干净 JSON**(JSON.parse 即可,不同于起点的反爬探针、book.qq.com 的压缩 IIFE)。
+ * home 分区一次抓取全拿到,零签名、零接口猜测。
+ *
+ * 注意:封面在 *.byteimg.com,URL 带 x-expires/x-signature 签名会过期,且无 Referer 直连 403。
+ * 渲染时必须 wrapImage(cover, { Referer: FANQIE_REFERER }) 走本地代理(Rust 带 Referer 拉取)。
+ *
+ * 走 scriptFetch(Tauri 下 Rust ureq 绕 CORS + 跟随全局代理),localStorage 1h 缓存。
+ */
+import { scriptFetch } from "@/source-script/fetch";
+import type { DiscoverItem } from "./discover";
+
+const BASE = "https://fanqienovel.com";
+const UA =
+  "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/126.0.0.0 Safari/537.36";
+/** 番茄封面 / 图片统一带这个 Referer 防盗链(byteimg 无 Referer 会 403)。 */
+export const FANQIE_REFERER = "https://fanqienovel.com/";
+const CACHE_TTL_MS = 60 * 60 * 1000;
+const CACHE_KEY = "douytv:fanqie-discover-cache:home";
+
+interface CacheEntry {
+  expiresAt: number;
+  value: FanqieHomeData;
+}
+let memoryCache: CacheEntry | null = null;
+
+function readCache(): FanqieHomeData | undefined {
+  if (memoryCache && memoryCache.expiresAt > Date.now()) return memoryCache.value;
+  memoryCache = null;
+  if (typeof window === "undefined") return undefined;
+  try {
+    const raw = window.localStorage.getItem(CACHE_KEY);
+    if (!raw) return undefined;
+    const parsed = JSON.parse(raw) as CacheEntry;
+    if (parsed.expiresAt <= Date.now()) {
+      window.localStorage.removeItem(CACHE_KEY);
+      return undefined;
+    }
+    memoryCache = parsed;
+    return parsed.value;
+  } catch {
+    return undefined;
+  }
+}
+
+function writeCache(value: FanqieHomeData): void {
+  const entry: CacheEntry = { expiresAt: Date.now() + CACHE_TTL_MS, value };
+  memoryCache = entry;
+  if (typeof window === "undefined") return;
+  try {
+    window.localStorage.setItem(CACHE_KEY, JSON.stringify(entry));
+  } catch {
+    // 忽略配额失败
+  }
+}
+
+/** 番茄书详情外链(仅展示;阅读走用户源解析)。 */
+export function fanqieBookUrl(bookId: string): string {
+  return `${BASE}/page/${bookId}`;
+}
+
+/**
+ * 从 HTML 里提取 window.__INITIAL_STATE__ 对象 —— 花括号配平扫描(跳过字符串内的括号),
+ * 比正则更稳(简介里常有 { } )。返回解析后的根对象。
+ */
+function extractInitialState(html: string): Record<string, unknown> {
+  const marker = html.indexOf("window.__INITIAL_STATE__");
+  if (marker < 0) throw new Error("番茄页面结构变化(未找到 __INITIAL_STATE__)");
+  const start = html.indexOf("{", marker);
+  if (start < 0) throw new Error("番茄页面结构变化(state 起始缺失)");
+  let depth = 0;
+  let inStr = false;
+  let esc = false;
+  let quote = "";
+  let end = -1;
+  for (let i = start; i < html.length; i++) {
+    const c = html[i];
+    if (inStr) {
+      if (esc) esc = false;
+      else if (c === "\\") esc = true;
+      else if (c === quote) inStr = false;
+      continue;
+    }
+    if (c === '"' || c === "'") {
+      inStr = true;
+      quote = c;
+      continue;
+    }
+    if (c === "{") depth++;
+    else if (c === "}") {
+      depth--;
+      if (depth === 0) {
+        end = i + 1;
+        break;
+      }
+    }
+  }
+  if (end < 0) throw new Error("番茄页面结构变化(state 未闭合)");
+  try {
+    return JSON.parse(html.slice(start, end)) as Record<string, unknown>;
+  } catch {
+    throw new Error("番茄 __INITIAL_STATE__ 解析失败");
+  }
+}
+
+/** 番茄首页书条目(各分区字段交集)。 */
+interface FanqieRawBook {
+  bookId?: string;
+  bookName?: string;
+  author?: string;
+  abstract?: string;
+  category?: string;
+  thumbUri?: string;
+}
+
+function toItem(raw: FanqieRawBook): DiscoverItem | null {
+  const id = raw.bookId != null ? String(raw.bookId) : "";
+  if (!id || !raw.bookName) return null;
+  return {
+    id,
+    title: raw.bookName,
+    cover: raw.thumbUri || "",
+    author: raw.author || undefined,
+    cat: raw.category || undefined,
+    desc: raw.abstract || undefined,
+  };
+}
+
+function mapList(list: unknown): DiscoverItem[] {
+  if (!Array.isArray(list)) return [];
+  const seen = new Set<string>();
+  const out: DiscoverItem[] = [];
+  for (const x of list) {
+    const item = toItem(x as FanqieRawBook);
+    if (item && !seen.has(item.id)) {
+      seen.add(item.id);
+      out.push(item);
+    }
+  }
+  return out;
+}
+
+/** 最近更新条目(书名 + 最新章 + 分类 + 作者)。 */
+export interface FanqieUpdate {
+  bookId: string;
+  bookName: string;
+  /** 最新章标题。 */
+  chapter: string;
+  category?: string;
+  author?: string;
+}
+
+/** 名家条目(头像 + 笔名 + 代表作)。 */
+export interface FanqieWriter {
+  uid: string;
+  name: string;
+  /** 头像(byteimg,过 wrapImage + Referer)。 */
+  cover: string;
+  /** 代表作简介。 */
+  introduction?: string;
+}
+
+/** 番茄首页归一化数据。 */
+export interface FanqieHomeData {
+  /** 编辑推荐。 */
+  editor: DiscoverItem[];
+  /** 本周强推。 */
+  week: DiscoverItem[];
+  /** 男生精选。 */
+  boy: DiscoverItem[];
+  /** 女生精选。 */
+  girl: DiscoverItem[];
+  /** 最近更新。 */
+  updates: FanqieUpdate[];
+  /** 名家(头像 + 代表作)。 */
+  writers: FanqieWriter[];
+}
+
+function mapUpdates(list: unknown): FanqieUpdate[] {
+  if (!Array.isArray(list)) return [];
+  return list
+    .map((x) => {
+      const u = x as {
+        bookId?: string;
+        bookName?: string;
+        title?: string;
+        category?: string;
+        author?: string;
+      };
+      const id = u.bookId != null ? String(u.bookId) : "";
+      if (!id || !u.bookName) return null;
+      return {
+        bookId: id,
+        bookName: u.bookName,
+        chapter: u.title || "",
+        category: u.category || undefined,
+        author: u.author || undefined,
+      } as FanqieUpdate;
+    })
+    .filter((x): x is FanqieUpdate => x !== null);
+}
+
+function mapWriters(list: unknown): FanqieWriter[] {
+  if (!Array.isArray(list)) return [];
+  return list
+    .map((x) => {
+      const w = x as {
+        uid?: string;
+        name?: string;
+        cover_uri?: string;
+        introduction?: string;
+      };
+      const uid = w.uid != null ? String(w.uid) : "";
+      if (!uid || !w.name) return null;
+      return {
+        uid,
+        name: w.name,
+        cover: w.cover_uri || "",
+        introduction: w.introduction || undefined,
+      } as FanqieWriter;
+    })
+    .filter((x): x is FanqieWriter => x !== null);
+}
+
+/** 抓番茄小说首页,解析 __INITIAL_STATE__.home → 全部分区。 */
+export async function fetchFanqieHome(): Promise<FanqieHomeData> {
+  const cached = readCache();
+  if (cached) return cached;
+
+  const res = await scriptFetch(`${BASE}/`, {
+    method: "GET",
+    headers: { "User-Agent": UA, Referer: FANQIE_REFERER },
+    timeout: 15_000,
+    // 走 reqwest(h2)而非 ureq —— ureq 的 rustls 对这类站点会
+    // "tls connection init failed: unexpected end of file"(curl/Schannel 正常)。
+    // 同类处置见 docs/scripts/sharesome.js。
+    http2: true,
+  });
+  if (!res.ok) throw new Error(`番茄小说返回 HTTP ${res.status}`);
+  const html = await res.text();
+  const root = extractInitialState(html);
+  const home = (root.home || {}) as Record<string, unknown>;
+
+  const result: FanqieHomeData = {
+    editor: mapList(home.editorList),
+    week: mapList(home.weekList),
+    boy: mapList(home.boyList),
+    girl: mapList(home.girlList),
+    updates: mapUpdates(home.updateList),
+    writers: mapWriters(home.writerList),
+  };
+
+  // 全空视为抓取失败(触发上层兜底),不写缓存。
+  const anyContent =
+    result.editor.length ||
+    result.week.length ||
+    result.boy.length ||
+    result.girl.length;
+  if (!anyContent) throw new Error("番茄小说首页数据缺失");
+
+  writeCache(result);
+  return result;
+}

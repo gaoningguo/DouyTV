@@ -68,6 +68,9 @@ return {
     const res = await ctx.request.get(url, {
       headers: this._headers(ctx, true),
       timeout: 25000,
+      // pin.porn 走 Cloudflare —— ureq(HTTP/1.1 + rustls 默认指纹)会被 bot 检测层
+      // 403/连接重置。走 reqwest(http2)栈更接近浏览器,实测 API 在浏览器指纹下正常。
+      http2: true,
     });
     if (!res.ok) throw new Error("Pin.Porn HTTP " + res.status + " @ " + url);
     return res.json();

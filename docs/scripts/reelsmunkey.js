@@ -72,6 +72,9 @@ return {
       html = await ctx.request.getHtml(url, {
         headers: this._headers(ctx),
         timeout: 20000,
+        // reelsmunkey 走 Cloudflare —— ureq(HTTP/1.1 + rustls 默认指纹)会被 bot
+        // 检测层 403(与 nudetik/sharesome 同类)。走 reqwest(http2)栈更接近浏览器。
+        http2: true,
       });
     } catch (e) {
       ctx.log && ctx.log.warn && ctx.log.warn("ReelsMunkey 请求失败:", url, String(e));

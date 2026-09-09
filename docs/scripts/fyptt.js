@@ -108,6 +108,9 @@ return {
     const res = await ctx.request.get(url, {
       headers: this._headers(ctx, true),
       timeout: 20000,
+      // fyptt 走 Cloudflare —— ureq(HTTP/1.1 + rustls 默认指纹)会被 bot 检测层
+      // 403/连接重置。走 reqwest(http2)栈更接近浏览器,实测在浏览器指纹下正常。
+      http2: true,
     });
     // WP 越界翻页返回 400 rest_post_invalid_page_number —— 视作没有更多。
     if (res.status === 400) return { list: [], page, pageCount: page, total: 0 };
@@ -169,6 +172,7 @@ return {
       const res = await ctx.request.get(url, {
         headers: this._headers(ctx, true),
         timeout: 20000,
+        http2: true,
       });
       if (!res.ok) throw new Error("FYPTT detail HTTP " + res.status + " @ " + url);
       const post = await res.json();
@@ -209,6 +213,7 @@ return {
       const res = await ctx.request.get(playUrl, {
         headers: this._headers(ctx),
         timeout: 20000,
+        http2: true,
       });
       if (!res.ok) {
         throw new Error("FYPTT: 取播放直链失败 HTTP " + res.status);
@@ -271,6 +276,7 @@ return {
     const res = await ctx.request.get(url, {
       headers: this._headers(ctx, true),
       timeout: 20000,
+      http2: true,
     });
     if (!res.ok) throw new Error("FYPTT categories HTTP " + res.status);
     const raw = await res.json();

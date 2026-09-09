@@ -3237,6 +3237,15 @@ pub fn run() {
                 // m3u8 cache 1.5s TTL 会让 hls.js 看到旧版本无法刷新 sequence。
                 let host_skips_m3u8_cache = target_host.ends_with(".a0s.net")
                     || target_host == "a0s.net";
+                // 有些 CDN 对【带 Origin 头】的请求一律 403 —— 浏览器加载 <img> / <video src>
+                // 同源播放时本就不发 Origin,它们照这个行为做了严格校验。已知:
+                //   - image 端点(pin.porn 封面等):浏览器 <img> 从不发 Origin
+                //   - *.twimg.com(X/Twitter 媒体,xhs18 / xiaohuangniao / pektino / xcom 共用)
+                // 实测同一条 twimg mp4(经代理,Referer 均为 https://x.com/):
+                //   不带 Origin → 200 / 带 Range → 206;【带 Origin → 403】。
+                let host_rejects_origin = is_image_path
+                    || target_host.ends_with(".twimg.com")
+                    || target_host == "twimg.com";
                 let want_h2 = host_needs_chrome_fingerprint || host_needs_h2_pool;
 
                 let fetch_result = if want_h2 {
@@ -3263,7 +3272,7 @@ pub fn run() {
                                 referer,
                                 proxy,
                                 timeout_override,
-                                !is_image_path,
+                                !host_rejects_origin,
                             ));
                             if !host_skips_m3u8_cache {
                                 if let Ok(ref r) = result {
@@ -3309,11 +3318,18 @@ pub fn run() {
                             referer,
                             proxy,
                             timeout_override,
-                            !is_image_path,
+                            !host_rejects_origin,
                         ))
                     }
                 } else {
-                    proxy_fetch(target_url, ua, referer, proxy, timeout_override, !is_image_path)
+                    proxy_fetch(
+                        target_url,
+                        ua,
+                        referer,
+                        proxy,
+                        timeout_override,
+                        !host_rejects_origin,
+                    )
                 };
 
                 let resp = match fetch_result {
