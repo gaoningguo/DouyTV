@@ -38,6 +38,8 @@ CI: `.github/workflows/build.yml` runs the desktop matrix (win/linux/macos-arm64
 
 This is the heart of the app. Plugins are user-supplied JS that returns an object with up to 5 hooks: `getSources / search / recommend / detail / resolvePlayUrl`. Each hook receives a `ctx` with `fetch`, `request.{get,getJson,getHtml,post}`, `html.load` (cheerio), `cache`, `log`, `utils`, `config`, and `runtime` metadata. Scripts are compiled with `new Function(code)` and cached by source-code hash (`runtime.ts`).
 
+Maintained copies live in the sibling repo **DouyTV-plugins**: `videos/` (this protocol, `return { meta, … }`) and `live/` → `dist/` (NetLive live plugins). Settings → 视频管理 → 订阅 → 脚本仓库 pulls `videos/index.json`; 直播管理 pulls `dist/index.json`. Do not mix the two catalogs.
+
 Two descriptor types share the same hook surface:
 - `type: 'script'` — user JS in `desc.code` (default; matches MoonTV).
 - `type: 'cms'` — `desc.api` is a MoonTV CMS V10 endpoint; `cms.ts` synthesizes a `ScriptModule` that calls `?ac=videolist&wd=…` / `&ids=…` and parses `vod_play_url` (`$$$` between playbacks, `#` between episodes, `$` between title and URL).
