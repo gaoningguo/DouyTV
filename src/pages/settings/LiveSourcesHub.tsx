@@ -5,6 +5,8 @@
  *   网络直播 tab : 插件订阅 + 手动导入（弹窗） + 插件列表 + 18+ 开关
  */
 import { useCallback, useEffect, useRef, useState } from "react";
+import { Link } from "react-router-dom";
+
 import { useLiveStore } from "@/stores/live";
 import { useLiveSubStore } from "@/stores/liveSubscription";
 import { useEpgStore } from "@/stores/epg";
@@ -19,6 +21,7 @@ import {
   IconPlus,
   IconRefresh,
   IconTrash,
+  IconChevronRight,
 } from "@/components/Icon";
 
 type Tab = "iptv" | "netlive";
@@ -493,7 +496,32 @@ function NetliveTab() {
           {adultEnabled ? "ON" : "OFF"}
         </button>
       </div>
-
+{adultEnabled && (
+              <Link
+                to="/settings/stripchat-keys"
+                className="flex items-center justify-between px-3 py-2 rounded-lg mb-3 tap"
+                style={{
+                  background: "var(--ink-3)",
+                  color: "var(--cream-dim)",
+                  border: "1px solid var(--cream-line)",
+                  fontSize: 12,
+                }}
+              >
+                <span className="flex items-center gap-2">
+                  <span
+                    className="font-mono text-[9px] px-1.5 py-0.5 rounded"
+                    style={{
+                      background: "rgba(255,107,53,0.18)",
+                      color: "var(--ember)",
+                    }}
+                  >
+                    STRIPCHAT
+                  </span>
+                  <span>Mouflon 解扰密钥(否则黑屏 / 看广告)</span>
+                </span>
+                <IconChevronRight size={14} />
+              </Link>
+            )}
       {/* ─── 弹窗 ─── */}
       {dialog === "add-sub" && (
         <DialogSheet onClose={() => setDialog(undefined)} title="添加插件订阅" hint="GitHub 仓库地址或 index.json URL，添加后自动同步插件">
